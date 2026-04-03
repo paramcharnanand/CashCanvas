@@ -6,67 +6,120 @@ import _ from "lodash";
 // ─── CATEGORY ENGINE ───
 const DEFAULT_CATEGORIES = {
   "Housing": [
-    "rent", "mortgage", "property tax", "hoa", "landlord", "lease payment", "storage unit", "renters insurance",
+    "rent", "mortgage", "property tax", "hoa", "landlord", "lease payment", "storage unit",
+    "renters insurance", "homeowners", "real estate", "apartment",
   ],
   "Groceries": [
-    "grocery", "whole foods", "trader joe", "safeway", "kroger", "walmart supercenter", "walmart grocery",
-    "costco", "aldi", "publix", "sprouts", "fresh market", "food 4 less", "grocery outlet", "smart & final",
-    "winco", "ralphs", "vons", "h-e-b", "heb", "meijer", "harris teeter", "food lion", "stop & shop",
-    "market basket", "lucky supermarket", "giant food", "albertsons", "instacart", "shipt",
+    "whole foods", "trader joe", "safeway", "kroger", "walmart supercenter", "walmart grocery",
+    "costco", "aldi", "publix", "sprouts", "fresh market", "food 4 less", "grocery outlet",
+    "smart & final", "winco", "ralphs", "vons", "h-e-b", "heb", "meijer", "harris teeter",
+    "food lion", "stop & shop", "market basket", "lucky supermarket", "giant food", "albertsons",
+    "tom thumb", "weis market", "price chopper", "grocery", "supermarket", "instacart", "shipt",
+    "amazon fresh", "fresh direct", "peapod", "save-a-lot", "lidl", "piggly wiggly",
   ],
   "Dining": [
-    "restaurant", "mcdonald", "starbucks", "uber eats", "doordash", "grubhub", "pizza", "chipotle",
-    "wendy", "dunkin", "cafe", "diner", "burger king", "taco bell", "subway sandwich", "domino",
-    "panera", "chick-fil-a", "in-n-out", "kfc", "popeye", "shake shack", "sushi", "ramen",
-    "poke bowl", "wingstop", "five guys", "panda express", "jack in the box", "sonic drive",
-    "dairy queen", "smoothie king", "boba", "bakery", "deli", "eatery", "brunch", "steakhouse",
-    "ihop", "denny", "olive garden", "cheesecake factory", "applebee", "buffalo wild wing",
-    "red robin", "noodle", "dim sum", "taqueria", "pizzeria",
+    "uber eats", "doordash", "grubhub", "postmates", "caviar delivery",
+    "mcdonald", "burger king", "wendy", "taco bell", "chick-fil-a", "popeye", "kfc",
+    "in-n-out", "five guys", "shake shack", "whataburger", "culver", "arby", "carl's jr",
+    "jack in the box", "sonic drive", "dairy queen", "steak 'n shake", "hardee",
+    "domino", "pizza hut", "papa john", "little caesar", "round table pizza",
+    "subway sandwich", "jersey mike", "firehouse sub", "potbelly", "which wich",
+    "chipotle", "qdoba", "moe's", "del taco", "panda express", "pei wei",
+    "panera", "jason's deli", "mcalister", "corner bakery",
+    "starbucks", "dunkin", "dutch bros", "peet's coffee", "coffee bean", "caribou coffee",
+    "smoothie king", "jamba juice", "tropical smoothie",
+    "olive garden", "red lobster", "outback", "chili's", "applebee", "tgi friday",
+    "cheesecake factory", "red robin", "buffalo wild wing", "hooters", "texas roadhouse",
+    "longhorn steakhouse", "ruth's chris", "ihop", "denny", "cracker barrel", "waffle house",
+    "golden corral", "perkins", "bob evans",
+    "sushi", "ramen", "poke bowl", "dim sum", "taqueria", "pizzeria",
+    "cafe", "diner", "restaurant", "bistro", "eatery", "steakhouse", "boba", "bakery", "deli",
+    "wingstop", "raising cane", "zaxby", "bojangle", "el pollo loco",
+    "noodle", "brunch", "grille", "kitchen",
   ],
   "Transport": [
-    "uber", "lyft", "bart", "muni", "caltrain", "amtrak", "zipcar", "zip car",
-    "bird scooter", "lime scooter", "spin scooter", "clipper card", "toll", "parking",
-    "shell", "chevron", "arco", "bp gas", "exxon", "mobil", "sunoco", "fuel", "gas station",
-    "car wash", "jiffy lube", "valvoline", "firestone", "pep boys", "autozone", "o'reilly auto",
+    "uber", "lyft",
+    "bart", "muni", "caltrain", "amtrak", "metra", "marc train", "septa", "marta", "wmata",
+    "via rail", "nj transit", "path train", "chicago transit", "la metro",
+    "zipcar", "zip car", "turo rental", "enterprise rent", "hertz car", "avis rental", "budget car",
+    "bird scooter", "lime scooter", "spin scooter", "clipper card", "metro card",
+    "toll", "e-zpass", "fastrak", "sunpass", "pikepass",
+    "parking", "spothero", "parkwhiz", "laz parking",
+    "shell", "chevron", "arco", "bp gas", "exxon", "mobil", "sunoco", "speedway",
+    "circle k", "quiktrip", "wawa", "casey's", "kwik trip", "racetrac", "pilot flying",
+    "fuel", "gas station", "car wash",
+    "jiffy lube", "valvoline", "firestone", "pep boys", "autozone", "o'reilly auto",
+    "midas", "meineke", "discount tire", "mavis tire", "oil change",
     "delta air", "united air", "southwest air", "american airlines", "jetblue", "alaska air",
-    "spirit air", "frontier air", "allegiant", "metro card",
+    "spirit air", "frontier air", "allegiant", "hawaiian air", "sun country",
+    "amtrak ticket", "greyhound bus",
   ],
   "Subscriptions": [
     "netflix", "spotify", "hulu", "disney+", "disney plus", "hbo max", "peacock", "paramount+",
     "apple tv", "youtube premium", "amazon prime", "audible", "kindle unlimited", "crunchyroll",
-    "twitch", "patreon", "dropbox", "adobe", "microsoft 365", "office 365", "google one", "icloud",
-    "linkedin premium", "duolingo", "calm app", "headspace", "nytimes", "wsj subscription",
-    "peloton", "apple.com/bill", "apple music", "itunes", "gym membership", "annual membership",
-    "monthly subscription", "annual subscription",
+    "funimation", "vrv subscription", "shudder", "mubi",
+    "twitch", "patreon", "substack", "medium membership",
+    "dropbox", "adobe", "microsoft 365", "office 365", "google one", "icloud",
+    "linkedin premium", "duolingo", "babbel", "rosetta stone",
+    "calm app", "headspace", "noom", "weight watchers",
+    "nytimes", "washington post", "wsj subscription", "the atlantic", "economist",
+    "peloton", "strava", "myfitnesspal", "beachbody",
+    "apple.com/bill", "apple music", "itunes",
+    "gym membership", "annual membership", "monthly subscription", "annual subscription",
+    "planet fitness", "la fitness", "equinox", "24 hour fitness", "gold's gym",
   ],
   "Utilities": [
-    "electric bill", "electricity", "water bill", "internet service", "comcast", "verizon bill",
-    "at&t services", "t-mobile bill", "phone bill", "gas bill", "power bill",
-    "pg&e", "pge", "sdg&e", "con ed", "duke energy", "national grid", "spectrum", "cox cable",
-    "centurylink", "frontier comm", "charter comm", "xcel energy", "sewage", "waste management",
+    "electric bill", "electricity", "water bill", "internet service", "phone bill", "gas bill", "power bill",
+    "pg&e", "pge", "sdg&e", "con ed", "coned", "duke energy", "national grid", "xcel energy",
+    "dominion energy", "pse&g", "eversource", "ameren", "entergy", "centerpoint energy",
+    "comcast", "xfinity", "spectrum", "cox cable", "centurylink", "frontier comm",
+    "charter comm", "cox communications",
+    "verizon bill", "at&t bill", "t-mobile bill",
+    "sewage", "waste management", "republic services", "clean harbors", "sewer",
   ],
   "Shopping": [
-    "amazon.com", "ebay", "etsy", "best buy", "nordstrom", "zara", "h&m", "nike", "adidas", "mall",
-    "ikea", "home depot", "lowe's", "tj maxx", "marshalls", "ross stores", "old navy", "gap",
-    "uniqlo", "macy's", "bloomingdale", "anthropologie", "urban outfitters", "asos", "wayfair",
-    "chewy", "petco", "petsmart", "dollar tree", "dollar general", "five below",
-    "bath & body works", "sephora", "ulta", "apple store", "walmart",
+    "amazon.com", "ebay", "etsy", "wayfair", "wish.com", "shein", "asos", "revolve",
+    "nordstrom", "macy's", "bloomingdale", "neiman marcus", "saks fifth",
+    "kohl's", "jcpenney", "belk", "dillard",
+    "zara", "h&m", "gap", "old navy", "banana republic", "j.crew", "ann taylor",
+    "forever 21", "express clothing", "american eagle", "hollister", "abercrombie",
+    "uniqlo", "anthropologie", "urban outfitters", "free people",
+    "nike", "adidas", "under armour", "lululemon", "athleta", "fabletics",
+    "tj maxx", "marshalls", "ross stores", "burlington coat",
+    "ikea", "home depot", "lowe's", "menards", "ace hardware", "true value",
+    "best buy", "apple store", "microsoft store", "b&h photo", "adorama", "gamestop", "micro center",
+    "target", "walmart", "dollar tree", "dollar general", "five below", "family dollar",
+    "bath & body works", "sephora", "ulta", "mac cosmetics", "fenty beauty",
+    "petco", "petsmart", "chewy",
+    "bed bath", "crate and barrel", "west elm", "pottery barn", "restoration hardware",
+    "rei outdoor", "dick's sporting", "academy sports", "bass pro",
   ],
   "Health": [
-    "pharmacy", "cvs", "walgreens", "rite aid", "doctor", "hospital", "dental", "optometry",
-    "vision care", "medical", "health insurance", "copay", "urgent care", "kaiser", "blue cross",
-    "blue shield", "aetna", "cigna", "lab corp", "quest diagnostic", "prescription", "therapy",
-    "counseling", "chiropractic", "dermatology", "eye exam", "planned parenthood",
+    "pharmacy", "cvs", "walgreens", "rite aid", "duane reade",
+    "doctor", "hospital", "dental", "dentist", "orthodont",
+    "optometry", "vision care", "lenscrafters", "pearle vision",
+    "medical", "health insurance", "copay", "urgent care", "emergency room",
+    "kaiser", "blue cross", "blue shield", "aetna", "cigna", "united health", "humana",
+    "lab corp", "quest diagnostic", "blood test", "prescription", "rx",
+    "therapy", "counseling", "mental health", "chiropractic", "physical therapy",
+    "dermatology", "eye exam", "planned parenthood", "minute clinic",
   ],
   "Entertainment": [
-    "movie", "theater", "concert", "gaming", "steam", "playstation", "xbox", "nintendo",
-    "roblox", "amc theatres", "regal cinema", "eventbrite", "stubhub", "ticketmaster", "live nation",
-    "bowling", "escape room", "arcade", "museum", "zoo", "aquarium", "comedy club", "sports ticket",
-    "golf", "mini golf", "laser tag", "go kart",
+    "amc theatres", "regal cinema", "cinemark", "alamo drafthouse", "movie", "theater",
+    "concert", "live music", "ticketmaster", "stubhub", "eventbrite", "live nation", "seat geek",
+    "steam", "playstation", "xbox", "nintendo", "roblox", "epic games", "blizzard", "ea games",
+    "twitch", "discord nitro",
+    "bowling", "escape room", "arcade", "dave & buster", "museum", "zoo", "aquarium",
+    "comedy club", "sports ticket", "golf", "mini golf", "laser tag", "go kart",
+    "six flags", "universal studio", "disneyland", "disney world", "sea world",
+    "nba", "nfl", "mlb", "nhl", "mls ticket",
   ],
   "Income": [
-    "payroll", "direct dep", "direct deposit", "salary", "wage", "zelle from", "venmo from",
-    "tax refund", "cashback reward", "cash back", "rebate", "reimbursement",
+    "payroll", "direct dep", "direct deposit", "salary", "wage",
+    "zelle from", "venmo from", "cashapp from",
+    "tax refund", "irs treas", "state refund",
+    "cashback reward", "cash back", "rebate", "reimbursement",
+    "interest payment", "dividend", "transfer from",
   ],
   "Other": [],
 };
@@ -74,12 +127,27 @@ const DEFAULT_CATEGORIES = {
 const PALETTE = ["#E8453C","#F4A623","#2EC4B6","#5B5EA6","#9B5DE5","#F15BB5","#00BBF9","#00F5D4","#FEE440","#FF6B6B","#4ECDC4","#45B7D1"];
 
 function categorize(desc, customCats) {
-  const d = (desc || "").toLowerCase();
+  // Strip bank-statement boilerplate so the merchant name is exposed
+  const cleaned = (desc || "").toLowerCase()
+    .replace(/\b(card\s+purchase|pos\s+(debit|credit|purchase)|ach\s+(debit|credit|payment|transfer)|online\s+(payment|transfer|banking)|bill\s+pay(ment)?|direct\s+dep(osit)?|wire\s+transfer|check\s+(paid|deposit|crd)|mobile\s+(payment|deposit)|contactless\s+purchase|recurring\s+(charge|payment)|autopay|preauthorized|authorized\s+on|payment\s+to|purchase\s+at|pending|memo|ref\s*#?|tran\s*#?)\b/g, " ")
+    .replace(/\b\d{1,2}\/\d{1,2}(\/\d{2,4})?\b/g, " ") // strip dates e.g. 12/30
+    .replace(/\b[a-z]{0,3}\d{4,}\b/g, " ")              // strip reference/card numbers
+    .replace(/\s+/g, " ").trim();
+
   const cats = { ...DEFAULT_CATEGORIES, ...customCats };
   for (const [cat, keywords] of Object.entries(cats)) {
     if (cat === "Other") continue;
     for (const kw of keywords) {
-      if (d.includes(kw.toLowerCase())) return cat;
+      const k = kw.toLowerCase();
+      if (k.includes(" ")) {
+        // multi-word keyword: simple substring match is fine
+        if (cleaned.includes(k)) return cat;
+      } else {
+        // single word: word-boundary match to avoid false positives
+        // e.g. "gas" won't match "gas bill", "phone" won't match "iphone"
+        const escaped = k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        if (new RegExp(`(?:^|[^a-z])${escaped}(?:[^a-z]|$)`).test(cleaned)) return cat;
+      }
     }
   }
   return "Other";
@@ -1420,10 +1488,10 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
             </div>
 
             {/* Category cards */}
-            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>Edit Category Keywords</div>
-            <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginBottom: 32 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>Categories</div>
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 32 }}>
               {allCategories.map((cat, ci) => {
-                const keywords = [...(DEFAULT_CATEGORIES[cat] || []), ...(customCats[cat] || [])];
+                const customKws = customCats[cat] || [];
                 const isEditing = editingCat === cat;
                 const catTxns = expenses.filter(t => t.category === cat);
                 const catTotal = Math.abs(_.sumBy(catTxns, "amount"));
@@ -1431,75 +1499,79 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
 
                 return (
                   <div key={cat} style={{
-                    flex: "1 1 280px", maxWidth: 360, background: theme.surface,
+                    flex: "1 1 220px", maxWidth: 300, background: theme.surface,
                     border: `1px solid ${isEditing ? theme.accent : theme.border}`,
-                    borderRadius: 16, padding: 20, transition: "border-color 0.2s",
+                    borderRadius: 14, padding: 18, transition: "border-color 0.2s",
                   }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ width: 12, height: 12, borderRadius: 4, background: PALETTE[ci % PALETTE.length] }} />
-                        <span style={{ fontSize: 16, fontWeight: 700 }}>{cat}</span>
-                      </div>
-                      <span style={{ fontFamily: fontMono, fontSize: 13, color: theme.textMuted }}>
-                        {fmt(catTotal)} · {catTxns.length} txns
-                      </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                      <div style={{ width: 12, height: 12, borderRadius: 4, background: PALETTE[ci % PALETTE.length], flexShrink: 0 }} />
+                      <span style={{ fontSize: 15, fontWeight: 700, flex: 1 }}>{cat}</span>
+                      <span style={{ fontFamily: fontMono, fontSize: 12, color: theme.textMuted }}>{catTxns.length}</span>
                     </div>
 
-                    {catTotal > 0 && (
-                      <div style={{ marginBottom: 12 }}>
-                        <div style={{ height: 4, background: theme.bg, borderRadius: 2, overflow: "hidden" }}>
-                          <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: PALETTE[ci % PALETTE.length], borderRadius: 2 }} />
+                    <div style={{ fontSize: 20, fontWeight: 700, fontFamily: fontMono, color: PALETTE[ci % PALETTE.length], marginBottom: 8 }}>
+                      {fmt(catTotal)}
+                    </div>
+
+                    <div style={{ marginBottom: isEditing ? 12 : 0 }}>
+                      <div style={{ height: 4, background: theme.bg, borderRadius: 2, overflow: "hidden", marginBottom: 3 }}>
+                        <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: PALETTE[ci % PALETTE.length], borderRadius: 2 }} />
+                      </div>
+                      <div style={{ fontSize: 11, color: theme.textMuted }}>{pct.toFixed(1)}% of spending</div>
+                    </div>
+
+                    {/* Show custom keywords only when editing */}
+                    {isEditing && (
+                      <div>
+                        {customKws.length > 0 && (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 5, margin: "10px 0 8px" }}>
+                            {customKws.map(kw => (
+                              <span key={kw} style={{
+                                fontSize: 11, padding: "3px 8px", borderRadius: 5,
+                                background: theme.accentSoft, color: theme.accent, border: `1px solid ${theme.accent}44`,
+                                display: "flex", alignItems: "center", gap: 5,
+                              }}>
+                                {kw}
+                                <button onClick={() => setCustomCats(prev => ({ ...prev, [cat]: prev[cat].filter(k => k !== kw) }))}
+                                  style={{ background: "none", border: "none", color: theme.accent, cursor: "pointer", fontSize: 13, padding: 0, lineHeight: 1 }}>×</button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+                          <input
+                            value={newKeyword}
+                            onChange={e => setNewKeyword(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === "Enter" && newKeyword.trim()) {
+                                setCustomCats(prev => ({ ...prev, [cat]: [...(prev[cat] || []), newKeyword.trim().toLowerCase()] }));
+                                setNewKeyword("");
+                              }
+                            }}
+                            placeholder="Type merchant name..."
+                            style={{
+                              flex: 1, padding: "8px 12px", background: theme.bg,
+                              border: `1px solid ${theme.border}`, borderRadius: 8,
+                              color: theme.text, fontFamily: font, fontSize: 13, outline: "none",
+                            }}
+                            autoFocus
+                          />
+                          <button onClick={() => { setEditingCat(null); setNewKeyword(""); }} style={{
+                            padding: "8px 14px", background: theme.accent, border: "none",
+                            borderRadius: 8, color: "#fff", cursor: "pointer", fontSize: 13, fontFamily: font,
+                          }}>Done</button>
                         </div>
-                        <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 3 }}>{pct.toFixed(1)}% of spending</div>
                       </div>
                     )}
 
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 12 }}>
-                      {keywords.map(kw => (
-                        <span key={kw} style={{
-                          fontSize: 11, padding: "3px 8px", borderRadius: 5,
-                          background: theme.bg, color: theme.textMuted, border: `1px solid ${theme.border}`,
-                          display: "flex", alignItems: "center", gap: 5,
-                        }}>
-                          {kw}
-                          {(customCats[cat] || []).includes(kw) && (
-                            <button onClick={() => {
-                              setCustomCats(prev => ({ ...prev, [cat]: (prev[cat] || []).filter(k => k !== kw) }));
-                            }} style={{ background: "none", border: "none", color: theme.accent, cursor: "pointer", fontSize: 13, padding: 0, lineHeight: 1 }}>×</button>
-                          )}
-                        </span>
-                      ))}
-                    </div>
-
-                    {isEditing ? (
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <input
-                          value={newKeyword}
-                          onChange={e => setNewKeyword(e.target.value)}
-                          onKeyDown={e => {
-                            if (e.key === "Enter" && newKeyword.trim()) {
-                              setCustomCats(prev => ({ ...prev, [cat]: [...(prev[cat] || []), newKeyword.trim().toLowerCase()] }));
-                              setNewKeyword("");
-                            }
-                          }}
-                          placeholder="Add keyword..."
-                          style={{
-                            flex: 1, padding: "8px 12px", background: theme.bg,
-                            border: `1px solid ${theme.border}`, borderRadius: 8,
-                            color: theme.text, fontFamily: font, fontSize: 13, outline: "none",
-                          }}
-                        />
-                        <button onClick={() => { setEditingCat(null); setNewKeyword(""); }} style={{
-                          padding: "8px 14px", background: theme.accent, border: "none",
-                          borderRadius: 8, color: "#fff", cursor: "pointer", fontSize: 13, fontFamily: font,
-                        }}>Done</button>
-                      </div>
-                    ) : (
+                    {!isEditing && (
                       <button onClick={() => setEditingCat(cat)} style={{
-                        width: "100%", padding: "8px", background: "transparent",
+                        marginTop: 12, width: "100%", padding: "7px", background: "transparent",
                         border: `1px dashed ${theme.border}`, borderRadius: 8,
-                        color: theme.textMuted, cursor: "pointer", fontSize: 13, fontFamily: font,
-                      }}>+ Add keyword</button>
+                        color: theme.textMuted, cursor: "pointer", fontSize: 12, fontFamily: font,
+                      }}>
+                        {customKws.length > 0 ? `+ ${customKws.length} custom keyword${customKws.length > 1 ? "s" : ""}` : "+ Add merchant"}
+                      </button>
                     )}
                   </div>
                 );
