@@ -106,7 +106,7 @@ function StatCard({ label, value, sub, color = theme.accent, icon }) {
       background: theme.surface, border: `1px solid ${theme.border}`,
       borderRadius: 16, padding: "24px 28px", flex: "1 1 200px", minWidth: 200,
       position: "relative", overflow: "hidden",
-      transition: "border-color 0.2s",
+      transition: "border-color 0.2s", cursor: "default", userSelect: "none",
     }}
     onMouseEnter={e => e.currentTarget.style.borderColor = color}
     onMouseLeave={e => e.currentTarget.style.borderColor = theme.border}
@@ -1198,6 +1198,7 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
                     <div style={{
                       textAlign: "right", fontFamily: fontMono, fontWeight: 600,
                       color: t.amount >= 0 ? theme.green : theme.text,
+                      cursor: "default", userSelect: "none",
                     }}>
                       {t.amount >= 0 ? "+" : "-"}{fmt(t.amount)}
                     </div>
