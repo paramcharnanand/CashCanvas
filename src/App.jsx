@@ -100,14 +100,15 @@ const theme = {
 
 // ─── COMPONENTS ───
 
-function StatCard({ label, value, sub, color = theme.accent, icon }) {
+function StatCard({ label, value, sub, color = theme.accent, icon, onClick }) {
   return (
     <div style={{
       background: theme.surface, border: `1px solid ${theme.border}`,
       borderRadius: 16, padding: "24px 28px", flex: "1 1 200px", minWidth: 200,
       position: "relative", overflow: "hidden",
-      transition: "border-color 0.2s", cursor: "default", userSelect: "none",
+      transition: "border-color 0.2s", cursor: onClick ? "pointer" : "default", userSelect: "none",
     }}
+    onClick={onClick}
     onMouseEnter={e => e.currentTarget.style.borderColor = color}
     onMouseLeave={e => e.currentTarget.style.borderColor = theme.border}
     >
@@ -975,7 +976,7 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <TabBar tabs={["Overview", "Transactions", "Categories", "Savings"]} active={tab} onChange={setTab} />
+          <TabBar tabs={["Overview", "Categories", "Savings"]} active={tab} onChange={setTab} />
           <button onClick={onReset} style={{
             padding: "10px 18px", background: "transparent", border: `1px solid ${theme.border}`,
             borderRadius: 8, color: theme.textMuted, cursor: "pointer", fontFamily: font, fontSize: 13,
@@ -989,10 +990,10 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
           <div>
             {/* Stats Row */}
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 28 }}>
-              <StatCard label="Total Income" value={fmt(totalIncome)} color={theme.green} sub={`${income.length} transactions`} />
-              <StatCard label="Total Expenses" value={fmt(totalExpenses)} color={theme.accent} sub={`${expenses.length} transactions`} />
+              <StatCard label="Total Income" value={fmt(totalIncome)} color={theme.green} sub={`${income.length} transactions`} onClick={() => setTab("Transactions")} />
+              <StatCard label="Total Expenses" value={fmt(totalExpenses)} color={theme.accent} sub={`${expenses.length} transactions`} onClick={() => setTab("Transactions")} />
               <StatCard label="Net Cashflow" value={(netCashflow >= 0 ? "+" : "-") + fmt(netCashflow)} color={netCashflow >= 0 ? theme.green : theme.accent} sub={netCashflow >= 0 ? "Surplus" : "Deficit"} />
-              <StatCard label="Transactions" value={transactions.length} color={theme.yellow} sub={`${monthlyData.length} months`} />
+              <StatCard label="Transactions" value={transactions.length} color={theme.yellow} sub={`${monthlyData.length} months`} onClick={() => setTab("Transactions")} />
             </div>
 
             {/* Charts Row */}
