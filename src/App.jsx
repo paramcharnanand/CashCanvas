@@ -357,6 +357,36 @@ function isJunkLine(line) {
   return false;
 }
 
+// ─── STATEMENT TYPE DETECTION ───
+function detectStatementType(pages) {
+  const allText = pages.flatMap(p => p.items.map(i => i.str || "")).join(" ").toLowerCase();
+
+  const ccSignals = [
+    "credit card", "credit limit", "minimum payment", "payment due date",
+    "statement balance", "new balance", "previous balance",
+    "finance charge", "interest charged", "interest charge",
+    "cash advance", "apr ", "annual percentage rate",
+    "visa", "mastercard", "american express", "amex", "discover card",
+    "rewards points", "cash back rewards", "miles earned",
+  ];
+
+  const bankSignals = [
+    "checking account", "savings account",
+    "beginning balance", "ending balance", "available balance",
+    "direct deposit", "overdraft", "routing number",
+    "wire transfer", "ach deposit", "service charge",
+  ];
+
+  let ccScore = 0;
+  let bankScore = 0;
+  for (const kw of ccSignals) if (allText.includes(kw)) ccScore++;
+  for (const kw of bankSignals) if (allText.includes(kw)) bankScore++;
+
+  if (ccScore > bankScore) return "credit_card";
+  if (bankScore > ccScore) return "bank";
+  return "unknown";
+}
+
 function extractDescFromLine(line, dateEnd, amtStart) {
   // Primary: text between date and first amount
   if (dateEnd < amtStart) {
@@ -464,7 +494,7 @@ function strategyMultiLine(lines, inferredYear = null) {
 }
 
 // Strategy 3: AI-powered extraction using Claude API
-async function strategyAI(file) {
+async function strategyAI(file, statementType = "unknown") {
   try {
     const base64 = await new Promise((res, rej) => {
       const reader = new FileReader();
@@ -488,10 +518,10 @@ async function strategyAI(file) {
             },
             {
               type: "text",
-              text: `Extract ALL transactions from this bank statement. Return ONLY a JSON array, no markdown, no backticks, no explanation. Each object must have:
+              text: `Extract ALL transactions from this ${statementType === "credit_card" ? "credit card statement" : "bank statement"}. Return ONLY a JSON array, no markdown, no backticks, no explanation. Each object must have:
 - "date": string in "YYYY-MM-DD" format
 - "desc": merchant/description string
-- "amount": number (negative for expenses/debits, positive for income/credits/deposits)
+- "amount": number (negative for expenses/charges/purchases, positive for income/payments/credits/deposits)${statementType === "credit_card" ? "\nIMPORTANT: This is a credit card statement. Purchases and charges must be NEGATIVE. Payments you made to the card must be POSITIVE." : ""}
 
 Example: [{"date":"2025-01-15","desc":"WHOLE FOODS MARKET","amount":-87.32},{"date":"2025-01-14","desc":"PAYROLL DEPOSIT","amount":3200.00}]
 
@@ -537,28 +567,37 @@ async function parsePDF(file, onProgress = () => {}) {
     pages = [];
   }
 
+  // Detect statement type from raw page text
+  const statementType = pages.length > 0 ? detectStatementType(pages) : "unknown";
+  onProgress(`Detected: ${statementType === "credit_card" ? "Credit Card Statement" : statementType === "bank" ? "Bank Statement" : "Statement"}`);
+
   // Build lines with multiple Y-tolerances
   let bestTxns = [];
   let inferredYear = null;
-  
+
   for (const tolerance of [2, 4, 6, 8]) {
     let allLines = [];
     for (const page of pages) {
       const lines = buildLines(page.items, tolerance);
       allLines = allLines.concat(lines);
     }
-    
+
     if (allLines.length === 0) continue;
 
     if (!inferredYear) inferredYear = inferYearFromLines(allLines);
-    
+
     // Try single-line strategy
     let txns = strategySingleLine(allLines, inferredYear);
     if (txns.length > bestTxns.length) bestTxns = txns;
-    
+
     // Try multi-line strategy
     txns = strategyMultiLine(allLines, inferredYear);
     if (txns.length > bestTxns.length) bestTxns = txns;
+  }
+
+  // Credit card statements show charges as positive — flip signs so expenses are negative
+  if (statementType === "credit_card" && bestTxns.length > 0) {
+    bestTxns = bestTxns.map(t => ({ ...t, amount: -t.amount }));
   }
 
   onProgress(`Found ${bestTxns.length} transactions via text extraction...`);
@@ -566,19 +605,19 @@ async function parsePDF(file, onProgress = () => {}) {
   // If text-based extraction found enough, use it
   if (bestTxns.length >= 3) {
     bestTxns.sort((a, b) => b.date - a.date);
-    return bestTxns;
+    return { txns: bestTxns, statementType };
   }
 
   // Fallback: use Claude AI to read the PDF directly
   onProgress("Using AI to read the statement...");
-  const aiTxns = await strategyAI(file);
+  const aiTxns = await strategyAI(file, statementType);
   if (aiTxns.length > bestTxns.length) {
     aiTxns.sort((a, b) => b.date - a.date);
-    return aiTxns;
+    return { txns: aiTxns, statementType };
   }
 
   bestTxns.sort((a, b) => b.date - a.date);
-  return bestTxns;
+  return { txns: bestTxns, statementType };
 }
 
 // ─── UPLOAD SCREEN ───
@@ -622,7 +661,7 @@ function UploadScreen({ onData }) {
               }
             }
             if (transactions.length === 0) throw new Error("No valid transactions found");
-            onData(transactions, file.name);
+            onData(transactions, file.name, "bank");
           } catch (e) {
             setError(e.message);
           }
@@ -632,14 +671,14 @@ function UploadScreen({ onData }) {
       });
     } else if (ext === "pdf") {
       setLoadingMsg("Reading PDF...");
-      parsePDF(file, (msg) => setLoadingMsg(msg)).then(transactions => {
-        if (transactions.length === 0) {
+      parsePDF(file, (msg) => setLoadingMsg(msg)).then(({ txns, statementType }) => {
+        if (txns.length === 0) {
           setError("No transactions found in PDF. This can happen with scanned/image-based PDFs. Try exporting a CSV from your bank's website instead.");
           setLoading(false);
           setLoadingMsg("");
           return;
         }
-        onData(transactions, file.name);
+        onData(txns, file.name, statementType);
         setLoading(false);
         setLoadingMsg("");
       }).catch(e => {
@@ -713,7 +752,7 @@ function UploadScreen({ onData }) {
 
         <button onClick={() => {
           const sample = generateSampleData();
-          onData(sample, "sample_data.csv");
+          onData(sample, "sample_data.csv", "bank");
         }} style={{
           marginTop: 32, padding: "12px 28px", background: "transparent",
           border: `1px solid ${theme.border}`, borderRadius: 10, color: theme.textMuted,
@@ -804,7 +843,7 @@ function CustomTooltip({ active, payload, label }) {
 }
 
 // ─── DASHBOARD ───
-function Dashboard({ transactions: rawTxns, fileName, onReset }) {
+function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown", onReset }) {
   const [tab, setTab] = useState("Overview");
   const [customCats, setCustomCats] = useState({});
   const [savingsGoal, setSavingsGoal] = useState({ amount: "", deadline: "", name: "" });
@@ -924,6 +963,16 @@ function Dashboard({ transactions: rawTxns, fileName, onReset }) {
           <span style={{ fontSize: 13, color: theme.textMuted, background: theme.bg, padding: "4px 10px", borderRadius: 6 }}>
             {fileName}
           </span>
+          {statementType !== "unknown" && (
+            <span style={{
+              fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 6,
+              background: statementType === "credit_card" ? "#7c3aed22" : "#0891b222",
+              color: statementType === "credit_card" ? "#7c3aed" : "#0891b2",
+              border: `1px solid ${statementType === "credit_card" ? "#7c3aed44" : "#0891b244"}`,
+            }}>
+              {statementType === "credit_card" ? "Credit Card" : "Bank Statement"}
+            </span>
+          )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <TabBar tabs={["Overview", "Transactions", "Categories", "Savings"]} active={tab} onChange={setTab} />
@@ -1784,10 +1833,12 @@ function Dashboard({ transactions: rawTxns, fileName, onReset }) {
 export default function App() {
   const [transactions, setTransactions] = useState(null);
   const [fileName, setFileName] = useState("");
+  const [statementType, setStatementType] = useState("unknown");
 
-  const handleData = useCallback((txns, name) => {
+  const handleData = useCallback((txns, name, type = "unknown") => {
     setTransactions(txns);
     setFileName(name);
+    setStatementType(type);
   }, []);
 
   if (!transactions) {
@@ -1798,7 +1849,8 @@ export default function App() {
     <Dashboard
       transactions={transactions}
       fileName={fileName}
-      onReset={() => { setTransactions(null); setFileName(""); }}
+      statementType={statementType}
+      onReset={() => { setTransactions(null); setFileName(""); setStatementType("unknown"); }}
     />
   );
 }
