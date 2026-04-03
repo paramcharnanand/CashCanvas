@@ -813,6 +813,7 @@ function Dashboard({ transactions: rawTxns, fileName, onReset }) {
   const [reassignTxn, setReassignTxn] = useState(null);
   const [txnOverrides, setTxnOverrides] = useState({});
   const [newCatName, setNewCatName] = useState("");
+  const [selectedTxns, setSelectedTxns] = useState(new Set());
   const [cutSelections, setCutSelections] = useState({});  // { categoryName: { selected: bool, percent: number } }
   const [showPlan, setShowPlan] = useState(false);
 
@@ -1072,28 +1073,69 @@ function Dashboard({ transactions: rawTxns, fileName, onReset }) {
         {tab === "Transactions" && (
           <div>
             <SectionTitle sub={`${transactions.length} transactions found`}>All Transactions</SectionTitle>
+
+            {selectedTxns.size > 0 && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 12, marginBottom: 12,
+                padding: "10px 16px", background: theme.accentSoft, borderRadius: 10,
+                border: `1px solid ${theme.accent}`,
+              }}>
+                <span style={{ fontSize: 14, color: theme.accent, fontWeight: 600 }}>{selectedTxns.size} selected</span>
+                <button onClick={() => setReassignTxn(true)} style={{
+                  padding: "6px 14px", background: theme.accent, border: "none",
+                  borderRadius: 7, color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 600,
+                  fontFamily: "inherit",
+                }}>Reassign Category</button>
+                <button onClick={() => setSelectedTxns(new Set())} style={{
+                  padding: "6px 14px", background: "none", border: `1px solid ${theme.accent}`,
+                  borderRadius: 7, color: theme.accent, cursor: "pointer", fontSize: 13, fontWeight: 600,
+                  fontFamily: "inherit",
+                }}>Clear</button>
+              </div>
+            )}
+
             <div style={{
               background: theme.surface, border: `1px solid ${theme.border}`,
               borderRadius: 16, overflow: "hidden",
             }}>
               <div style={{
-                display: "grid", gridTemplateColumns: "120px 1fr 140px 140px 40px",
+                display: "grid", gridTemplateColumns: "40px 120px 1fr 140px 140px",
                 padding: "14px 20px", borderBottom: `1px solid ${theme.border}`,
                 fontSize: 12, fontWeight: 600, color: theme.textMuted, textTransform: "uppercase", letterSpacing: "0.06em",
+                alignItems: "center",
               }}>
-                <div>Date</div><div>Description</div><div>Category</div><div style={{ textAlign: "right" }}>Amount</div><div></div>
+                <div>
+                  <input type="checkbox"
+                    checked={selectedTxns.size === transactions.length && transactions.length > 0}
+                    onChange={e => setSelectedTxns(e.target.checked ? new Set(transactions.map(t => t.id)) : new Set())}
+                    style={{ cursor: "pointer", accentColor: "var(--accent, #6366f1)" }}
+                  />
+                </div>
+                <div>Date</div><div>Description</div><div>Category</div><div style={{ textAlign: "right" }}>Amount</div>
               </div>
               <div style={{ maxHeight: 600, overflowY: "auto" }}>
                 {transactions.map(t => (
                   <div key={t.id} style={{
-                    display: "grid", gridTemplateColumns: "120px 1fr 140px 140px 40px",
+                    display: "grid", gridTemplateColumns: "40px 120px 1fr 140px 140px",
                     padding: "12px 20px", borderBottom: `1px solid ${theme.border}`,
                     fontSize: 14, alignItems: "center",
                     transition: "background 0.15s",
+                    background: selectedTxns.has(t.id) ? theme.accentSoft : "transparent",
                   }}
-                  onMouseEnter={e => e.currentTarget.style.background = theme.surfaceHover}
-                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                  onMouseEnter={e => { if (!selectedTxns.has(t.id)) e.currentTarget.style.background = theme.surfaceHover; }}
+                  onMouseLeave={e => { if (!selectedTxns.has(t.id)) e.currentTarget.style.background = "transparent"; }}
                   >
+                    <div>
+                      <input type="checkbox"
+                        checked={selectedTxns.has(t.id)}
+                        onChange={e => setSelectedTxns(prev => {
+                          const next = new Set(prev);
+                          e.target.checked ? next.add(t.id) : next.delete(t.id);
+                          return next;
+                        })}
+                        style={{ cursor: "pointer", accentColor: "var(--accent, #6366f1)" }}
+                      />
+                    </div>
                     <div style={{ color: theme.textMuted, fontSize: 13 }}>
                       {t.date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" })}
                     </div>
@@ -1110,12 +1152,6 @@ function Dashboard({ transactions: rawTxns, fileName, onReset }) {
                     }}>
                       {t.amount >= 0 ? "+" : "-"}{fmt(t.amount)}
                     </div>
-                    <div>
-                      <button onClick={() => setReassignTxn(t.id)} style={{
-                        background: "none", border: "none", color: theme.textMuted,
-                        cursor: "pointer", fontSize: 16, padding: 2,
-                      }} title="Reassign category">✏️</button>
-                    </div>
                   </div>
                 ))}
               </div>
@@ -1131,19 +1167,24 @@ function Dashboard({ transactions: rawTxns, fileName, onReset }) {
                   background: theme.surface, border: `1px solid ${theme.border}`,
                   borderRadius: 16, padding: 28, width: 360, maxHeight: "80vh", overflowY: "auto",
                 }} onClick={e => e.stopPropagation()}>
-                  <h3 style={{ margin: "0 0 16px", fontSize: 18, fontWeight: 700 }}>Reassign Category</h3>
+                  <h3 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 700 }}>Reassign Category</h3>
                   <p style={{ fontSize: 14, color: theme.textMuted, margin: "0 0 16px" }}>
-                    {transactions[reassignTxn]?.desc}
+                    {selectedTxns.size} transaction{selectedTxns.size !== 1 ? "s" : ""} will be updated
                   </p>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {allCategories.filter(c => c !== "Income").map(cat => (
                       <button key={cat} onClick={() => {
-                        setTxnOverrides(prev => ({ ...prev, [reassignTxn]: cat }));
+                        setTxnOverrides(prev => {
+                          const next = { ...prev };
+                          selectedTxns.forEach(id => { next[id] = cat; });
+                          return next;
+                        });
+                        setSelectedTxns(new Set());
                         setReassignTxn(null);
                         setNewCatName("");
                       }} style={{
-                        padding: "10px 16px", background: transactions[reassignTxn]?.category === cat ? theme.accentSoft : theme.bg,
-                        border: `1px solid ${transactions[reassignTxn]?.category === cat ? theme.accent : theme.border}`,
+                        padding: "10px 16px", background: theme.bg,
+                        border: `1px solid ${theme.border}`,
                         borderRadius: 8, color: theme.text, cursor: "pointer", textAlign: "left",
                         fontFamily: font, fontSize: 14,
                       }}>{cat}</button>
@@ -1159,7 +1200,12 @@ function Dashboard({ transactions: rawTxns, fileName, onReset }) {
                             if (e.key === "Enter" && newCatName.trim()) {
                               const name = newCatName.trim();
                               setCustomCats(prev => ({ ...prev, [name]: prev[name] || [] }));
-                              setTxnOverrides(prev => ({ ...prev, [reassignTxn]: name }));
+                              setTxnOverrides(prev => {
+                                const next = { ...prev };
+                                selectedTxns.forEach(id => { next[id] = name; });
+                                return next;
+                              });
+                              setSelectedTxns(new Set());
                               setReassignTxn(null);
                               setNewCatName("");
                             }
@@ -1175,7 +1221,12 @@ function Dashboard({ transactions: rawTxns, fileName, onReset }) {
                           if (!newCatName.trim()) return;
                           const name = newCatName.trim();
                           setCustomCats(prev => ({ ...prev, [name]: prev[name] || [] }));
-                          setTxnOverrides(prev => ({ ...prev, [reassignTxn]: name }));
+                          setTxnOverrides(prev => {
+                            const next = { ...prev };
+                            selectedTxns.forEach(id => { next[id] = name; });
+                            return next;
+                          });
+                          setSelectedTxns(new Set());
                           setReassignTxn(null);
                           setNewCatName("");
                         }} style={{
