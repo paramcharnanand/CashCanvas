@@ -5,17 +5,70 @@ import _ from "lodash";
 
 // ─── CATEGORY ENGINE ───
 const DEFAULT_CATEGORIES = {
-  "Housing": ["rent", "mortgage", "property", "hoa", "landlord"],
-  "Groceries": ["grocery", "whole foods", "trader joe", "safeway", "kroger", "walmart", "costco", "aldi", "target", "publix"],
-  "Dining": ["restaurant", "mcdonald", "starbucks", "uber eats", "doordash", "grubhub", "pizza", "chipotle", "wendys", "dunkin", "cafe", "diner", "burger"],
-  "Transport": ["uber", "lyft", "gas", "fuel", "shell", "chevron", "parking", "transit", "metro", "toll"],
-  "Subscriptions": ["netflix", "spotify", "hulu", "amazon prime", "disney", "apple", "youtube", "hbo", "gym", "membership"],
-  "Utilities": ["electric", "water", "internet", "comcast", "verizon", "at&t", "t-mobile", "phone", "gas bill", "power"],
-  "Shopping": ["amazon", "ebay", "etsy", "best buy", "nordstrom", "zara", "h&m", "nike", "adidas", "mall"],
-  "Health": ["pharmacy", "cvs", "walgreens", "doctor", "hospital", "dental", "medical", "insurance", "copay"],
-  "Entertainment": ["movie", "theater", "concert", "ticket", "gaming", "steam", "playstation", "xbox"],
-  "Income": ["payroll", "direct dep", "salary", "wage", "deposit", "transfer in", "refund", "cashback"],
-  "Other": []
+  "Housing": [
+    "rent", "mortgage", "property tax", "hoa", "landlord", "lease payment", "storage unit", "renters insurance",
+  ],
+  "Groceries": [
+    "grocery", "whole foods", "trader joe", "safeway", "kroger", "walmart supercenter", "walmart grocery",
+    "costco", "aldi", "publix", "sprouts", "fresh market", "food 4 less", "grocery outlet", "smart & final",
+    "winco", "ralphs", "vons", "h-e-b", "heb", "meijer", "harris teeter", "food lion", "stop & shop",
+    "market basket", "lucky supermarket", "giant food", "albertsons", "instacart", "shipt",
+  ],
+  "Dining": [
+    "restaurant", "mcdonald", "starbucks", "uber eats", "doordash", "grubhub", "pizza", "chipotle",
+    "wendy", "dunkin", "cafe", "diner", "burger king", "taco bell", "subway sandwich", "domino",
+    "panera", "chick-fil-a", "in-n-out", "kfc", "popeye", "shake shack", "sushi", "ramen",
+    "poke bowl", "wingstop", "five guys", "panda express", "jack in the box", "sonic drive",
+    "dairy queen", "smoothie king", "boba", "bakery", "deli", "eatery", "brunch", "steakhouse",
+    "ihop", "denny", "olive garden", "cheesecake factory", "applebee", "buffalo wild wing",
+    "red robin", "noodle", "dim sum", "taqueria", "pizzeria",
+  ],
+  "Transport": [
+    "uber", "lyft", "bart", "muni", "caltrain", "amtrak", "zipcar", "zip car",
+    "bird scooter", "lime scooter", "spin scooter", "clipper card", "toll", "parking",
+    "shell", "chevron", "arco", "bp gas", "exxon", "mobil", "sunoco", "fuel", "gas station",
+    "car wash", "jiffy lube", "valvoline", "firestone", "pep boys", "autozone", "o'reilly auto",
+    "delta air", "united air", "southwest air", "american airlines", "jetblue", "alaska air",
+    "spirit air", "frontier air", "allegiant", "metro card",
+  ],
+  "Subscriptions": [
+    "netflix", "spotify", "hulu", "disney+", "disney plus", "hbo max", "peacock", "paramount+",
+    "apple tv", "youtube premium", "amazon prime", "audible", "kindle unlimited", "crunchyroll",
+    "twitch", "patreon", "dropbox", "adobe", "microsoft 365", "office 365", "google one", "icloud",
+    "linkedin premium", "duolingo", "calm app", "headspace", "nytimes", "wsj subscription",
+    "peloton", "apple.com/bill", "apple music", "itunes", "gym membership", "annual membership",
+    "monthly subscription", "annual subscription",
+  ],
+  "Utilities": [
+    "electric bill", "electricity", "water bill", "internet service", "comcast", "verizon bill",
+    "at&t services", "t-mobile bill", "phone bill", "gas bill", "power bill",
+    "pg&e", "pge", "sdg&e", "con ed", "duke energy", "national grid", "spectrum", "cox cable",
+    "centurylink", "frontier comm", "charter comm", "xcel energy", "sewage", "waste management",
+  ],
+  "Shopping": [
+    "amazon.com", "ebay", "etsy", "best buy", "nordstrom", "zara", "h&m", "nike", "adidas", "mall",
+    "ikea", "home depot", "lowe's", "tj maxx", "marshalls", "ross stores", "old navy", "gap",
+    "uniqlo", "macy's", "bloomingdale", "anthropologie", "urban outfitters", "asos", "wayfair",
+    "chewy", "petco", "petsmart", "dollar tree", "dollar general", "five below",
+    "bath & body works", "sephora", "ulta", "apple store", "walmart",
+  ],
+  "Health": [
+    "pharmacy", "cvs", "walgreens", "rite aid", "doctor", "hospital", "dental", "optometry",
+    "vision care", "medical", "health insurance", "copay", "urgent care", "kaiser", "blue cross",
+    "blue shield", "aetna", "cigna", "lab corp", "quest diagnostic", "prescription", "therapy",
+    "counseling", "chiropractic", "dermatology", "eye exam", "planned parenthood",
+  ],
+  "Entertainment": [
+    "movie", "theater", "concert", "gaming", "steam", "playstation", "xbox", "nintendo",
+    "roblox", "amc theatres", "regal cinema", "eventbrite", "stubhub", "ticketmaster", "live nation",
+    "bowling", "escape room", "arcade", "museum", "zoo", "aquarium", "comedy club", "sports ticket",
+    "golf", "mini golf", "laser tag", "go kart",
+  ],
+  "Income": [
+    "payroll", "direct dep", "direct deposit", "salary", "wage", "zelle from", "venmo from",
+    "tax refund", "cashback reward", "cash back", "rebate", "reimbursement",
+  ],
+  "Other": [],
 };
 
 const PALETTE = ["#E8453C","#F4A623","#2EC4B6","#5B5EA6","#9B5DE5","#F15BB5","#00BBF9","#00F5D4","#FEE440","#FF6B6B","#4ECDC4","#45B7D1"];
@@ -1297,15 +1350,84 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
         )}
 
         {/* ─── CATEGORIES TAB ─── */}
-        {tab === "Categories" && (
+        {tab === "Categories" && (() => {
+          const otherTxns = expenses.filter(t => t.category === "Other");
+          const categorizedTxns = expenses.filter(t => t.category !== "Other");
+          const categorizedPct = expenses.length > 0 ? Math.round((categorizedTxns.length / expenses.length) * 100) : 0;
+          const topCats = allCategories.filter(c => c !== "Other" && c !== "Income");
+
+          return (
           <div>
             <SectionTitle sub="Customize how transactions are categorized">Manage Categories</SectionTitle>
-            <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+
+            {/* Summary bar */}
+            <div style={{
+              background: theme.surface, border: `1px solid ${theme.border}`,
+              borderRadius: 16, padding: "20px 24px", marginBottom: 24,
+              display: "flex", alignItems: "center", gap: 32, flexWrap: "wrap",
+            }}>
+              <div>
+                <div style={{ fontSize: 12, color: theme.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Categorized</div>
+                <div style={{ fontSize: 28, fontWeight: 700, color: theme.green, fontFamily: fontMono }}>{categorizedPct}%</div>
+                <div style={{ fontSize: 12, color: theme.textMuted }}>{categorizedTxns.length} of {expenses.length} transactions</div>
+              </div>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: theme.textMuted, marginBottom: 6 }}>
+                  <span>Categorized</span>
+                  <span>{otherTxns.length} uncategorized</span>
+                </div>
+                <div style={{ height: 8, background: theme.bg, borderRadius: 4, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${categorizedPct}%`, background: theme.green, borderRadius: 4, transition: "width 0.4s" }} />
+                </div>
+              </div>
+              {otherTxns.length > 0 && (
+                <div style={{
+                  padding: "8px 16px", background: theme.accentSoft, border: `1px solid ${theme.accent}`,
+                  borderRadius: 8, fontSize: 13, color: theme.accent, fontWeight: 600,
+                }}>
+                  {otherTxns.length} need attention below
+                </div>
+              )}
+            </div>
+
+            {/* Spending breakdown bars */}
+            <div style={{
+              background: theme.surface, border: `1px solid ${theme.border}`,
+              borderRadius: 16, padding: "20px 24px", marginBottom: 24,
+            }}>
+              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>Spending Breakdown</div>
+              {allCategories.filter(c => c !== "Other" && c !== "Income").map((cat, ci) => {
+                const catTotal = Math.abs(_.sumBy(expenses.filter(t => t.category === cat), "amount"));
+                const pct = totalExpenses > 0 ? (catTotal / totalExpenses) * 100 : 0;
+                if (catTotal === 0) return null;
+                return (
+                  <div key={cat} style={{ marginBottom: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ width: 10, height: 10, borderRadius: 3, background: PALETTE[ci % PALETTE.length], flexShrink: 0 }} />
+                        <span style={{ fontWeight: 500 }}>{cat}</span>
+                      </div>
+                      <span style={{ fontFamily: fontMono, color: theme.textMuted, fontSize: 12 }}>
+                        {fmt(catTotal)} · {pct.toFixed(1)}%
+                      </span>
+                    </div>
+                    <div style={{ height: 6, background: theme.bg, borderRadius: 3, overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${pct}%`, background: PALETTE[ci % PALETTE.length], borderRadius: 3, transition: "width 0.4s" }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Category cards */}
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>Edit Category Keywords</div>
+            <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginBottom: 32 }}>
               {allCategories.map((cat, ci) => {
                 const keywords = [...(DEFAULT_CATEGORIES[cat] || []), ...(customCats[cat] || [])];
                 const isEditing = editingCat === cat;
                 const catTxns = expenses.filter(t => t.category === cat);
                 const catTotal = Math.abs(_.sumBy(catTxns, "amount"));
+                const pct = totalExpenses > 0 ? (catTotal / totalExpenses) * 100 : 0;
 
                 return (
                   <div key={cat} style={{
@@ -1313,37 +1435,37 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
                     border: `1px solid ${isEditing ? theme.accent : theme.border}`,
                     borderRadius: 16, padding: 20, transition: "border-color 0.2s",
                   }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{
-                          width: 12, height: 12, borderRadius: 4,
-                          background: PALETTE[ci % PALETTE.length],
-                        }} />
+                        <div style={{ width: 12, height: 12, borderRadius: 4, background: PALETTE[ci % PALETTE.length] }} />
                         <span style={{ fontSize: 16, fontWeight: 700 }}>{cat}</span>
                       </div>
-                      <span style={{ fontFamily: fontMono, fontSize: 14, color: theme.textMuted }}>
-                        {fmt(catTotal)} · {catTxns.length}
+                      <span style={{ fontFamily: fontMono, fontSize: 13, color: theme.textMuted }}>
+                        {fmt(catTotal)} · {catTxns.length} txns
                       </span>
                     </div>
 
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+                    {catTotal > 0 && (
+                      <div style={{ marginBottom: 12 }}>
+                        <div style={{ height: 4, background: theme.bg, borderRadius: 2, overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: PALETTE[ci % PALETTE.length], borderRadius: 2 }} />
+                        </div>
+                        <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 3 }}>{pct.toFixed(1)}% of spending</div>
+                      </div>
+                    )}
+
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 12 }}>
                       {keywords.map(kw => (
                         <span key={kw} style={{
-                          fontSize: 12, padding: "4px 10px", borderRadius: 6,
+                          fontSize: 11, padding: "3px 8px", borderRadius: 5,
                           background: theme.bg, color: theme.textMuted, border: `1px solid ${theme.border}`,
-                          display: "flex", alignItems: "center", gap: 6,
+                          display: "flex", alignItems: "center", gap: 5,
                         }}>
                           {kw}
                           {(customCats[cat] || []).includes(kw) && (
                             <button onClick={() => {
-                              setCustomCats(prev => ({
-                                ...prev,
-                                [cat]: (prev[cat] || []).filter(k => k !== kw)
-                              }));
-                            }} style={{
-                              background: "none", border: "none", color: theme.accent,
-                              cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1,
-                            }}>×</button>
+                              setCustomCats(prev => ({ ...prev, [cat]: (prev[cat] || []).filter(k => k !== kw) }));
+                            }} style={{ background: "none", border: "none", color: theme.accent, cursor: "pointer", fontSize: 13, padding: 0, lineHeight: 1 }}>×</button>
                           )}
                         </span>
                       ))}
@@ -1356,10 +1478,7 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
                           onChange={e => setNewKeyword(e.target.value)}
                           onKeyDown={e => {
                             if (e.key === "Enter" && newKeyword.trim()) {
-                              setCustomCats(prev => ({
-                                ...prev,
-                                [cat]: [...(prev[cat] || []), newKeyword.trim().toLowerCase()]
-                              }));
+                              setCustomCats(prev => ({ ...prev, [cat]: [...(prev[cat] || []), newKeyword.trim().toLowerCase()] }));
                               setNewKeyword("");
                             }
                           }}
@@ -1380,14 +1499,58 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
                         width: "100%", padding: "8px", background: "transparent",
                         border: `1px dashed ${theme.border}`, borderRadius: 8,
                         color: theme.textMuted, cursor: "pointer", fontSize: 13, fontFamily: font,
-                      }}>+ Add keywords</button>
+                      }}>+ Add keyword</button>
                     )}
                   </div>
                 );
               })}
             </div>
+
+            {/* Uncategorized transactions quick-fix */}
+            {otherTxns.length > 0 && (
+              <div style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: 16, padding: 24 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Uncategorized Transactions</div>
+                <div style={{ fontSize: 13, color: theme.textMuted, marginBottom: 16 }}>
+                  {otherTxns.length} transactions couldn't be auto-categorized. Click a category to assign.
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {otherTxns.map(t => (
+                    <div key={t.id} style={{
+                      display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+                      padding: "12px 16px", background: theme.bg, borderRadius: 10,
+                      border: `1px solid ${theme.border}`,
+                    }}>
+                      <div style={{ flex: 1, minWidth: 140 }}>
+                        <div style={{ fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.desc}</div>
+                        <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>
+                          {t.date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                        </div>
+                      </div>
+                      <div style={{ fontFamily: fontMono, fontSize: 13, fontWeight: 600, color: theme.accent, minWidth: 70, textAlign: "right" }}>
+                        -{fmt(t.amount)}
+                      </div>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        {topCats.slice(0, 6).map(cat => (
+                          <button key={cat} onClick={() => {
+                            setTxnOverrides(prev => ({ ...prev, [t.id]: cat }));
+                          }} style={{
+                            padding: "4px 10px", background: theme.surface, border: `1px solid ${theme.border}`,
+                            borderRadius: 6, color: theme.textMuted, cursor: "pointer", fontSize: 12,
+                            fontFamily: font, transition: "all 0.15s",
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor = theme.accent; e.currentTarget.style.color = theme.accent; }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = theme.border; e.currentTarget.style.color = theme.textMuted; }}
+                          >{cat}</button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        )}
+          );
+        })()}
 
         {/* ─── SAVINGS TAB ─── */}
         {tab === "Savings" && (
