@@ -124,7 +124,7 @@ const DEFAULT_CATEGORIES = {
   "Other": [],
 };
 
-const PALETTE = ["#E8453C","#F4A623","#2EC4B6","#5B5EA6","#9B5DE5","#F15BB5","#00BBF9","#00F5D4","#FEE440","#FF6B6B","#4ECDC4","#45B7D1"];
+const PALETTE = ["#1a6b4a","#b02d21","#bfc9c0","#6f7a72","#3f4943","#8e130c","#a0b0a8","#005235","#d4a57a","#c8bfb0","#7a6b5a","#4a7a6a"];
 
 function categorize(desc, customCats) {
   // Strip bank-statement boilerplate so the merchant name is exposed
@@ -201,59 +201,70 @@ function detectColumns(headers) {
 }
 
 // ─── STYLES ───
-const font = `'DM Sans', 'Satoshi', system-ui, sans-serif`;
-const fontMono = `'JetBrains Mono', 'Fira Code', monospace`;
+const font = `'Manrope', sans-serif`;
+const fontMono = `'Inter', monospace`;
+const fontHeadline = `'Newsreader', serif`;
 
 const theme = {
-  bg: "#0B0F1A",
-  surface: "#131829",
-  surfaceHover: "#1A2035",
-  border: "#1E2642",
-  text: "#E8ECF4",
-  textMuted: "#7B8AB8",
-  accent: "#E8453C",
-  accentSoft: "rgba(232,69,60,0.12)",
-  green: "#2EC4B6",
-  greenSoft: "rgba(46,196,182,0.12)",
-  yellow: "#F4A623",
-  yellowSoft: "rgba(244,166,35,0.12)",
+  bg: "#fbf9f6",
+  surface: "#ffffff",
+  surfaceHover: "#f5f3f0",
+  surfaceContainer: "#efeeeb",
+  surfaceContainerLow: "#f5f3f0",
+  border: "#efeeeb",
+  borderVariant: "rgba(191,201,192,0.2)",
+  text: "#1b1c1a",
+  textMuted: "#3f4943",
+  textSubtle: "#6f7a72",
+  primary: "#005235",
+  primaryContainer: "#1a6b4a",
+  accent: "#b02d21",
+  accentSoft: "rgba(176,45,33,0.08)",
+  green: "#1a6b4a",
+  greenSoft: "rgba(26,107,74,0.08)",
+  yellow: "#005235",
+  yellowSoft: "rgba(0,82,53,0.08)",
 };
 
 // ─── COMPONENTS ───
 
-function StatCard({ label, value, sub, color = theme.accent, icon, onClick }) {
+function StatCard({ label, value, sub, color = theme.primary, onClick }) {
   return (
     <div style={{
-      background: theme.surface, border: `1px solid ${theme.border}`,
-      borderRadius: 16, padding: "24px 28px", flex: "1 1 200px", minWidth: 200,
-      position: "relative", overflow: "hidden",
-      transition: "border-color 0.2s", cursor: onClick ? "pointer" : "default", userSelect: "none",
+      background: theme.surface,
+      borderRadius: 8, padding: "20px 24px", flex: "1 1 200px", minWidth: 200,
+      borderLeft: `3px solid ${color}`,
+      boxShadow: "0 1px 3px rgba(27,28,26,0.07)",
+      cursor: onClick ? "pointer" : "default", userSelect: "none",
+      transition: "box-shadow 0.2s",
     }}
     onClick={onClick}
-    onMouseEnter={e => e.currentTarget.style.borderColor = color}
-    onMouseLeave={e => e.currentTarget.style.borderColor = theme.border}
+    onMouseEnter={e => { if (onClick) e.currentTarget.style.boxShadow = "0 3px 8px rgba(27,28,26,0.12)"; }}
+    onMouseLeave={e => { if (onClick) e.currentTarget.style.boxShadow = "0 1px 3px rgba(27,28,26,0.07)"; }}
     >
-      <div style={{
-        position: "absolute", top: -20, right: -20, width: 80, height: 80,
-        borderRadius: "50%", background: color, opacity: 0.06
-      }} />
-      <div style={{ fontSize: 13, color: theme.textMuted, letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600 }}>{label}</div>
-      <div style={{ fontSize: 32, fontWeight: 700, color, marginTop: 8, fontFamily: fontMono }}>{value}</div>
-      {sub && <div style={{ fontSize: 13, color: theme.textMuted, marginTop: 4 }}>{sub}</div>}
+      <div style={{ fontSize: 11, fontFamily: fontMono, color: theme.textMuted, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 500, marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 30, fontWeight: 600, color: theme.text, fontFamily: fontMono, fontFeatureSettings: '"tnum"', letterSpacing: "-0.02em" }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: color, marginTop: 6, display: "flex", alignItems: "center", gap: 4, fontFamily: font, fontWeight: 500 }}>{sub}</div>}
     </div>
   );
 }
 
 function TabBar({ tabs, active, onChange }) {
   return (
-    <div style={{ display: "flex", gap: 4, background: theme.surface, borderRadius: 12, padding: 4, border: `1px solid ${theme.border}` }}>
+    <div style={{ display: "flex", gap: 32 }}>
       {tabs.map(t => (
         <button key={t} onClick={() => onChange(t)} style={{
-          padding: "10px 20px", border: "none", borderRadius: 8, cursor: "pointer",
-          fontFamily: font, fontSize: 14, fontWeight: 600, letterSpacing: "0.02em",
-          background: active === t ? theme.accent : "transparent",
-          color: active === t ? "#fff" : theme.textMuted,
+          padding: "8px 0",
+          border: "none",
+          borderBottom: active === t ? `2px solid ${theme.primary}` : "2px solid transparent",
+          background: "transparent",
+          cursor: "pointer",
+          fontFamily: font,
+          fontSize: 14,
+          fontWeight: active === t ? 600 : 400,
+          color: active === t ? theme.primary : theme.textSubtle,
           transition: "all 0.2s",
+          letterSpacing: "0.01em",
         }}>{t}</button>
       ))}
     </div>
@@ -263,8 +274,8 @@ function TabBar({ tabs, active, onChange }) {
 function SectionTitle({ children, sub }) {
   return (
     <div style={{ marginBottom: 20 }}>
-      <h2 style={{ fontSize: 22, fontWeight: 700, color: theme.text, margin: 0 }}>{children}</h2>
-      {sub && <p style={{ fontSize: 14, color: theme.textMuted, margin: "4px 0 0" }}>{sub}</p>}
+      <h2 style={{ fontSize: 24, fontWeight: 400, fontFamily: fontHeadline, color: theme.text, margin: 0, lineHeight: 1.2 }}>{children}</h2>
+      {sub && <p style={{ fontSize: 11, fontFamily: fontMono, color: theme.textSubtle, margin: "4px 0 0", textTransform: "uppercase", letterSpacing: "0.08em" }}>{sub}</p>}
     </div>
   );
 }
@@ -821,72 +832,152 @@ function UploadScreen({ onData }) {
     handleFile(e.dataTransfer.files[0]);
   }, [handleFile]);
 
+  const featureBadges = [
+    { icon: "encrypted", title: "Private", desc: "Client-side processing only" },
+    { icon: "auto_awesome", title: "Visual insights", desc: "Categorized spend patterns" },
+    { icon: "track_changes", title: "Savings goals", desc: "Automated milestone tracking" },
+  ];
+
   return (
-    <div style={{
-      minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center",
-      justifyContent: "center", background: theme.bg, fontFamily: font, color: theme.text,
-      padding: 32,
-    }}>
-      <div style={{ textAlign: "center", maxWidth: 600, width: "100%" }}>
-        <div style={{ fontSize: 48, fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1.1 }}>
-          <span style={{ color: theme.accent }}>Cash</span>Canvas
-        </div>
-        <p style={{ color: theme.textMuted, fontSize: 17, margin: "12px 0 40px", lineHeight: 1.6 }}>
-          Upload your bank statement to visualize spending patterns, track expenses, and reach your savings goals.
-        </p>
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: theme.bg, fontFamily: font, color: theme.text }}>
+      {/* Nav */}
+      <header style={{ background: theme.bg, borderBottom: `1px solid ${theme.surfaceContainerLow}`, padding: "20px 48px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ fontSize: 22, fontFamily: fontHeadline, fontStyle: "italic", color: theme.text }}>CashCanvas</div>
+      </header>
 
-        <div
-          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={onDrop}
-          onClick={() => inputRef.current?.click()}
-          style={{
-            border: `2px dashed ${dragging ? theme.accent : theme.border}`,
-            borderRadius: 20, padding: "60px 40px", cursor: "pointer",
-            background: dragging ? theme.accentSoft : theme.surface,
-            transition: "all 0.3s",
+      {/* Main */}
+      <main style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 48px 0", maxWidth: 1000, margin: "0 auto", width: "100%" }}>
+        {/* Hero */}
+        <section style={{ textAlign: "center", marginBottom: 48 }}>
+          <h1 style={{ fontSize: 56, fontFamily: fontHeadline, fontWeight: 400, color: theme.text, lineHeight: 1.1, margin: "0 0 16px", letterSpacing: "-0.02em" }}>
+            Cash<span style={{ fontStyle: "italic" }}>Canvas</span>
+          </h1>
+          <p style={{ fontFamily: fontHeadline, fontStyle: "italic", fontSize: 18, color: theme.textMuted, margin: 0 }}>
+            The <span style={{ fontFamily: fontMono, fontStyle: "normal", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.2em", color: theme.primary }}>Atelier</span> of your personal finance.
+          </p>
+        </section>
+
+        {/* Two-column layout */}
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 48, width: "100%", alignItems: "start" }}>
+          {/* Left: Drop zone */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div
+              onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={onDrop}
+              onClick={() => inputRef.current?.click()}
+              style={{
+                background: dragging ? theme.greenSoft : theme.surface,
+                border: `1px dashed ${dragging ? theme.primary : "#d0d0d0"}`,
+                borderRadius: 8,
+                height: 320,
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                cursor: "pointer",
+                transition: "all 0.25s",
+              }}
+            >
+              <div style={{
+                width: 56, height: 56,
+                background: dragging ? theme.greenSoft : theme.surfaceContainerLow,
+                borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+                marginBottom: 20, transition: "background 0.2s",
+              }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 28, color: theme.primary, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>cloud_upload</span>
+              </div>
+              <p style={{ fontFamily: fontHeadline, fontStyle: "italic", fontSize: 18, color: theme.textMuted, margin: "0 0 8px" }}>
+                {loading ? (loadingMsg || "Parsing your statement...") : "Drop your bank statement"}
+              </p>
+              <p style={{ fontFamily: fontMono, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.15em", color: theme.textSubtle, margin: 0 }}>
+                CSV, PDF or OFX files accepted
+              </p>
+              <input ref={inputRef} type="file" accept=".csv,.tsv,.pdf" style={{ display: "none" }}
+                onChange={(e) => handleFile(e.target.files[0])} />
+            </div>
+            {error && (
+              <div style={{
+                padding: "12px 16px", background: "rgba(176,45,33,0.06)",
+                border: `1px solid rgba(176,45,33,0.2)`, borderRadius: 6, color: theme.accent,
+                fontSize: 13, fontFamily: font,
+              }}>{error}</div>
+            )}
+          </div>
+
+          {/* Right: Badges + image */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 32, paddingTop: 8 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              {featureBadges.map(b => (
+                <div key={b.title} style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                  <div style={{
+                    width: 40, height: 40, borderRadius: "50%",
+                    background: theme.surfaceContainerLow,
+                    display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                  }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 20, color: theme.textSubtle, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>{b.icon}</span>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: theme.text, marginBottom: 2 }}>{b.title}</div>
+                    <div style={{ fontSize: 12, color: theme.textSubtle }}>{b.desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Decorative panel */}
+            <div style={{
+              background: theme.surfaceContainerLow,
+              borderRadius: 8, aspectRatio: "4/3",
+              display: "flex", alignItems: "flex-end", padding: 20,
+              overflow: "hidden", position: "relative",
+            }}>
+              <div style={{
+                position: "absolute", inset: 0,
+                background: "linear-gradient(135deg, #efeeeb 0%, #e0ddd8 100%)",
+              }} />
+              <p style={{ position: "relative", fontFamily: fontMono, fontSize: 9, textTransform: "uppercase", letterSpacing: "0.2em", color: theme.textSubtle }}>Editorial Finance</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Sample data CTA */}
+        <div style={{ marginTop: 48, textAlign: "center" }}>
+          <button onClick={() => {
+            const sample = generateSampleData();
+            onData(sample, "sample_data.csv", "bank");
+          }} style={{
+            background: "transparent", border: "none",
+            color: theme.text, cursor: "pointer", fontFamily: font, fontSize: 14, fontWeight: 500,
+            display: "inline-flex", alignItems: "center", gap: 8,
+            padding: "8px 0", borderBottom: `1px solid transparent`,
+            transition: "border-color 0.2s",
           }}
-        >
-          <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
-          <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 8 }}>
-            {loading ? (loadingMsg || "Parsing your statement...") : "Drop your bank statement here"}
-          </div>
-          <div style={{ fontSize: 14, color: theme.textMuted }}>
-            Supports CSV and PDF files · All data stays in your browser
-          </div>
-          <input ref={inputRef} type="file" accept=".csv,.tsv,.pdf" style={{ display: "none" }}
-            onChange={(e) => handleFile(e.target.files[0])} />
+          onMouseEnter={e => e.currentTarget.style.borderBottomColor = theme.text}
+          onMouseLeave={e => e.currentTarget.style.borderBottomColor = "transparent"}
+          >
+            Try with sample data
+            <span className="material-symbols-outlined" style={{ fontSize: 16, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>arrow_forward</span>
+          </button>
         </div>
+      </main>
 
-        {error && (
-          <div style={{
-            marginTop: 20, padding: "14px 20px", background: theme.accentSoft,
-            border: `1px solid ${theme.accent}`, borderRadius: 12, color: theme.accent,
-            fontSize: 14, textAlign: "left"
-          }}>{error}</div>
-        )}
-
-        <div style={{ marginTop: 48, display: "flex", gap: 32, justifyContent: "center", flexWrap: "wrap" }}>
-          {["🔒 Private", "📈 Visual insights", "🎯 Savings goals"].map(t => (
-            <div key={t} style={{ fontSize: 14, color: theme.textMuted, fontWeight: 500 }}>{t}</div>
-          ))}
+      {/* Footer */}
+      <footer style={{ background: theme.surfaceContainerLow, marginTop: 64, padding: "40px 48px" }}>
+        <div style={{ maxWidth: 1000, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 32 }}>
+          <div style={{ maxWidth: 240 }}>
+            <p style={{ fontFamily: fontHeadline, fontStyle: "italic", fontSize: 18, color: theme.text, marginBottom: 10 }}>The Financial Atelier</p>
+            <p style={{ fontSize: 13, color: theme.textSubtle, lineHeight: 1.6, margin: 0 }}>Personal finance is a craft. We provide the tools to refine your spending habits into a masterpiece of wealth preservation.</p>
+          </div>
+          <div style={{ display: "flex", gap: 48 }}>
+            <div>
+              <p style={{ fontFamily: fontMono, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.15em", color: theme.textSubtle, marginBottom: 12 }}>Platform</p>
+              {["Security", "Privacy"].map(l => <div key={l} style={{ fontSize: 13, color: theme.textSubtle, marginBottom: 8 }}>{l}</div>)}
+            </div>
+          </div>
         </div>
-
-        <button onClick={() => {
-          const sample = generateSampleData();
-          onData(sample, "sample_data.csv", "bank");
-        }} style={{
-          marginTop: 32, padding: "12px 28px", background: "transparent",
-          border: `1px solid ${theme.border}`, borderRadius: 10, color: theme.textMuted,
-          cursor: "pointer", fontFamily: font, fontSize: 14, fontWeight: 500,
-          transition: "all 0.2s",
-        }}
-        onMouseEnter={e => { e.currentTarget.style.borderColor = theme.accent; e.currentTarget.style.color = theme.text; }}
-        onMouseLeave={e => { e.currentTarget.style.borderColor = theme.border; e.currentTarget.style.color = theme.textMuted; }}
-        >
-          Try with sample data
-        </button>
-      </div>
+        <div style={{ maxWidth: 1000, margin: "32px auto 0", paddingTop: 20, borderTop: `1px solid ${theme.border}`, display: "flex", justifyContent: "space-between" }}>
+          <span style={{ fontFamily: fontMono, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em", color: theme.textSubtle }}>© 2025 CashCanvas</span>
+          <span style={{ fontFamily: fontMono, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em", color: theme.textSubtle }}>All data processed locally</span>
+        </div>
+      </footer>
     </div>
   );
 }
@@ -951,12 +1042,14 @@ function CustomTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
     <div style={{
-      background: theme.surface, border: `1px solid ${theme.border}`,
-      borderRadius: 10, padding: "10px 14px", fontSize: 13, fontFamily: font,
+      background: theme.surface,
+      borderRadius: 6, padding: "10px 14px", fontSize: 13, fontFamily: font,
+      boxShadow: "0 8px 24px rgba(27,28,26,0.1)",
+      border: `1px solid ${theme.border}`,
     }}>
-      <div style={{ color: theme.textMuted, marginBottom: 4 }}>{label}</div>
+      <div style={{ color: theme.textSubtle, marginBottom: 6, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: fontMono }}>{label}</div>
       {payload.map((p, i) => (
-        <div key={i} style={{ color: p.color || theme.text, fontWeight: 600 }}>
+        <div key={i} style={{ color: p.color || theme.text, fontWeight: 600, fontFamily: fontMono, fontFeatureSettings: '"tnum"' }}>
           {p.name}: ${Math.abs(p.value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </div>
       ))}
@@ -1073,93 +1166,104 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
   return (
     <div style={{ minHeight: "100vh", background: theme.bg, fontFamily: font, color: theme.text }}>
       {/* Header */}
-      <div style={{
-        padding: "16px 32px", borderBottom: `1px solid ${theme.border}`,
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        background: theme.surface, position: "sticky", top: 0, zIndex: 100,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <span style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em" }}>
-            <span style={{ color: theme.accent }}>Cash</span>Canvas
-          </span>
-          <span style={{ fontSize: 13, color: theme.textMuted, background: theme.bg, padding: "4px 10px", borderRadius: 6 }}>
-            {fileName}
-          </span>
-          {statementType !== "unknown" && (
-            <span style={{
-              fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 6,
-              background: statementType === "credit_card" ? "#7c3aed22" : "#0891b222",
-              color: statementType === "credit_card" ? "#7c3aed" : "#0891b2",
-              border: `1px solid ${statementType === "credit_card" ? "#7c3aed44" : "#0891b244"}`,
+      <header style={{ background: theme.bg, position: "sticky", top: 0, zIndex: 100 }}>
+        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "20px 40px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+              <span style={{ fontSize: 22, fontFamily: fontHeadline, fontStyle: "italic", color: theme.text }}>CashCanvas</span>
+              <div style={{ display: "flex", gap: 8 }}>
+                <span style={{ fontSize: 10, fontFamily: fontMono, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: theme.textSubtle, background: theme.surfaceContainerLow, padding: "4px 10px", borderRadius: 20, display: "flex", alignItems: "center", gap: 5 }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 13, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>file_present</span>
+                  {fileName}
+                </span>
+                {statementType !== "unknown" && (
+                  <span style={{ fontSize: 10, fontFamily: fontMono, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: theme.textSubtle, background: theme.surfaceContainerLow, padding: "4px 10px", borderRadius: 20, display: "flex", alignItems: "center", gap: 5 }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 13, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>account_balance</span>
+                    {statementType === "credit_card" ? "Credit Card" : "Bank Statement"}
+                  </span>
+                )}
+              </div>
+            </div>
+            <button onClick={onReset} style={{
+              padding: "9px 20px",
+              background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryContainer} 100%)`,
+              border: "none", borderRadius: 6, color: "#fff",
+              cursor: "pointer", fontFamily: font, fontSize: 13, fontWeight: 600,
+              display: "flex", alignItems: "center", gap: 6,
             }}>
-              {statementType === "credit_card" ? "Credit Card" : "Bank Statement"}
-            </span>
-          )}
+              <span className="material-symbols-outlined" style={{ fontSize: 16, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>add</span>
+              New Upload
+            </button>
+          </div>
+          <nav style={{ marginTop: 12 }}>
+            <TabBar tabs={["Overview", "Categories", "Savings"]} active={tab} onChange={setTab} />
+          </nav>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <TabBar tabs={["Overview", "Categories", "Savings"]} active={tab} onChange={setTab} />
-          <button onClick={onReset} style={{
-            padding: "10px 18px", background: "transparent", border: `1px solid ${theme.border}`,
-            borderRadius: 8, color: theme.textMuted, cursor: "pointer", fontFamily: font, fontSize: 13,
-          }}>New Upload</button>
-        </div>
-      </div>
+        <div style={{ height: 1, background: theme.surfaceContainerLow }} />
+      </header>
 
-      <div style={{ padding: "28px 32px", maxWidth: 1280, margin: "0 auto" }}>
+      <div style={{ padding: "40px 40px", maxWidth: 1280, margin: "0 auto" }}>
         {/* ─── OVERVIEW TAB ─── */}
         {tab === "Overview" && (
           <div>
+            {/* Hero */}
+            <section style={{ marginBottom: 36 }}>
+              <h1 style={{ fontSize: 48, fontFamily: fontHeadline, fontWeight: 400, color: theme.text, margin: "0 0 8px", lineHeight: 1.1 }}>
+                The <span style={{ fontStyle: "italic", color: theme.primary }}>Canvas</span> of your wealth
+              </h1>
+              <p style={{ fontSize: 15, color: theme.textSubtle, margin: 0, maxWidth: 520, lineHeight: 1.6 }}>
+                A curated perspective of your financial movement. Calculated with surgical precision.
+              </p>
+            </section>
+
             {/* Stats Row */}
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 28 }}>
-              <StatCard label="Total Income" value={fmt(totalIncome)} color={theme.green} sub={`${income.length} transactions`} onClick={() => setTab("Transactions")} />
-              <StatCard label="Total Expenses" value={fmt(totalExpenses)} color={theme.accent} sub={`${expenses.length} transactions`} onClick={() => setTab("Transactions")} />
-              <StatCard label="Net Cashflow" value={(netCashflow >= 0 ? "+" : "-") + fmt(netCashflow)} color={netCashflow >= 0 ? theme.green : theme.accent} sub={netCashflow >= 0 ? "Surplus" : "Deficit"} />
-              <StatCard label="Transactions" value={transactions.length} color={theme.yellow} sub={`${monthlyData.length} months`} onClick={() => setTab("Transactions")} />
+              <StatCard label="Total Income" value={fmt(totalIncome)} color={theme.green} sub={`↑ ${income.length} transactions`} onClick={() => setTab("Transactions")} />
+              <StatCard label="Total Expenses" value={fmt(totalExpenses)} color={theme.accent} sub={`↓ ${expenses.length} transactions`} onClick={() => setTab("Transactions")} />
+              <StatCard label="Net Cashflow" value={(netCashflow >= 0 ? "+" : "") + fmt(netCashflow)} color={netCashflow >= 0 ? theme.green : theme.accent} sub={netCashflow >= 0 ? "Surplus" : "Deficit"} />
+              <StatCard label="Transactions" value={transactions.length} color={theme.textSubtle} sub={`${monthlyData.length} months`} onClick={() => setTab("Transactions")} />
             </div>
 
             {/* Charts Row */}
-            <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginBottom: 28 }}>
-              {/* Spending by Category Pie */}
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 3fr", gap: 20, marginBottom: 24 }}>
+              {/* Spending Composition Donut */}
               <div style={{
-                flex: "1 1 380px", background: theme.surface, border: `1px solid ${theme.border}`,
-                borderRadius: 16, padding: 24, minWidth: 340,
+                background: theme.surface, borderRadius: 8, padding: "28px 32px",
+                boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
               }}>
-                <SectionTitle sub="Where your money goes">Spending by Category</SectionTitle>
-                <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                  <ResponsiveContainer width="50%" height={240}>
-                    <PieChart>
-                      <Pie data={catBreakdown} dataKey="value" cx="50%" cy="50%" innerRadius={55} outerRadius={95} paddingAngle={2} strokeWidth={0}>
-                        {catBreakdown.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
-                      </Pie>
-                      <Tooltip content={<CustomTooltip />} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div style={{ flex: 1, fontSize: 13 }}>
-                    {catBreakdown.slice(0, 7).map((c, i) => (
-                      <div key={c.name} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                        <div style={{ width: 10, height: 10, borderRadius: 3, background: PALETTE[i % PALETTE.length], flexShrink: 0 }} />
-                        <span style={{ color: theme.textMuted, flex: 1 }}>{c.name}</span>
-                        <span style={{ fontFamily: fontMono, fontWeight: 600 }}>{fmt(c.value)}</span>
-                      </div>
-                    ))}
-                  </div>
+                <SectionTitle sub="By Category">Spending Composition</SectionTitle>
+                <ResponsiveContainer width="100%" height={220}>
+                  <PieChart>
+                    <Pie data={catBreakdown} dataKey="value" cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={2} strokeWidth={0}>
+                      {catBreakdown.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
+                    </Pie>
+                    <Tooltip content={<CustomTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 16px", marginTop: 8 }}>
+                  {catBreakdown.slice(0, 6).map((c, i) => (
+                    <div key={c.name} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: PALETTE[i % PALETTE.length], flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, color: theme.textSubtle, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
 
-              {/* Monthly Trend Bar */}
+              {/* Fiscal Trajectory Bar */}
               <div style={{
-                flex: "1 1 480px", background: theme.surface, border: `1px solid ${theme.border}`,
-                borderRadius: 16, padding: 24, minWidth: 400,
+                background: theme.surface, borderRadius: 8, padding: "28px 32px",
+                boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
               }}>
-                <SectionTitle sub="Income vs expenses over time">Monthly Trends</SectionTitle>
-                <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={monthlyData} barGap={4}>
-                    <CartesianGrid stroke={theme.border} strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="month" tick={{ fill: theme.textMuted, fontSize: 12 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: theme.textMuted, fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v / 1000).toFixed(1)}k`} />
+                <SectionTitle sub={`Income vs Expenses · Last ${monthlyData.length} Months`}>Fiscal Trajectory</SectionTitle>
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={monthlyData} barGap={3} barSize={10}>
+                    <CartesianGrid stroke={theme.surfaceContainerLow} strokeDasharray="0" vertical={false} />
+                    <XAxis dataKey="month" tick={{ fill: theme.textSubtle, fontSize: 11, fontFamily: fontMono }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: theme.textSubtle, fontSize: 11, fontFamily: fontMono }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
                     <Tooltip content={<CustomTooltip />} />
-                    <Bar dataKey="Income" fill={theme.green} radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="Expenses" fill={theme.accent} radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="Income" fill={`${theme.green}33`} radius={[2, 2, 0, 0]} />
+                    <Bar dataKey="Expenses" fill={`${theme.accent}55`} radius={[2, 2, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -1167,17 +1271,18 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
 
             {/* Net Cashflow Line */}
             <div style={{
-              background: theme.surface, border: `1px solid ${theme.border}`,
-              borderRadius: 16, padding: 24, marginBottom: 28,
+              background: theme.surface,
+              borderRadius: 8, padding: "28px 32px", marginBottom: 24,
+              boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
             }}>
-              <SectionTitle sub="Monthly net savings trajectory">Net Cashflow Trend</SectionTitle>
+              <SectionTitle sub="Net cashflow trajectory">Net Flow Dynamics</SectionTitle>
               <ResponsiveContainer width="100%" height={200}>
                 <LineChart data={monthlyData}>
-                  <CartesianGrid stroke={theme.border} strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="month" tick={{ fill: theme.textMuted, fontSize: 12 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: theme.textMuted, fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={v => `$${v.toLocaleString()}`} />
+                  <CartesianGrid stroke={theme.surfaceContainerLow} strokeDasharray="0" vertical={false} />
+                  <XAxis dataKey="month" tick={{ fill: theme.textSubtle, fontSize: 11, fontFamily: fontMono }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: theme.textSubtle, fontSize: 11, fontFamily: fontMono }} axisLine={false} tickLine={false} tickFormatter={v => `$${v.toLocaleString()}`} />
                   <Tooltip content={<CustomTooltip />} />
-                  <Line type="monotone" dataKey="Net" stroke={theme.yellow} strokeWidth={3} dot={{ r: 5, fill: theme.yellow }} />
+                  <Line type="monotone" dataKey="Net" stroke={theme.primary} strokeWidth={2.5} dot={{ r: 4, fill: theme.primary, strokeWidth: 0 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -1185,27 +1290,39 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
             {/* Recurring + Top Merchants */}
             <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
               <div style={{
-                flex: "1 1 400px", background: theme.surface, border: `1px solid ${theme.border}`,
-                borderRadius: 16, padding: 24,
+                flex: "1 1 400px", background: theme.surface,
+                borderRadius: 8, padding: "28px 32px",
+                boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
               }}>
-                <SectionTitle sub="Regular charges detected">Recurring Payments</SectionTitle>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+                  <SectionTitle sub="Regular charges detected">Recurring Payments</SectionTitle>
+                  <span className="material-symbols-outlined" style={{ color: theme.textSubtle, opacity: 0.4, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>repeat</span>
+                </div>
                 {recurring.length === 0 ? (
-                  <div style={{ color: theme.textMuted, fontSize: 14 }}>No recurring payments detected</div>
+                  <div style={{ color: theme.textSubtle, fontSize: 14 }}>No recurring payments detected</div>
                 ) : (
                   <div style={{ maxHeight: 300, overflowY: "auto" }}>
                     {recurring.slice(0, 8).map(r => (
                       <div key={r.desc} style={{
-                        display: "flex", alignItems: "center", justifyContent: "space-between",
-                        padding: "12px 0", borderBottom: `1px solid ${theme.border}`,
+                        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+                        padding: "14px 0", borderBottom: `1px solid ${theme.surfaceContainer}`,
                       }}>
-                        <div>
-                          <div style={{ fontSize: 14, fontWeight: 600 }}>{r.desc}</div>
-                          <div style={{ fontSize: 12, color: theme.textMuted }}>
-                            {r.count}x · {r.category} {r.isFixed && <span style={{ color: theme.green }}>· Fixed</span>}
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                          <div style={{
+                            width: 32, height: 32, borderRadius: 4, flexShrink: 0,
+                            background: theme.surfaceContainerLow,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            fontSize: 11, fontWeight: 700, color: theme.textSubtle, fontFamily: fontMono,
+                          }}>{r.desc[0].toUpperCase()}</div>
+                          <div>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: theme.text }}>{r.desc}</div>
+                            <div style={{ fontSize: 10, color: theme.textSubtle, fontFamily: fontMono, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 2 }}>
+                              {r.category} · {r.isFixed ? "Fixed" : "Variable"}
+                            </div>
                           </div>
                         </div>
-                        <div style={{ fontFamily: fontMono, fontWeight: 600, color: theme.accent }}>
-                          ~{fmt(r.avg)}<span style={{ color: theme.textMuted, fontSize: 11 }}>/mo</span>
+                        <div style={{ fontFamily: fontMono, fontWeight: 600, fontSize: 14, color: theme.text, fontFeatureSettings: '"tnum"', whiteSpace: "nowrap" }}>
+                          {fmt(r.avg)}<span style={{ color: theme.textSubtle, fontSize: 11, fontWeight: 400 }}>/mo</span>
                         </div>
                       </div>
                     ))}
@@ -1214,25 +1331,30 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
               </div>
 
               <div style={{
-                flex: "1 1 400px", background: theme.surface, border: `1px solid ${theme.border}`,
-                borderRadius: 16, padding: 24,
+                flex: "1 1 400px", background: theme.surface,
+                borderRadius: 8, padding: "28px 32px",
+                boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
               }}>
-                <SectionTitle sub="Highest total spend">Top Merchants</SectionTitle>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+                  <SectionTitle sub="Highest total spend">Top Merchants</SectionTitle>
+                  <span className="material-symbols-outlined" style={{ color: theme.textSubtle, opacity: 0.4, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>storefront</span>
+                </div>
                 {topMerchants.map((m, i) => (
                   <div key={m.desc} style={{
                     display: "flex", alignItems: "center", gap: 12,
-                    padding: "10px 0", borderBottom: `1px solid ${theme.border}`,
+                    padding: "14px 0", borderBottom: `1px solid ${theme.surfaceContainer}`,
                   }}>
                     <div style={{
-                      width: 28, height: 28, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center",
-                      background: PALETTE[i % PALETTE.length] + "22", color: PALETTE[i % PALETTE.length],
-                      fontSize: 13, fontWeight: 700, flexShrink: 0,
-                    }}>{i + 1}</div>
+                      width: 32, height: 32, borderRadius: 4, flexShrink: 0,
+                      background: theme.surfaceContainerLow,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 11, fontWeight: 700, color: theme.textSubtle, fontFamily: fontMono,
+                    }}>{m.desc[0].toUpperCase()}</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.desc}</div>
-                      <div style={{ fontSize: 12, color: theme.textMuted }}>{m.count} transactions · {m.category}</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: theme.text }}>{m.desc}</div>
+                      <div style={{ fontSize: 10, color: theme.textSubtle, fontFamily: fontMono, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 2 }}>{m.count} transactions · {m.category}</div>
                     </div>
-                    <div style={{ fontFamily: fontMono, fontWeight: 600, color: theme.accent }}>{fmt(m.total)}</div>
+                    <div style={{ fontFamily: fontMono, fontWeight: 600, fontSize: 14, color: theme.text, fontFeatureSettings: '"tnum"', whiteSpace: "nowrap" }}>{fmt(m.total)}</div>
                   </div>
                 ))}
               </div>
@@ -1248,38 +1370,39 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
             {selectedTxns.size > 0 && (
               <div style={{
                 display: "flex", alignItems: "center", gap: 12, marginBottom: 12,
-                padding: "10px 16px", background: theme.accentSoft, borderRadius: 10,
-                border: `1px solid ${theme.accent}`,
+                padding: "10px 16px", background: theme.greenSoft, borderRadius: 6,
+                border: `1px solid ${theme.green}33`,
               }}>
-                <span style={{ fontSize: 14, color: theme.accent, fontWeight: 600 }}>{selectedTxns.size} selected</span>
+                <span style={{ fontSize: 14, color: theme.primary, fontWeight: 600 }}>{selectedTxns.size} selected</span>
                 <button onClick={() => setReassignTxn(true)} style={{
-                  padding: "6px 14px", background: theme.accent, border: "none",
-                  borderRadius: 7, color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 600,
+                  padding: "6px 14px", background: theme.primary, border: "none",
+                  borderRadius: 4, color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 600,
                   fontFamily: "inherit",
                 }}>Reassign Category</button>
                 <button onClick={() => setSelectedTxns(new Set())} style={{
-                  padding: "6px 14px", background: "none", border: `1px solid ${theme.accent}`,
-                  borderRadius: 7, color: theme.accent, cursor: "pointer", fontSize: 13, fontWeight: 600,
+                  padding: "6px 14px", background: "none", border: `1px solid ${theme.primary}44`,
+                  borderRadius: 4, color: theme.primary, cursor: "pointer", fontSize: 13, fontWeight: 600,
                   fontFamily: "inherit",
                 }}>Clear</button>
               </div>
             )}
 
             <div style={{
-              background: theme.surface, border: `1px solid ${theme.border}`,
-              borderRadius: 16, overflow: "hidden",
+              background: theme.surface,
+              borderRadius: 8, overflow: "hidden",
+              boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
             }}>
               <div style={{
                 display: "grid", gridTemplateColumns: "40px 120px 1fr 140px 140px",
-                padding: "14px 20px", borderBottom: `1px solid ${theme.border}`,
-                fontSize: 12, fontWeight: 600, color: theme.textMuted, textTransform: "uppercase", letterSpacing: "0.06em",
-                alignItems: "center",
+                padding: "12px 20px", borderBottom: `1px solid ${theme.surfaceContainer}`,
+                fontSize: 10, fontWeight: 600, color: theme.textSubtle, textTransform: "uppercase", letterSpacing: "0.1em",
+                fontFamily: fontMono, alignItems: "center",
               }}>
                 <div>
                   <input type="checkbox"
                     checked={selectedTxns.size === transactions.length && transactions.length > 0}
                     onChange={e => setSelectedTxns(e.target.checked ? new Set(transactions.map(t => t.id)) : new Set())}
-                    style={{ cursor: "pointer", accentColor: "var(--accent, #6366f1)" }}
+                    style={{ cursor: "pointer", accentColor: theme.primary }}
                   />
                 </div>
                 <div>Date</div><div>Description</div><div>Category</div><div style={{ textAlign: "right" }}>Amount</div>
@@ -1288,12 +1411,12 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
                 {transactions.map(t => (
                   <div key={t.id} style={{
                     display: "grid", gridTemplateColumns: "40px 120px 1fr 140px 140px",
-                    padding: "12px 20px", borderBottom: `1px solid ${theme.border}`,
-                    fontSize: 14, alignItems: "center",
-                    transition: "background 0.15s",
-                    background: selectedTxns.has(t.id) ? theme.accentSoft : "transparent",
+                    padding: "12px 20px", borderBottom: `1px solid ${theme.surfaceContainer}`,
+                    fontSize: 13, alignItems: "center",
+                    transition: "background 0.12s",
+                    background: selectedTxns.has(t.id) ? theme.greenSoft : "transparent",
                   }}
-                  onMouseEnter={e => { if (!selectedTxns.has(t.id)) e.currentTarget.style.background = theme.surfaceHover; }}
+                  onMouseEnter={e => { if (!selectedTxns.has(t.id)) e.currentTarget.style.background = theme.surfaceContainerLow; }}
                   onMouseLeave={e => { if (!selectedTxns.has(t.id)) e.currentTarget.style.background = "transparent"; }}
                   >
                     <div>
@@ -1304,23 +1427,23 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
                           e.target.checked ? next.add(t.id) : next.delete(t.id);
                           return next;
                         })}
-                        style={{ cursor: "pointer", accentColor: "var(--accent, #6366f1)" }}
+                        style={{ cursor: "pointer", accentColor: theme.primary }}
                       />
                     </div>
-                    <div style={{ color: theme.textMuted, fontSize: 13 }}>
+                    <div style={{ color: theme.textSubtle, fontSize: 12, fontFamily: fontMono }}>
                       {t.date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" })}
                     </div>
-                    <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 12 }}>{t.desc}</div>
+                    <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 12, fontWeight: 500 }}>{t.desc}</div>
                     <div>
                       <span style={{
-                        fontSize: 12, padding: "3px 10px", borderRadius: 6,
-                        background: theme.bg, color: theme.textMuted, fontWeight: 500,
+                        fontSize: 11, padding: "2px 8px", borderRadius: 4, fontFamily: fontMono,
+                        background: theme.surfaceContainerLow, color: theme.textSubtle,
                       }}>{t.category}</span>
                     </div>
                     <div style={{
-                      textAlign: "right", fontFamily: fontMono, fontWeight: 600,
+                      textAlign: "right", fontFamily: fontMono, fontWeight: 600, fontSize: 13,
                       color: t.amount >= 0 ? theme.green : theme.text,
-                      cursor: "default", userSelect: "none",
+                      fontFeatureSettings: '"tnum"', cursor: "default", userSelect: "none",
                     }}>
                       {t.amount >= 0 ? "+" : "-"}{fmt(t.amount)}
                     </div>
@@ -1332,15 +1455,17 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
             {/* Reassign modal */}
             {reassignTxn !== null && (
               <div style={{
-                position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
+                position: "fixed", inset: 0, background: "rgba(27,28,26,0.4)",
                 display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200,
+                backdropFilter: "blur(4px)",
               }} onClick={() => { setReassignTxn(null); setNewCatName(""); }}>
                 <div style={{
-                  background: theme.surface, border: `1px solid ${theme.border}`,
-                  borderRadius: 16, padding: 28, width: 360, maxHeight: "80vh", overflowY: "auto",
+                  background: theme.surface,
+                  borderRadius: 8, padding: 28, width: 360, maxHeight: "80vh", overflowY: "auto",
+                  boxShadow: "0 24px 48px rgba(27,28,26,0.12)",
                 }} onClick={e => e.stopPropagation()}>
-                  <h3 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 700 }}>Reassign Category</h3>
-                  <p style={{ fontSize: 14, color: theme.textMuted, margin: "0 0 16px" }}>
+                  <h3 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 400, fontFamily: fontHeadline }}>Reassign Category</h3>
+                  <p style={{ fontSize: 13, color: theme.textSubtle, margin: "0 0 16px" }}>
                     {selectedTxns.size} transaction{selectedTxns.size !== 1 ? "s" : ""} will be updated
                   </p>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -1355,15 +1480,18 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
                         setReassignTxn(null);
                         setNewCatName("");
                       }} style={{
-                        padding: "10px 16px", background: theme.bg,
+                        padding: "10px 14px", background: theme.surfaceContainerLow,
                         border: `1px solid ${theme.border}`,
-                        borderRadius: 8, color: theme.text, cursor: "pointer", textAlign: "left",
-                        fontFamily: font, fontSize: 14,
-                      }}>{cat}</button>
+                        borderRadius: 4, color: theme.text, cursor: "pointer", textAlign: "left",
+                        fontFamily: font, fontSize: 13, transition: "background 0.1s",
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = theme.surfaceContainer}
+                      onMouseLeave={e => e.currentTarget.style.background = theme.surfaceContainerLow}
+                      >{cat}</button>
                     ))}
                     {/* Create new category */}
-                    <div style={{ marginTop: 8, borderTop: `1px solid ${theme.border}`, paddingTop: 12 }}>
-                      <div style={{ fontSize: 12, color: theme.textMuted, marginBottom: 6, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Create new category</div>
+                    <div style={{ marginTop: 8, borderTop: `1px solid ${theme.surfaceContainer}`, paddingTop: 12 }}>
+                      <div style={{ fontSize: 10, color: theme.textSubtle, marginBottom: 8, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", fontFamily: fontMono }}>Create new category</div>
                       <div style={{ display: "flex", gap: 6 }}>
                         <input
                           value={newCatName}
@@ -1384,9 +1512,9 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
                           }}
                           placeholder="e.g. Pet Care, Education..."
                           style={{
-                            flex: 1, padding: "10px 14px", background: theme.bg,
-                            border: `1px solid ${theme.border}`, borderRadius: 8,
-                            color: theme.text, fontFamily: font, fontSize: 14, outline: "none",
+                            flex: 1, padding: "9px 12px", background: theme.surfaceContainerLow,
+                            border: `1px solid ${theme.border}`, borderRadius: 4,
+                            color: theme.text, fontFamily: font, fontSize: 13, outline: "none",
                           }}
                         />
                         <button onClick={() => {
@@ -1402,11 +1530,11 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
                           setReassignTxn(null);
                           setNewCatName("");
                         }} style={{
-                          padding: "10px 16px", background: newCatName.trim() ? theme.accent : theme.bg,
-                          border: `1px solid ${newCatName.trim() ? theme.accent : theme.border}`,
-                          borderRadius: 8, color: newCatName.trim() ? "#fff" : theme.textMuted,
+                          padding: "9px 14px", background: newCatName.trim() ? theme.primary : theme.surfaceContainer,
+                          border: "none",
+                          borderRadius: 4, color: newCatName.trim() ? "#fff" : theme.textSubtle,
                           cursor: newCatName.trim() ? "pointer" : "default",
-                          fontFamily: font, fontSize: 14, fontWeight: 600, whiteSpace: "nowrap",
+                          fontFamily: font, fontSize: 13, fontWeight: 600, whiteSpace: "nowrap",
                         }}>+ Add</button>
                       </div>
                     </div>
@@ -1430,57 +1558,57 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
 
             {/* Summary bar */}
             <div style={{
-              background: theme.surface, border: `1px solid ${theme.border}`,
-              borderRadius: 16, padding: "20px 24px", marginBottom: 24,
+              background: theme.surface,
+              borderRadius: 8, padding: "20px 28px", marginBottom: 24,
               display: "flex", alignItems: "center", gap: 32, flexWrap: "wrap",
+              boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
             }}>
               <div>
-                <div style={{ fontSize: 12, color: theme.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Categorized</div>
-                <div style={{ fontSize: 28, fontWeight: 700, color: theme.green, fontFamily: fontMono }}>{categorizedPct}%</div>
-                <div style={{ fontSize: 12, color: theme.textMuted }}>{categorizedTxns.length} of {expenses.length} transactions</div>
+                <div style={{ fontSize: 10, color: theme.textSubtle, fontFamily: fontMono, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Categorized</div>
+                <div style={{ fontSize: 30, fontWeight: 600, color: theme.green, fontFamily: fontMono, fontFeatureSettings: '"tnum"' }}>{categorizedPct}%</div>
+                <div style={{ fontSize: 12, color: theme.textSubtle, marginTop: 4 }}>{categorizedTxns.length} of {expenses.length} transactions</div>
               </div>
               <div style={{ flex: 1, minWidth: 200 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: theme.textMuted, marginBottom: 6 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: theme.textSubtle, marginBottom: 8, fontFamily: fontMono }}>
                   <span>Categorized</span>
                   <span>{otherTxns.length} uncategorized</span>
                 </div>
-                <div style={{ height: 8, background: theme.bg, borderRadius: 4, overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${categorizedPct}%`, background: theme.green, borderRadius: 4, transition: "width 0.4s" }} />
+                <div style={{ height: 4, background: theme.surfaceContainerLow, borderRadius: 2, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${categorizedPct}%`, background: theme.green, borderRadius: 2, transition: "width 0.4s" }} />
                 </div>
               </div>
               {otherTxns.length > 0 && (
                 <div style={{
-                  padding: "8px 16px", background: theme.accentSoft, border: `1px solid ${theme.accent}`,
-                  borderRadius: 8, fontSize: 13, color: theme.accent, fontWeight: 600,
+                  padding: "6px 14px", background: "rgba(176,45,33,0.06)", border: `1px solid rgba(176,45,33,0.2)`,
+                  borderRadius: 4, fontSize: 12, color: theme.accent, fontWeight: 600, fontFamily: fontMono,
+                  textTransform: "uppercase", letterSpacing: "0.06em",
                 }}>
-                  {otherTxns.length} need attention below
+                  {otherTxns.length} need attention
                 </div>
               )}
             </div>
 
             {/* Spending breakdown bars */}
             <div style={{
-              background: theme.surface, border: `1px solid ${theme.border}`,
-              borderRadius: 16, padding: "20px 24px", marginBottom: 24,
+              background: theme.surface,
+              borderRadius: 8, padding: "24px 28px", marginBottom: 24,
+              boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
             }}>
-              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>Spending Breakdown</div>
+              <SectionTitle sub="by category">Category breakdown</SectionTitle>
               {allCategories.filter(c => c !== "Other" && c !== "Income").map((cat, ci) => {
                 const catTotal = Math.abs(_.sumBy(expenses.filter(t => t.category === cat), "amount"));
                 const pct = totalExpenses > 0 ? (catTotal / totalExpenses) * 100 : 0;
                 if (catTotal === 0) return null;
                 return (
-                  <div key={cat} style={{ marginBottom: 12 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ width: 10, height: 10, borderRadius: 3, background: PALETTE[ci % PALETTE.length], flexShrink: 0 }} />
-                        <span style={{ fontWeight: 500 }}>{cat}</span>
-                      </div>
-                      <span style={{ fontFamily: fontMono, color: theme.textMuted, fontSize: 12 }}>
-                        {fmt(catTotal)} · {pct.toFixed(1)}%
+                  <div key={cat} style={{ marginBottom: 20 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                      <span style={{ fontWeight: 600, fontSize: 14, color: theme.text }}>{cat}</span>
+                      <span style={{ fontFamily: fontMono, color: theme.textSubtle, fontSize: 13, fontFeatureSettings: '"tnum"' }}>
+                        {fmt(catTotal)}
                       </span>
                     </div>
-                    <div style={{ height: 6, background: theme.bg, borderRadius: 3, overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: `${pct}%`, background: PALETTE[ci % PALETTE.length], borderRadius: 3, transition: "width 0.4s" }} />
+                    <div style={{ height: 3, background: theme.surfaceContainerLow, borderRadius: 2, overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${pct}%`, background: PALETTE[ci % PALETTE.length], borderRadius: 2, transition: "width 0.4s" }} />
                     </div>
                   </div>
                 );
@@ -1488,7 +1616,7 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
             </div>
 
             {/* Category cards */}
-            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>Categories</div>
+            <div style={{ fontSize: 11, fontFamily: fontMono, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", color: theme.textSubtle, marginBottom: 16 }}>Categories</div>
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 32 }}>
               {allCategories.map((cat, ci) => {
                 const customKws = customCats[cat] || [];
@@ -1500,24 +1628,25 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
                 return (
                   <div key={cat} style={{
                     flex: "1 1 220px", maxWidth: 300, background: theme.surface,
-                    border: `1px solid ${isEditing ? theme.accent : theme.border}`,
-                    borderRadius: 14, padding: 18, transition: "border-color 0.2s",
+                    borderLeft: `3px solid ${isEditing ? theme.primary : PALETTE[ci % PALETTE.length]}`,
+                    borderRadius: 8, padding: "16px 20px",
+                    boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
+                    transition: "box-shadow 0.2s",
                   }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                      <div style={{ width: 12, height: 12, borderRadius: 4, background: PALETTE[ci % PALETTE.length], flexShrink: 0 }} />
-                      <span style={{ fontSize: 15, fontWeight: 700, flex: 1 }}>{cat}</span>
-                      <span style={{ fontFamily: fontMono, fontSize: 12, color: theme.textMuted }}>{catTxns.length}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                      <span style={{ fontSize: 14, fontWeight: 600, flex: 1, color: theme.text }}>{cat}</span>
+                      <span style={{ fontFamily: fontMono, fontSize: 11, color: theme.textSubtle }}>{catTxns.length}</span>
                     </div>
 
-                    <div style={{ fontSize: 20, fontWeight: 700, fontFamily: fontMono, color: PALETTE[ci % PALETTE.length], marginBottom: 8 }}>
+                    <div style={{ fontSize: 22, fontWeight: 600, fontFamily: fontMono, fontFeatureSettings: '"tnum"', color: theme.text, marginBottom: 10, letterSpacing: "-0.02em" }}>
                       {fmt(catTotal)}
                     </div>
 
                     <div style={{ marginBottom: isEditing ? 12 : 0 }}>
-                      <div style={{ height: 4, background: theme.bg, borderRadius: 2, overflow: "hidden", marginBottom: 3 }}>
-                        <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: PALETTE[ci % PALETTE.length], borderRadius: 2 }} />
+                      <div style={{ height: 2, background: theme.surfaceContainerLow, borderRadius: 1, overflow: "hidden", marginBottom: 4 }}>
+                        <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: PALETTE[ci % PALETTE.length], borderRadius: 1 }} />
                       </div>
-                      <div style={{ fontSize: 11, color: theme.textMuted }}>{pct.toFixed(1)}% of spending</div>
+                      <div style={{ fontSize: 11, color: theme.textSubtle, fontFamily: fontMono }}>{pct.toFixed(1)}% of spending</div>
                     </div>
 
                     {/* Show custom keywords only when editing */}
@@ -1527,13 +1656,13 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
                           <div style={{ display: "flex", flexWrap: "wrap", gap: 5, margin: "10px 0 8px" }}>
                             {customKws.map(kw => (
                               <span key={kw} style={{
-                                fontSize: 11, padding: "3px 8px", borderRadius: 5,
-                                background: theme.accentSoft, color: theme.accent, border: `1px solid ${theme.accent}44`,
+                                fontSize: 11, padding: "3px 8px", borderRadius: 4,
+                                background: theme.greenSoft, color: theme.primary, border: `1px solid ${theme.primary}22`,
                                 display: "flex", alignItems: "center", gap: 5,
                               }}>
                                 {kw}
                                 <button onClick={() => setCustomCats(prev => ({ ...prev, [cat]: prev[cat].filter(k => k !== kw) }))}
-                                  style={{ background: "none", border: "none", color: theme.accent, cursor: "pointer", fontSize: 13, padding: 0, lineHeight: 1 }}>×</button>
+                                  style={{ background: "none", border: "none", color: theme.primary, cursor: "pointer", fontSize: 13, padding: 0, lineHeight: 1 }}>×</button>
                               </span>
                             ))}
                           </div>
@@ -1550,15 +1679,15 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
                             }}
                             placeholder="Type merchant name..."
                             style={{
-                              flex: 1, padding: "8px 12px", background: theme.bg,
-                              border: `1px solid ${theme.border}`, borderRadius: 8,
+                              flex: 1, padding: "8px 12px", background: theme.surfaceContainerLow,
+                              border: `1px solid ${theme.border}`, borderRadius: 4,
                               color: theme.text, fontFamily: font, fontSize: 13, outline: "none",
                             }}
                             autoFocus
                           />
                           <button onClick={() => { setEditingCat(null); setNewKeyword(""); }} style={{
-                            padding: "8px 14px", background: theme.accent, border: "none",
-                            borderRadius: 8, color: "#fff", cursor: "pointer", fontSize: 13, fontFamily: font,
+                            padding: "8px 14px", background: theme.primary, border: "none",
+                            borderRadius: 4, color: "#fff", cursor: "pointer", fontSize: 13, fontFamily: font,
                           }}>Done</button>
                         </div>
                       </div>
@@ -1567,8 +1696,8 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
                     {!isEditing && (
                       <button onClick={() => setEditingCat(cat)} style={{
                         marginTop: 12, width: "100%", padding: "7px", background: "transparent",
-                        border: `1px dashed ${theme.border}`, borderRadius: 8,
-                        color: theme.textMuted, cursor: "pointer", fontSize: 12, fontFamily: font,
+                        border: `1px dashed ${theme.outlineVariant || "#bfc9c0"}`, borderRadius: 4,
+                        color: theme.textSubtle, cursor: "pointer", fontSize: 12, fontFamily: font,
                       }}>
                         {customKws.length > 0 ? `+ ${customKws.length} custom keyword${customKws.length > 1 ? "s" : ""}` : "+ Add merchant"}
                       </button>
@@ -1580,38 +1709,40 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
 
             {/* Uncategorized transactions quick-fix */}
             {otherTxns.length > 0 && (
-              <div style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: 16, padding: 24 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Uncategorized Transactions</div>
-                <div style={{ fontSize: 13, color: theme.textMuted, marginBottom: 16 }}>
+              <div style={{ background: theme.surface, borderRadius: 8, padding: "24px 28px", boxShadow: "0 1px 3px rgba(27,28,26,0.06)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <div style={{ fontSize: 20, fontWeight: 400, fontFamily: fontHeadline, color: theme.text }}>Uncategorized Transactions</div>
+                  <span style={{ padding: "3px 10px", background: "rgba(176,45,33,0.08)", borderRadius: 4, fontSize: 10, fontFamily: fontMono, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: theme.accent }}>Action Required</span>
+                </div>
+                <div style={{ fontSize: 13, color: theme.textSubtle, marginBottom: 20 }}>
                   {otherTxns.length} transactions couldn't be auto-categorized. Click a category to assign.
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
                   {otherTxns.map(t => (
                     <div key={t.id} style={{
                       display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
-                      padding: "12px 16px", background: theme.bg, borderRadius: 10,
-                      border: `1px solid ${theme.border}`,
+                      padding: "14px 0", borderBottom: `1px solid ${theme.surfaceContainer}`,
                     }}>
                       <div style={{ flex: 1, minWidth: 140 }}>
-                        <div style={{ fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.desc}</div>
-                        <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: theme.text }}>{t.desc}</div>
+                        <div style={{ fontSize: 11, color: theme.textSubtle, marginTop: 2, fontFamily: fontMono }}>
                           {t.date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                         </div>
                       </div>
-                      <div style={{ fontFamily: fontMono, fontSize: 13, fontWeight: 600, color: theme.accent, minWidth: 70, textAlign: "right" }}>
-                        -{fmt(t.amount)}
+                      <div style={{ fontFamily: fontMono, fontSize: 13, fontWeight: 600, color: theme.accent, minWidth: 70, textAlign: "right", fontFeatureSettings: '"tnum"' }}>
+                        {fmt(t.amount)}
                       </div>
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                         {topCats.slice(0, 6).map(cat => (
                           <button key={cat} onClick={() => {
                             setTxnOverrides(prev => ({ ...prev, [t.id]: cat }));
                           }} style={{
-                            padding: "4px 10px", background: theme.surface, border: `1px solid ${theme.border}`,
-                            borderRadius: 6, color: theme.textMuted, cursor: "pointer", fontSize: 12,
-                            fontFamily: font, transition: "all 0.15s",
+                            padding: "4px 10px", background: theme.surfaceContainerLow, border: "none",
+                            borderRadius: 4, color: theme.textSubtle, cursor: "pointer", fontSize: 11,
+                            fontFamily: font, transition: "all 0.12s",
                           }}
-                          onMouseEnter={e => { e.currentTarget.style.borderColor = theme.accent; e.currentTarget.style.color = theme.accent; }}
-                          onMouseLeave={e => { e.currentTarget.style.borderColor = theme.border; e.currentTarget.style.color = theme.textMuted; }}
+                          onMouseEnter={e => { e.currentTarget.style.background = theme.surfaceContainer; e.currentTarget.style.color = theme.text; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = theme.surfaceContainerLow; e.currentTarget.style.color = theme.textSubtle; }}
                           >{cat}</button>
                         ))}
                       </div>
@@ -1627,47 +1758,53 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
         {/* ─── SAVINGS TAB ─── */}
         {tab === "Savings" && (
           <div>
-            <SectionTitle sub="Set a goal and get personalized suggestions">Savings Goals</SectionTitle>
+            <section style={{ marginBottom: 32 }}>
+              <h1 style={{ fontSize: 40, fontFamily: fontHeadline, fontWeight: 400, color: theme.text, margin: "0 0 8px" }}>
+                Savings <span style={{ fontStyle: "italic", color: theme.primary }}>Goals</span>
+              </h1>
+              <p style={{ fontSize: 14, color: theme.textSubtle, margin: 0 }}>Set a target and get personalized suggestions based on your spending patterns.</p>
+            </section>
 
             <div style={{
-              background: theme.surface, border: `1px solid ${theme.border}`,
-              borderRadius: 16, padding: 28, marginBottom: 24, maxWidth: 560,
+              background: theme.surface,
+              borderRadius: 8, padding: 28, marginBottom: 24, maxWidth: 560,
+              boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
             }}>
-              <h3 style={{ fontSize: 17, fontWeight: 700, margin: "0 0 20px" }}>Set Your Goal</h3>
+              <h3 style={{ fontSize: 18, fontWeight: 400, fontFamily: fontHeadline, margin: "0 0 20px", color: theme.text }}>Set Your Goal</h3>
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 <div>
-                  <label style={{ fontSize: 13, color: theme.textMuted, display: "block", marginBottom: 6 }}>Goal Name</label>
+                  <label style={{ fontSize: 11, color: theme.textSubtle, display: "block", marginBottom: 6, fontFamily: fontMono, textTransform: "uppercase", letterSpacing: "0.08em" }}>Goal Name</label>
                   <input value={savingsGoal.name} onChange={e => setSavingsGoal(p => ({ ...p, name: e.target.value }))}
                     placeholder="e.g., Emergency fund, Vacation, New car"
                     style={{
-                      width: "100%", padding: "12px 16px", background: theme.bg,
-                      border: `1px solid ${theme.border}`, borderRadius: 10,
-                      color: theme.text, fontFamily: font, fontSize: 15, outline: "none",
+                      width: "100%", padding: "10px 14px", background: theme.surfaceContainerLow,
+                      border: `1px solid ${theme.border}`, borderRadius: 4,
+                      color: theme.text, fontFamily: font, fontSize: 14, outline: "none",
                       boxSizing: "border-box",
                     }}
                   />
                 </div>
                 <div style={{ display: "flex", gap: 12 }}>
                   <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: 13, color: theme.textMuted, display: "block", marginBottom: 6 }}>Target Amount ($)</label>
+                    <label style={{ fontSize: 11, color: theme.textSubtle, display: "block", marginBottom: 6, fontFamily: fontMono, textTransform: "uppercase", letterSpacing: "0.08em" }}>Target Amount ($)</label>
                     <input value={savingsGoal.amount} onChange={e => setSavingsGoal(p => ({ ...p, amount: e.target.value }))}
                       type="number" placeholder="5000"
                       style={{
-                        width: "100%", padding: "12px 16px", background: theme.bg,
-                        border: `1px solid ${theme.border}`, borderRadius: 10,
-                        color: theme.text, fontFamily: font, fontSize: 15, outline: "none",
+                        width: "100%", padding: "10px 14px", background: theme.surfaceContainerLow,
+                        border: `1px solid ${theme.border}`, borderRadius: 4,
+                        color: theme.text, fontFamily: font, fontSize: 14, outline: "none",
                         boxSizing: "border-box",
                       }}
                     />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: 13, color: theme.textMuted, display: "block", marginBottom: 6 }}>Target Date</label>
+                    <label style={{ fontSize: 11, color: theme.textSubtle, display: "block", marginBottom: 6, fontFamily: fontMono, textTransform: "uppercase", letterSpacing: "0.08em" }}>Target Date</label>
                     <input value={savingsGoal.deadline} onChange={e => setSavingsGoal(p => ({ ...p, deadline: e.target.value }))}
                       type="date"
                       style={{
-                        width: "100%", padding: "12px 16px", background: theme.bg,
-                        border: `1px solid ${theme.border}`, borderRadius: 10,
-                        color: theme.text, fontFamily: font, fontSize: 15, outline: "none",
+                        width: "100%", padding: "10px 14px", background: theme.surfaceContainerLow,
+                        border: `1px solid ${theme.border}`, borderRadius: 4,
+                        color: theme.text, fontFamily: font, fontSize: 14, outline: "none",
                         boxSizing: "border-box",
                       }}
                     />
@@ -1682,49 +1819,50 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
                   <StatCard
                     label="Monthly Target"
                     value={fmt(savingsSuggestion.monthly)}
-                    color={theme.yellow}
+                    color={theme.primary}
                     sub={`${savingsSuggestion.monthsLeft} months to go`}
                   />
                   <StatCard
                     label="Avg Monthly Surplus"
-                    value={(savingsSuggestion.surplus >= 0 ? "+" : "-") + fmt(savingsSuggestion.surplus)}
+                    value={(savingsSuggestion.surplus >= 0 ? "+" : "") + fmt(savingsSuggestion.surplus)}
                     color={savingsSuggestion.surplus >= 0 ? theme.green : theme.accent}
                     sub="Income minus expenses"
                   />
                   <StatCard
                     label="Feasibility"
-                    value={savingsSuggestion.feasible ? "On Track ✓" : "Needs Adjustment"}
+                    value={savingsSuggestion.feasible ? "On Track" : "Needs Adjustment"}
                     color={savingsSuggestion.feasible ? theme.green : theme.accent}
                     sub={savingsSuggestion.feasible ? "Current spending supports this goal" : "You may need to reduce spending"}
                   />
                 </div>
 
                 <div style={{
-                  background: theme.surface, border: `1px solid ${theme.border}`,
-                  borderRadius: 16, padding: 28,
+                  background: theme.surface,
+                  borderRadius: 8, padding: 28,
+                  boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
                 }}>
-                  <h3 style={{ fontSize: 17, fontWeight: 700, margin: "0 0 16px" }}>
+                  <h3 style={{ fontSize: 20, fontWeight: 400, fontFamily: fontHeadline, margin: "0 0 16px", color: theme.text }}>
                     {savingsSuggestion.goalName ? `Plan: ${savingsSuggestion.goalName}` : "Savings Plan"}
                   </h3>
-                  <div style={{ fontSize: 15, lineHeight: 1.8, color: theme.textMuted }}>
+                  <div style={{ fontSize: 14, lineHeight: 1.8, color: theme.textSubtle }}>
                     <p style={{ margin: "0 0 12px" }}>
-                      To save <strong style={{ color: theme.text }}>{fmt(savingsSuggestion.target)}</strong> in{" "}
+                      To save <strong style={{ color: theme.text, fontFamily: fontMono }}>{fmt(savingsSuggestion.target)}</strong> in{" "}
                       <strong style={{ color: theme.text }}>{savingsSuggestion.monthsLeft} months</strong>, you need to set aside{" "}
-                      <strong style={{ color: theme.yellow }}>{fmt(savingsSuggestion.monthly)}/month</strong>.
+                      <strong style={{ color: theme.primary, fontFamily: fontMono }}>{fmt(savingsSuggestion.monthly)}/month</strong>.
                     </p>
                     <p style={{ margin: "0 0 12px" }}>
-                      Your average monthly income is <strong style={{ color: theme.green }}>{fmt(savingsSuggestion.avgMonthlyIncome)}</strong> and
-                      average expenses are <strong style={{ color: theme.accent }}>{fmt(savingsSuggestion.avgMonthlyExpense)}</strong>.
+                      Your average monthly income is <strong style={{ color: theme.green, fontFamily: fontMono }}>{fmt(savingsSuggestion.avgMonthlyIncome)}</strong> and
+                      average expenses are <strong style={{ color: theme.accent, fontFamily: fontMono }}>{fmt(savingsSuggestion.avgMonthlyExpense)}</strong>.
                     </p>
                     {savingsSuggestion.feasible ? (
                       <p style={{ margin: 0 }}>
-                        Your current surplus of <strong style={{ color: theme.green }}>{fmt(savingsSuggestion.surplus)}/month</strong> covers
-                        the savings target. Keep your spending under <strong style={{ color: theme.text }}>{fmt(savingsSuggestion.avgMonthlyIncome - savingsSuggestion.monthly)}/month</strong> to stay on track.
+                        Your current surplus of <strong style={{ color: theme.green, fontFamily: fontMono }}>{fmt(savingsSuggestion.surplus)}/month</strong> covers
+                        the savings target. Keep your spending under <strong style={{ color: theme.text, fontFamily: fontMono }}>{fmt(savingsSuggestion.avgMonthlyIncome - savingsSuggestion.monthly)}/month</strong> to stay on track.
                       </p>
                     ) : (
                       <p style={{ margin: 0 }}>
                         You'd need to reduce monthly expenses by about{" "}
-                        <strong style={{ color: theme.accent }}>{fmt(savingsSuggestion.monthly - Math.max(0, savingsSuggestion.surplus))}</strong> to meet this goal.
+                        <strong style={{ color: theme.accent, fontFamily: fontMono }}>{fmt(savingsSuggestion.monthly - Math.max(0, savingsSuggestion.surplus))}</strong> to meet this goal.
                         Use the planner below to choose where to cut.
                       </p>
                     )}
@@ -1748,26 +1886,27 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
 
                   return (
                     <div style={{
-                      background: theme.surface, border: `1px solid ${theme.border}`,
-                      borderRadius: 16, padding: 28, marginTop: 20,
+                      background: theme.surface,
+                      borderRadius: 8, padding: 28, marginTop: 20,
+                      boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
                     }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                        <h3 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>Where can you cut back?</h3>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                        <h3 style={{ fontSize: 20, fontWeight: 400, fontFamily: fontHeadline, margin: 0, color: theme.text }}>Where can you cut back?</h3>
                         {selectedCount > 0 && (
                           <span style={{
-                            fontSize: 13, padding: "4px 12px", borderRadius: 20,
+                            fontSize: 12, padding: "4px 12px", borderRadius: 4, fontFamily: fontMono,
                             background: planFeasible ? theme.greenSoft : theme.yellowSoft,
-                            color: planFeasible ? theme.green : theme.yellow, fontWeight: 600,
+                            color: planFeasible ? theme.green : theme.primary, fontWeight: 600,
                           }}>
                             {planFeasible ? "Goal achievable!" : `Saving ${fmt(totalCutPerMonth)}/mo so far`}
                           </span>
                         )}
                       </div>
-                      <p style={{ fontSize: 14, color: theme.textMuted, margin: "0 0 20px", lineHeight: 1.5 }}>
+                      <p style={{ fontSize: 13, color: theme.textSubtle, margin: "0 0 20px", lineHeight: 1.6 }}>
                         Pick 2–3 categories you're willing to reduce. Adjust the slider to set how much you can cut from each.
                       </p>
 
-                      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
                         {cuttable.map((c, i) => {
                           const monthlyAvg = c.value / numMonths;
                           const sel = cutSelections[c.name] || { selected: false, percent: 25 };
@@ -1775,9 +1914,9 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
 
                           return (
                             <div key={c.name} style={{
-                              background: sel.selected ? (theme.bg) : theme.bg,
-                              border: `1px solid ${sel.selected ? theme.green : theme.border}`,
-                              borderRadius: 12, padding: "14px 18px",
+                              background: sel.selected ? theme.greenSoft : theme.surfaceContainerLow,
+                              borderLeft: `3px solid ${sel.selected ? theme.green : theme.outlineVariant || "#bfc9c0"}`,
+                              borderRadius: 4, padding: "12px 16px",
                               transition: "all 0.2s",
                             }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -1791,20 +1930,20 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
                                     setShowPlan(false);
                                   }}
                                   style={{
-                                    width: 22, height: 22, borderRadius: 6, flexShrink: 0, cursor: "pointer",
-                                    border: `2px solid ${sel.selected ? theme.green : theme.border}`,
+                                    width: 20, height: 20, borderRadius: 4, flexShrink: 0, cursor: "pointer",
+                                    border: `2px solid ${sel.selected ? theme.green : theme.outlineVariant || "#bfc9c0"}`,
                                     background: sel.selected ? theme.green : "transparent",
                                     display: "flex", alignItems: "center", justifyContent: "center",
                                     transition: "all 0.2s",
                                   }}
                                 >
-                                  {sel.selected && <span style={{ color: "#fff", fontSize: 14, fontWeight: 700, lineHeight: 1 }}>✓</span>}
+                                  {sel.selected && <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, lineHeight: 1 }}>✓</span>}
                                 </div>
 
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                                     <span style={{ fontSize: 14, fontWeight: 600, color: theme.text }}>{c.name}</span>
-                                    <span style={{ fontSize: 13, fontFamily: fontMono, color: theme.textMuted }}>
+                                    <span style={{ fontSize: 13, fontFamily: fontMono, color: theme.textSubtle, fontFeatureSettings: '"tnum"' }}>
                                       {fmt(monthlyAvg)}<span style={{ fontSize: 11 }}>/mo</span>
                                     </span>
                                   </div>
@@ -1812,7 +1951,7 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
                                   {sel.selected && (
                                     <div style={{ marginTop: 10 }}>
                                       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                                        <span style={{ fontSize: 12, color: theme.textMuted, minWidth: 30 }}>Cut</span>
+                                        <span style={{ fontSize: 11, color: theme.textSubtle, minWidth: 30, fontFamily: fontMono }}>Cut</span>
                                         <input
                                           type="range" min="10" max="80" step="5"
                                           value={sel.percent}
@@ -1846,47 +1985,48 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
                       {selectedCount > 0 && (
                         <div>
                           <div style={{
-                            background: theme.bg, borderRadius: 12, padding: "18px 20px",
-                            border: `1px solid ${theme.border}`, marginBottom: 16,
+                            background: theme.surfaceContainerLow, borderRadius: 6, padding: "16px 20px",
+                            marginBottom: 16,
                           }}>
                             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                              <span style={{ fontSize: 14, color: theme.textMuted }}>Monthly savings from cuts</span>
-                              <span style={{ fontSize: 16, fontWeight: 700, fontFamily: fontMono, color: theme.green }}>+{fmt(totalCutPerMonth)}</span>
+                              <span style={{ fontSize: 13, color: theme.textSubtle }}>Monthly savings from cuts</span>
+                              <span style={{ fontSize: 15, fontWeight: 600, fontFamily: fontMono, color: theme.green, fontFeatureSettings: '"tnum"' }}>+{fmt(totalCutPerMonth)}</span>
                             </div>
                             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                              <span style={{ fontSize: 14, color: theme.textMuted }}>New monthly expense</span>
-                              <span style={{ fontSize: 14, fontFamily: fontMono, color: theme.text }}>{fmt(newMonthlyExpense)}</span>
+                              <span style={{ fontSize: 13, color: theme.textSubtle }}>New monthly expense</span>
+                              <span style={{ fontSize: 13, fontFamily: fontMono, color: theme.text, fontFeatureSettings: '"tnum"' }}>{fmt(newMonthlyExpense)}</span>
                             </div>
                             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                              <span style={{ fontSize: 14, color: theme.textMuted }}>New monthly surplus</span>
-                              <span style={{ fontSize: 14, fontFamily: fontMono, color: newSurplus >= savingsSuggestion.monthly ? theme.green : theme.yellow }}>
-                                {newSurplus >= 0 ? "+" : "-"}{fmt(newSurplus)}
+                              <span style={{ fontSize: 13, color: theme.textSubtle }}>New monthly surplus</span>
+                              <span style={{ fontSize: 13, fontFamily: fontMono, color: newSurplus >= savingsSuggestion.monthly ? theme.green : theme.primary, fontFeatureSettings: '"tnum"' }}>
+                                {newSurplus >= 0 ? "+" : ""}{fmt(newSurplus)}
                               </span>
                             </div>
                             <div style={{
-                              height: 6, borderRadius: 3, background: theme.border, marginTop: 12, overflow: "hidden",
+                              height: 3, borderRadius: 2, background: theme.surfaceContainer, marginTop: 12, overflow: "hidden",
                             }}>
                               <div style={{
-                                height: "100%", borderRadius: 3, transition: "width 0.4s ease",
+                                height: "100%", borderRadius: 2, transition: "width 0.4s ease",
                                 width: `${Math.min(100, (newSurplus / savingsSuggestion.monthly) * 100)}%`,
-                                background: planFeasible ? theme.green : theme.yellow,
+                                background: planFeasible ? theme.green : theme.primary,
                               }} />
                             </div>
-                            <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 6, textAlign: "right" }}>
+                            <div style={{ fontSize: 11, color: theme.textSubtle, marginTop: 6, textAlign: "right", fontFamily: fontMono }}>
                               {planFeasible
                                 ? `Surplus covers your ${fmt(savingsSuggestion.monthly)}/mo target`
-                                : `Need ${fmt(savingsSuggestion.monthly - Math.max(0, newSurplus))} more/mo — try cutting more or extending your deadline`
+                                : `Need ${fmt(savingsSuggestion.monthly - Math.max(0, newSurplus))} more/mo`
                               }
                             </div>
                           </div>
 
                           <button onClick={() => setShowPlan(true)} style={{
-                            width: "100%", padding: "14px 20px", borderRadius: 10,
-                            background: theme.accent, border: "none", color: "#fff",
-                            fontSize: 15, fontWeight: 700, fontFamily: font, cursor: "pointer",
+                            width: "100%", padding: "12px 20px", borderRadius: 6,
+                            background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryContainer} 100%)`,
+                            border: "none", color: "#fff",
+                            fontSize: 14, fontWeight: 600, fontFamily: font, cursor: "pointer",
                             transition: "opacity 0.2s",
                           }}
-                          onMouseEnter={e => e.currentTarget.style.opacity = "0.85"}
+                          onMouseEnter={e => e.currentTarget.style.opacity = "0.88"}
                           onMouseLeave={e => e.currentTarget.style.opacity = "1"}
                           >
                             Generate My Savings Plan
@@ -1911,17 +2051,17 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
 
                         return (
                           <div style={{
-                            marginTop: 20, background: theme.bg, borderRadius: 14,
-                            border: `1px solid ${theme.border}`, overflow: "hidden",
+                            marginTop: 20, background: theme.surfaceContainerLow, borderRadius: 6,
+                            overflow: "hidden",
                           }}>
                             <div style={{
-                              padding: "18px 22px", borderBottom: `1px solid ${theme.border}`,
+                              padding: "16px 20px", borderBottom: `1px solid ${theme.surfaceContainer}`,
                               background: planFeasible ? theme.greenSoft : theme.yellowSoft,
                             }}>
-                              <div style={{ fontSize: 16, fontWeight: 700, color: theme.text, marginBottom: 4 }}>
-                                {planFeasible ? "🎯 Your plan is on track!" : "📋 Your Action Plan"}
+                              <div style={{ fontSize: 15, fontWeight: 600, fontFamily: fontHeadline, color: theme.text, marginBottom: 4 }}>
+                                {planFeasible ? "Your plan is on track" : "Your Action Plan"}
                               </div>
-                              <div style={{ fontSize: 14, color: theme.textMuted }}>
+                              <div style={{ fontSize: 13, color: theme.textSubtle }}>
                                 {planFeasible
                                   ? `By cutting ${fmt(totalCutPerMonth)}/mo across ${selectedCount} categories, you'll save ${fmt(savingsSuggestion.target)} in ${savingsSuggestion.monthsLeft} months with ${fmt(newSurplus - savingsSuggestion.monthly)}/mo to spare.`
                                   : `These cuts save ${fmt(totalCutPerMonth)}/mo. You'll need to find ${fmt(savingsSuggestion.monthly - Math.max(0, newSurplus))} more or adjust your timeline.`
@@ -1937,27 +2077,27 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
 
                               return (
                                 <div key={c.name} style={{
-                                  padding: "18px 22px",
-                                  borderBottom: idx < selectedCats.length - 1 ? `1px solid ${theme.border}` : "none",
+                                  padding: "16px 20px",
+                                  borderBottom: idx < selectedCats.length - 1 ? `1px solid ${theme.surfaceContainer}` : "none",
                                 }}>
-                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                                     <div>
-                                      <span style={{ fontSize: 15, fontWeight: 700, color: theme.text }}>{c.name}</span>
-                                      <span style={{ fontSize: 13, color: theme.textMuted, marginLeft: 8 }}>
+                                      <span style={{ fontSize: 14, fontWeight: 600, color: theme.text }}>{c.name}</span>
+                                      <span style={{ fontSize: 12, color: theme.textSubtle, marginLeft: 8, fontFamily: fontMono }}>
                                         {fmt(monthlyAvg)}/mo → {fmt(monthlyAvg - saving)}/mo
                                       </span>
                                     </div>
                                     <span style={{
-                                      fontSize: 14, fontWeight: 700, fontFamily: fontMono,
+                                      fontSize: 13, fontWeight: 600, fontFamily: fontMono,
                                       color: theme.green, background: theme.greenSoft,
-                                      padding: "4px 10px", borderRadius: 6,
+                                      padding: "3px 8px", borderRadius: 4, fontFeatureSettings: '"tnum"',
                                     }}>-{fmt(saving)}/mo</span>
                                   </div>
-                                  <div style={{ fontSize: 14, color: theme.textMuted, lineHeight: 1.7 }}>
-                                    <div style={{ fontWeight: 600, color: theme.text, fontSize: 13, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>How to do it:</div>
+                                  <div style={{ fontSize: 13, color: theme.textSubtle, lineHeight: 1.7 }}>
+                                    <div style={{ fontWeight: 600, color: theme.text, fontSize: 10, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.1em", fontFamily: fontMono }}>How to do it:</div>
                                     {catTips.map((tip, ti) => (
                                       <div key={ti} style={{ display: "flex", gap: 10, marginBottom: 6 }}>
-                                        <span style={{ color: theme.green, flexShrink: 0, fontWeight: 700 }}>→</span>
+                                        <span style={{ color: theme.primary, flexShrink: 0, fontWeight: 700 }}>→</span>
                                         <span>{tip}</span>
                                       </div>
                                     ))}
@@ -1968,10 +2108,10 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
 
                             {/* Weekly breakdown */}
                             <div style={{
-                              padding: "18px 22px", borderTop: `1px solid ${theme.border}`,
+                              padding: "16px 20px", borderTop: `1px solid ${theme.surfaceContainer}`,
                               background: theme.surface,
                             }}>
-                              <div style={{ fontSize: 13, fontWeight: 600, color: theme.text, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 12 }}>
+                              <div style={{ fontSize: 10, color: theme.textSubtle, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12, fontFamily: fontMono, fontWeight: 600 }}>
                                 Your new weekly budget
                               </div>
                               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -1982,25 +2122,25 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
                                   const weekly = newMonthly / 4.33;
                                   return (
                                     <div key={c.name} style={{
-                                      flex: "1 1 120px", background: theme.bg, borderRadius: 10,
-                                      padding: "12px 16px", border: `1px solid ${theme.border}`,
+                                      flex: "1 1 120px", background: theme.surfaceContainerLow, borderRadius: 4,
+                                      padding: "12px 14px",
                                       textAlign: "center",
                                     }}>
-                                      <div style={{ fontSize: 12, color: theme.textMuted, marginBottom: 4 }}>{c.name}</div>
-                                      <div style={{ fontSize: 18, fontWeight: 700, fontFamily: fontMono, color: theme.text }}>
-                                        {fmt(weekly)}<span style={{ fontSize: 11, color: theme.textMuted }}>/wk</span>
+                                      <div style={{ fontSize: 11, color: theme.textSubtle, marginBottom: 4, fontFamily: fontMono }}>{c.name}</div>
+                                      <div style={{ fontSize: 17, fontWeight: 600, fontFamily: fontMono, color: theme.text, fontFeatureSettings: '"tnum"' }}>
+                                        {fmt(weekly)}<span style={{ fontSize: 10, color: theme.textSubtle }}>/wk</span>
                                       </div>
                                     </div>
                                   );
                                 })}
                                 <div style={{
-                                  flex: "1 1 120px", background: theme.greenSoft, borderRadius: 10,
-                                  padding: "12px 16px", border: `1px solid ${theme.green}33`,
+                                  flex: "1 1 120px", background: theme.greenSoft, borderRadius: 4,
+                                  padding: "12px 14px",
                                   textAlign: "center",
                                 }}>
-                                  <div style={{ fontSize: 12, color: theme.green, marginBottom: 4 }}>To Savings</div>
-                                  <div style={{ fontSize: 18, fontWeight: 700, fontFamily: fontMono, color: theme.green }}>
-                                    {fmt(savingsSuggestion.monthly / 4.33)}<span style={{ fontSize: 11, opacity: 0.7 }}>/wk</span>
+                                  <div style={{ fontSize: 11, color: theme.green, marginBottom: 4, fontFamily: fontMono }}>To Savings</div>
+                                  <div style={{ fontSize: 17, fontWeight: 600, fontFamily: fontMono, color: theme.green, fontFeatureSettings: '"tnum"' }}>
+                                    {fmt(savingsSuggestion.monthly / 4.33)}<span style={{ fontSize: 10, opacity: 0.7 }}>/wk</span>
                                   </div>
                                 </div>
                               </div>
@@ -2025,8 +2165,9 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
 
                   return (
                     <div style={{
-                      background: theme.surface, border: `1px solid ${theme.border}`,
-                      borderRadius: 16, padding: 24, marginTop: 20,
+                      background: theme.surface,
+                      borderRadius: 8, padding: "28px 32px", marginTop: 20,
+                      boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
                     }}>
                       <SectionTitle sub="Projected savings over time">Savings Projection</SectionTitle>
                       <ResponsiveContainer width="100%" height={220}>
@@ -2036,14 +2177,14 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
                           "No Changes": Math.round(Math.max(0, savingsSuggestion.surplus) * i),
                           Goal: savingsSuggestion.target,
                         }))}>
-                          <CartesianGrid stroke={theme.border} strokeDasharray="3 3" vertical={false} />
-                          <XAxis dataKey="month" tick={{ fill: theme.textMuted, fontSize: 11 }} axisLine={false} tickLine={false} interval={Math.max(0, Math.floor(savingsSuggestion.monthsLeft / 8))} />
-                          <YAxis tick={{ fill: theme.textMuted, fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v / 1000).toFixed(1)}k`} />
+                          <CartesianGrid stroke={theme.surfaceContainerLow} strokeDasharray="0" vertical={false} />
+                          <XAxis dataKey="month" tick={{ fill: theme.textSubtle, fontSize: 11, fontFamily: fontMono }} axisLine={false} tickLine={false} interval={Math.max(0, Math.floor(savingsSuggestion.monthsLeft / 8))} />
+                          <YAxis tick={{ fill: theme.textSubtle, fontSize: 11, fontFamily: fontMono }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v / 1000).toFixed(1)}k`} />
                           <Tooltip content={<CustomTooltip />} />
-                          <Line type="monotone" dataKey="With Cuts" stroke={theme.green} strokeWidth={3} dot={false} />
-                          <Line type="monotone" dataKey="No Changes" stroke={theme.textMuted} strokeWidth={2} strokeDasharray="4 4" dot={false} />
-                          <Line type="monotone" dataKey="Goal" stroke={theme.accent} strokeWidth={2} strokeDasharray="6 3" dot={false} />
-                          <Legend wrapperStyle={{ fontSize: 12, color: theme.textMuted }} />
+                          <Line type="monotone" dataKey="With Cuts" stroke={theme.green} strokeWidth={2.5} dot={false} />
+                          <Line type="monotone" dataKey="No Changes" stroke={theme.outlineVariant || "#bfc9c0"} strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
+                          <Line type="monotone" dataKey="Goal" stroke={theme.accent} strokeWidth={1.5} strokeDasharray="6 3" dot={false} />
+                          <Legend wrapperStyle={{ fontSize: 11, color: theme.textSubtle, fontFamily: fontMono }} />
                         </LineChart>
                       </ResponsiveContainer>
                     </div>
@@ -2056,12 +2197,12 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
       </div>
 
       {/* Footer */}
-      <div style={{
-        padding: "20px 32px", borderTop: `1px solid ${theme.border}`,
-        textAlign: "center", fontSize: 13, color: theme.textMuted, marginTop: 40,
-      }}>
-        CashCanvas · All data processed locally in your browser · No data sent to any server
-      </div>
+      <footer style={{ marginTop: 64, borderTop: `1px solid ${theme.surfaceContainerLow}`, padding: "24px 40px" }}>
+        <div style={{ maxWidth: 1280, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <p style={{ fontFamily: fontHeadline, fontStyle: "italic", fontSize: 15, color: theme.textSubtle, margin: 0 }}>Crafted with intentionality by CashCanvas.</p>
+          <p style={{ fontFamily: fontMono, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.15em", color: theme.textSubtle, margin: 0 }}>All data processed locally</p>
+        </div>
+      </footer>
     </div>
   );
 }
