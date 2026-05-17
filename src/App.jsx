@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import * as Papa from "papaparse";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend } from "recharts";
 import _ from "lodash";
+import AuthScreen from "./AuthScreen.jsx";
 
 // ─── CATEGORY ENGINE ───
 const DEFAULT_CATEGORIES = {
@@ -126,13 +127,22 @@ const DEFAULT_CATEGORIES = {
 
 const PALETTE = ["#1a6b4a","#b02d21","#bfc9c0","#6f7a72","#3f4943","#8e130c","#a0b0a8","#005235","#d4a57a","#c8bfb0","#7a6b5a","#4a7a6a"];
 
-function categorize(desc, customCats) {
-  // Strip bank-statement boilerplate so the merchant name is exposed
-  const cleaned = (desc || "").toLowerCase()
+function cleanDesc(desc) {
+  return (desc || "").toLowerCase()
     .replace(/\b(card\s+purchase|pos\s+(debit|credit|purchase)|ach\s+(debit|credit|payment|transfer)|online\s+(payment|transfer|banking)|bill\s+pay(ment)?|direct\s+dep(osit)?|wire\s+transfer|check\s+(paid|deposit|crd)|mobile\s+(payment|deposit)|contactless\s+purchase|recurring\s+(charge|payment)|autopay|preauthorized|authorized\s+on|payment\s+to|purchase\s+at|pending|memo|ref\s*#?|tran\s*#?)\b/g, " ")
-    .replace(/\b\d{1,2}\/\d{1,2}(\/\d{2,4})?\b/g, " ") // strip dates e.g. 12/30
-    .replace(/\b[a-z]{0,3}\d{4,}\b/g, " ")              // strip reference/card numbers
+    .replace(/\b\d{1,2}\/\d{1,2}(\/\d{2,4})?\b/g, " ")
+    .replace(/\b[a-z]{0,3}\d{4,}\b/g, " ")
     .replace(/\s+/g, " ").trim();
+}
+
+function categorize(desc, customCats, merchantRules) {
+  const cleaned = cleanDesc(desc);
+
+  // User-learned rules take highest priority
+  if (merchantRules?.size) {
+    const rule = merchantRules.get(cleaned);
+    if (rule) return rule;
+  }
 
   const cats = { ...DEFAULT_CATEGORIES, ...customCats };
   for (const [cat, keywords] of Object.entries(cats)) {
@@ -140,11 +150,8 @@ function categorize(desc, customCats) {
     for (const kw of keywords) {
       const k = kw.toLowerCase();
       if (k.includes(" ")) {
-        // multi-word keyword: simple substring match is fine
         if (cleaned.includes(k)) return cat;
       } else {
-        // single word: word-boundary match to avoid false positives
-        // e.g. "gas" won't match "gas bill", "phone" won't match "iphone"
         const escaped = k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         if (new RegExp(`(?:^|[^a-z])${escaped}(?:[^a-z]|$)`).test(cleaned)) return cat;
       }
@@ -1058,9 +1065,11 @@ function CustomTooltip({ active, payload, label }) {
 }
 
 // ─── DASHBOARD ───
-function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown", onReset }) {
+function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementType = "unknown", onReset }) {
   const [tab, setTab] = useState("Overview");
   const [customCats, setCustomCats] = useState({});
+  const [apiCategories, setApiCategories] = useState([]); // full objects with _id for API ops
+  const [merchantRules, setMerchantRules] = useState(new Map());
   const [savingsGoal, setSavingsGoal] = useState({ amount: "", deadline: "", name: "" });
   const [editingCat, setEditingCat] = useState(null);
   const [newKeyword, setNewKeyword] = useState("");
@@ -1068,16 +1077,80 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
   const [txnOverrides, setTxnOverrides] = useState({});
   const [newCatName, setNewCatName] = useState("");
   const [selectedTxns, setSelectedTxns] = useState(new Set());
-  const [cutSelections, setCutSelections] = useState({});  // { categoryName: { selected: bool, percent: number } }
+  const [cutSelections, setCutSelections] = useState({});
   const [showPlan, setShowPlan] = useState(false);
+  const [newCatModal, setNewCatModal] = useState(false);
+  const [newCatForm, setNewCatForm] = useState({ name: "", icon: "🏷️", color: "#6f7a72" });
+  const [aiDone, setAiDone] = useState(false);
+
+  // ── API helper ──
+  const authFetch = useCallback(async (url, options = {}) => {
+    const res = await fetch(url, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${auth?.token}`,
+        ...(options.headers || {}),
+      },
+    });
+    if (res.status === 401) { onLogout(); return {}; }
+    return res.json();
+  }, [auth?.token, onLogout]);
+
+  // ── Load merchant rules + custom categories on mount ──
+  useEffect(() => {
+    if (!auth?.token) return;
+
+    authFetch("/api/merchant-rules").then(data => {
+      if (Array.isArray(data)) {
+        setMerchantRules(new Map(data.map(r => [r.merchantName, r.category])));
+      }
+    }).catch(() => {});
+
+    authFetch("/api/categories").then(data => {
+      if (Array.isArray(data)) {
+        setApiCategories(data);
+        const catMap = {};
+        data.forEach(c => { catMap[c.categoryName] = c.keywords || []; });
+        setCustomCats(catMap);
+      }
+    }).catch(() => {});
+  }, [auth?.token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── AI categorization — fires once after merchant rules load ──
+  useEffect(() => {
+    if (aiDone || !auth?.token) return;
+    const otherTxns = rawTxns
+      .map((t, i) => ({ ...t, id: i }))
+      .filter(t => t.amount < 0 && !txnOverrides[t.id] && categorize(t.desc, customCats, merchantRules) === "Other");
+    if (otherTxns.length === 0) { setAiDone(true); return; }
+    setAiDone(true);
+    authFetch("/api/categorize", {
+      method: "POST",
+      body: JSON.stringify({ transactions: otherTxns.slice(0, 100).map(t => ({ desc: t.desc, amount: t.amount })) }),
+    }).then(data => {
+      if (Array.isArray(data.results)) {
+        setTxnOverrides(prev => {
+          const next = { ...prev };
+          data.results.forEach(({ idx, category }) => {
+            if (category && category !== "Other") {
+              const id = otherTxns[idx]?.id;
+              if (id !== undefined && !next[id]) next[id] = category;
+            }
+          });
+          return next;
+        });
+      }
+    }).catch(() => {});
+  }, [merchantRules, aiDone]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const transactions = useMemo(() => {
     return rawTxns.map((t, i) => ({
       ...t,
       id: i,
-      category: txnOverrides[i] || categorize(t.desc, customCats),
+      category: txnOverrides[i] || categorize(t.desc, customCats, merchantRules),
     }));
-  }, [rawTxns, customCats, txnOverrides]);
+  }, [rawTxns, customCats, txnOverrides, merchantRules]);
 
   const expenses = useMemo(() => transactions.filter(t => t.amount < 0), [transactions]);
   const income = useMemo(() => transactions.filter(t => t.amount > 0), [transactions]);
@@ -1184,16 +1257,28 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
                 )}
               </div>
             </div>
-            <button onClick={onReset} style={{
-              padding: "9px 20px",
-              background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryContainer} 100%)`,
-              border: "none", borderRadius: 6, color: "#fff",
-              cursor: "pointer", fontFamily: font, fontSize: 13, fontWeight: 600,
-              display: "flex", alignItems: "center", gap: 6,
-            }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 16, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>add</span>
-              New Upload
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              {auth?.user && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 13, color: theme.textSubtle, fontFamily: fontMono }}>{auth.user.name}</span>
+                  <button onClick={onLogout} style={{
+                    padding: "7px 14px", background: "none",
+                    border: `1px solid ${theme.border}`, borderRadius: 6,
+                    color: theme.textSubtle, cursor: "pointer", fontFamily: font, fontSize: 12, fontWeight: 500,
+                  }}>Sign Out</button>
+                </div>
+              )}
+              <button onClick={onReset} style={{
+                padding: "9px 20px",
+                background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryContainer} 100%)`,
+                border: "none", borderRadius: 6, color: "#fff",
+                cursor: "pointer", fontFamily: font, fontSize: 13, fontWeight: 600,
+                display: "flex", alignItems: "center", gap: 6,
+              }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 16, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>add</span>
+                New Upload
+              </button>
+            </div>
           </div>
           <nav style={{ marginTop: 12 }}>
             <TabBar tabs={["Overview", "Categories", "Savings"]} active={tab} onChange={setTab} />
@@ -1476,6 +1561,18 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
                           selectedTxns.forEach(id => { next[id] = cat; });
                           return next;
                         });
+                        // Learn merchant→category mapping for each selected transaction
+                        selectedTxns.forEach(id => {
+                          const txn = rawTxns[id];
+                          if (!txn) return;
+                          const merchantName = cleanDesc(txn.desc);
+                          if (!merchantName) return;
+                          setMerchantRules(prev => new Map([...prev, [merchantName, cat]]));
+                          authFetch("/api/merchant-rules", {
+                            method: "POST",
+                            body: JSON.stringify({ merchantName, category: cat }),
+                          }).catch(() => {});
+                        });
                         setSelectedTxns(new Set());
                         setReassignTxn(null);
                         setNewCatName("");
@@ -1500,6 +1597,9 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
                             if (e.key === "Enter" && newCatName.trim()) {
                               const name = newCatName.trim();
                               setCustomCats(prev => ({ ...prev, [name]: prev[name] || [] }));
+                              authFetch("/api/categories", { method: "POST", body: JSON.stringify({ categoryName: name }) })
+                                .then(cat => { if (cat?._id) setApiCategories(prev => [...prev, cat]); })
+                                .catch(() => {});
                               setTxnOverrides(prev => {
                                 const next = { ...prev };
                                 selectedTxns.forEach(id => { next[id] = name; });
@@ -1521,6 +1621,9 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
                           if (!newCatName.trim()) return;
                           const name = newCatName.trim();
                           setCustomCats(prev => ({ ...prev, [name]: prev[name] || [] }));
+                          authFetch("/api/categories", { method: "POST", body: JSON.stringify({ categoryName: name }) })
+                            .then(cat => { if (cat?._id) setApiCategories(prev => [...prev, cat]); })
+                            .catch(() => {});
                           setTxnOverrides(prev => {
                             const next = { ...prev };
                             selectedTxns.forEach(id => { next[id] = name; });
@@ -1554,7 +1657,88 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
 
           return (
           <div>
-            <SectionTitle sub="Customize how transactions are categorized">Manage Categories</SectionTitle>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
+              <SectionTitle sub="Customize how transactions are categorized">Manage Categories</SectionTitle>
+              <button onClick={() => setNewCatModal(true)} style={{
+                padding: "9px 18px", background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryContainer} 100%)`,
+                border: "none", borderRadius: 6, color: "#fff",
+                cursor: "pointer", fontFamily: font, fontSize: 13, fontWeight: 600,
+                display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
+              }}>
+                <span style={{ fontSize: 16 }}>+</span> New Category
+              </button>
+            </div>
+
+            {/* New Category Modal */}
+            {newCatModal && (
+              <div style={{
+                position: "fixed", inset: 0, background: "rgba(27,28,26,0.4)",
+                display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200,
+                backdropFilter: "blur(4px)",
+              }} onClick={() => { setNewCatModal(false); setNewCatForm({ name: "", icon: "🏷️", color: "#6f7a72" }); }}>
+                <div style={{
+                  background: theme.surface, borderRadius: 10, padding: 32, width: 380,
+                  boxShadow: "0 24px 48px rgba(27,28,26,0.12)",
+                }} onClick={e => e.stopPropagation()}>
+                  <h3 style={{ margin: "0 0 20px", fontSize: 20, fontWeight: 400, fontFamily: fontHeadline }}>New Category</h3>
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ fontSize: 11, color: theme.textSubtle, display: "block", marginBottom: 6, fontFamily: fontMono, textTransform: "uppercase", letterSpacing: "0.08em" }}>Name</label>
+                    <input
+                      value={newCatForm.name}
+                      onChange={e => setNewCatForm(p => ({ ...p, name: e.target.value }))}
+                      placeholder="e.g. Pet Care, Education..."
+                      autoFocus
+                      style={{ width: "100%", padding: "10px 12px", boxSizing: "border-box", background: theme.surfaceContainerLow, border: `1px solid ${theme.border}`, borderRadius: 6, color: theme.text, fontFamily: font, fontSize: 14, outline: "none" }}
+                    />
+                  </div>
+                  <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: 11, color: theme.textSubtle, display: "block", marginBottom: 6, fontFamily: fontMono, textTransform: "uppercase", letterSpacing: "0.08em" }}>Icon / Emoji</label>
+                      <input
+                        value={newCatForm.icon}
+                        onChange={e => setNewCatForm(p => ({ ...p, icon: e.target.value }))}
+                        placeholder="🏷️"
+                        style={{ width: "100%", padding: "10px 12px", boxSizing: "border-box", background: theme.surfaceContainerLow, border: `1px solid ${theme.border}`, borderRadius: 6, color: theme.text, fontFamily: font, fontSize: 20, outline: "none", textAlign: "center" }}
+                      />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: 11, color: theme.textSubtle, display: "block", marginBottom: 6, fontFamily: fontMono, textTransform: "uppercase", letterSpacing: "0.08em" }}>Color</label>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        {["#005235","#b02d21","#6f7a72","#3f4943","#a07040","#1a6b4a","#7a3f8a","#3a6aa0"].map(c => (
+                          <div key={c} onClick={() => setNewCatForm(p => ({ ...p, color: c }))} style={{
+                            width: 24, height: 24, borderRadius: "50%", background: c, cursor: "pointer",
+                            border: newCatForm.color === c ? `3px solid ${theme.text}` : "2px solid transparent",
+                            boxSizing: "border-box", transition: "transform 0.1s",
+                          }} />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button onClick={() => { setNewCatModal(false); setNewCatForm({ name: "", icon: "🏷️", color: "#6f7a72" }); }} style={{
+                      flex: 1, padding: "10px", background: "none", border: `1px solid ${theme.border}`,
+                      borderRadius: 6, cursor: "pointer", fontFamily: font, fontSize: 13, color: theme.textSubtle,
+                    }}>Cancel</button>
+                    <button onClick={async () => {
+                      if (!newCatForm.name.trim()) return;
+                      const name = newCatForm.name.trim();
+                      setCustomCats(prev => ({ ...prev, [name]: [] }));
+                      setNewCatModal(false);
+                      setNewCatForm({ name: "", icon: "🏷️", color: "#6f7a72" });
+                      authFetch("/api/categories", {
+                        method: "POST",
+                        body: JSON.stringify({ categoryName: name, icon: newCatForm.icon, color: newCatForm.color }),
+                      }).then(cat => { if (cat?._id) setApiCategories(prev => [...prev, cat]); }).catch(() => {});
+                    }} style={{
+                      flex: 2, padding: "10px",
+                      background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryContainer} 100%)`,
+                      border: "none", borderRadius: 6, cursor: "pointer",
+                      fontFamily: font, fontSize: 13, fontWeight: 600, color: "#fff",
+                    }}>Create Category</button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Summary bar */}
             <div style={{
@@ -1624,18 +1808,34 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
                 const catTxns = expenses.filter(t => t.category === cat);
                 const catTotal = Math.abs(_.sumBy(catTxns, "amount"));
                 const pct = totalExpenses > 0 ? (catTotal / totalExpenses) * 100 : 0;
+                const apiCat = apiCategories.find(c => c.categoryName === cat);
+                const isCustom = !!customCats[cat] || !!apiCat;
+                const catColor = apiCat?.color || PALETTE[ci % PALETTE.length];
+                const catIcon = apiCat?.icon;
 
                 return (
                   <div key={cat} style={{
                     flex: "1 1 220px", maxWidth: 300, background: theme.surface,
-                    borderLeft: `3px solid ${isEditing ? theme.primary : PALETTE[ci % PALETTE.length]}`,
+                    borderLeft: `3px solid ${isEditing ? theme.primary : catColor}`,
                     borderRadius: 8, padding: "16px 20px",
                     boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
                     transition: "box-shadow 0.2s",
                   }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                      {catIcon && <span style={{ fontSize: 16 }}>{catIcon}</span>}
                       <span style={{ fontSize: 14, fontWeight: 600, flex: 1, color: theme.text }}>{cat}</span>
                       <span style={{ fontFamily: fontMono, fontSize: 11, color: theme.textSubtle }}>{catTxns.length}</span>
+                      {apiCat && (
+                        <button onClick={async () => {
+                          if (!confirm(`Delete category "${cat}"?`)) return;
+                          setCustomCats(prev => { const n = { ...prev }; delete n[cat]; return n; });
+                          setApiCategories(prev => prev.filter(c => c.categoryName !== cat));
+                          authFetch(`/api/categories/${apiCat._id}`, { method: "DELETE" }).catch(() => {});
+                        }} style={{
+                          background: "none", border: "none", color: theme.accent, cursor: "pointer",
+                          fontSize: 15, padding: "0 2px", lineHeight: 1, opacity: 0.6,
+                        }} title="Delete category">×</button>
+                      )}
                     </div>
 
                     <div style={{ fontSize: 22, fontWeight: 600, fontFamily: fontMono, fontFeatureSettings: '"tnum"', color: theme.text, marginBottom: 10, letterSpacing: "-0.02em" }}>
@@ -1661,8 +1861,12 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
                                 display: "flex", alignItems: "center", gap: 5,
                               }}>
                                 {kw}
-                                <button onClick={() => setCustomCats(prev => ({ ...prev, [cat]: prev[cat].filter(k => k !== kw) }))}
-                                  style={{ background: "none", border: "none", color: theme.primary, cursor: "pointer", fontSize: 13, padding: 0, lineHeight: 1 }}>×</button>
+                                <button onClick={() => {
+                                  const newKws = (customCats[cat] || []).filter(k => k !== kw);
+                                  setCustomCats(prev => ({ ...prev, [cat]: newKws }));
+                                  const id = apiCategories.find(c => c.categoryName === cat)?._id;
+                                  if (id) authFetch(`/api/categories/${id}`, { method: "PUT", body: JSON.stringify({ keywords: newKws }) }).catch(() => {});
+                                }} style={{ background: "none", border: "none", color: theme.primary, cursor: "pointer", fontSize: 13, padding: 0, lineHeight: 1 }}>×</button>
                               </span>
                             ))}
                           </div>
@@ -1673,7 +1877,11 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
                             onChange={e => setNewKeyword(e.target.value)}
                             onKeyDown={e => {
                               if (e.key === "Enter" && newKeyword.trim()) {
-                                setCustomCats(prev => ({ ...prev, [cat]: [...(prev[cat] || []), newKeyword.trim().toLowerCase()] }));
+                                const kw = newKeyword.trim().toLowerCase();
+                                const newKws = [...(customCats[cat] || []), kw];
+                                setCustomCats(prev => ({ ...prev, [cat]: newKws }));
+                                const id = apiCategories.find(c => c.categoryName === cat)?._id;
+                                if (id) authFetch(`/api/categories/${id}`, { method: "PUT", body: JSON.stringify({ keywords: newKws }) }).catch(() => {});
                                 setNewKeyword("");
                               }
                             }}
@@ -1757,8 +1965,8 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
 
         {/* ─── SAVINGS TAB ─── */}
         {tab === "Savings" && (
-          <div>
-            <section style={{ marginBottom: 32 }}>
+          <div style={{ maxWidth: 820, margin: "0 auto" }}>
+            <section style={{ marginBottom: 32, textAlign: "center" }}>
               <h1 style={{ fontSize: 40, fontFamily: fontHeadline, fontWeight: 400, color: theme.text, margin: "0 0 8px" }}>
                 Savings <span style={{ fontStyle: "italic", color: theme.primary }}>Goals</span>
               </h1>
@@ -1767,7 +1975,7 @@ function Dashboard({ transactions: rawTxns, fileName, statementType = "unknown",
 
             <div style={{
               background: theme.surface,
-              borderRadius: 8, padding: 28, marginBottom: 24, maxWidth: 560,
+              borderRadius: 8, padding: 28, marginBottom: 24,
               boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
             }}>
               <h3 style={{ fontSize: 18, fontWeight: 400, fontFamily: fontHeadline, margin: "0 0 20px", color: theme.text }}>Set Your Goal</h3>
@@ -2212,6 +2420,23 @@ export default function App() {
   const [transactions, setTransactions] = useState(null);
   const [fileName, setFileName] = useState("");
   const [statementType, setStatementType] = useState("unknown");
+  const [auth, setAuth] = useState(() => {
+    try {
+      const stored = localStorage.getItem("cc_auth");
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const handleAuth = useCallback((authData) => {
+    setAuth(authData);
+    if (authData) {
+      localStorage.setItem("cc_auth", JSON.stringify(authData));
+    } else {
+      localStorage.removeItem("cc_auth");
+    }
+  }, []);
 
   const handleData = useCallback((txns, name, type = "unknown") => {
     setTransactions(txns);
@@ -2219,12 +2444,18 @@ export default function App() {
     setStatementType(type);
   }, []);
 
+  if (!auth) {
+    return <AuthScreen onAuth={handleAuth} />;
+  }
+
   if (!transactions) {
     return <UploadScreen onData={handleData} />;
   }
 
   return (
     <Dashboard
+      auth={auth}
+      onLogout={() => { handleAuth(null); setTransactions(null); setFileName(""); setStatementType("unknown"); }}
       transactions={transactions}
       fileName={fileName}
       statementType={statementType}
