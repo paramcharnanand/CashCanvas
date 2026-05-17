@@ -8,27 +8,35 @@ import AuthScreen from "./AuthScreen.jsx";
 const DEFAULT_CATEGORIES = {
   "Housing": [
     "rent", "mortgage", "property tax", "hoa", "landlord", "lease payment", "storage unit",
-    "renters insurance", "homeowners", "real estate", "apartment",
+    "renters insurance", "homeowners", "real estate", "apartment", "sublease", "leasing",
+    "extra space", "public storage", "life storage", "u-haul storage", "cubesmart",
   ],
   "Groceries": [
-    "whole foods", "trader joe", "safeway", "kroger", "walmart supercenter", "walmart grocery",
-    "costco", "aldi", "publix", "sprouts", "fresh market", "food 4 less", "grocery outlet",
-    "smart & final", "winco", "ralphs", "vons", "h-e-b", "heb", "meijer", "harris teeter",
-    "food lion", "stop & shop", "market basket", "lucky supermarket", "giant food", "albertsons",
-    "tom thumb", "weis market", "price chopper", "grocery", "supermarket", "instacart", "shipt",
+    "whole foods", "wholefds", "wfm", "trader joe", "safeway", "kroger",
+    "walmart supercenter", "walmart grocery", "walmart neighborhood",
+    "costco", "costco whse", "aldi", "publix", "sprouts", "fresh market", "food 4 less",
+    "grocery outlet", "smart & final", "winco", "ralphs", "vons", "h-e-b", "heb",
+    "meijer", "harris teeter", "food lion", "stop & shop", "market basket",
+    "lucky supermarket", "giant food", "albertsons", "tom thumb", "weis market",
+    "price chopper", "grocery", "supermarket", "instacart", "shipt",
     "amazon fresh", "fresh direct", "peapod", "save-a-lot", "lidl", "piggly wiggly",
+    "wegmans", "fresh thyme", "earth fare", "natural grocers", "coborn", "jewel osco",
+    "king soopers", "fry's food", "smith's food", "pick n save", "festival foods",
+    "hy-vee", "brookshire", "bi-lo", "stater bros", "food basics", "hannaford",
+    "giant eagle", "winn-dixie",
   ],
   "Dining": [
     "uber eats", "doordash", "grubhub", "postmates", "caviar delivery",
+    "seamless", "delivery.com", "gopuff",
     "mcdonald", "burger king", "wendy", "taco bell", "chick-fil-a", "popeye", "kfc",
     "in-n-out", "five guys", "shake shack", "whataburger", "culver", "arby", "carl's jr",
     "jack in the box", "sonic drive", "dairy queen", "steak 'n shake", "hardee",
-    "domino", "pizza hut", "papa john", "little caesar", "round table pizza",
-    "subway sandwich", "jersey mike", "firehouse sub", "potbelly", "which wich",
+    "domino", "pizza hut", "papa john", "little caesar", "round table pizza", "papa murphy",
+    "subway", "jersey mike", "firehouse sub", "potbelly", "which wich", "jimmy john",
     "chipotle", "qdoba", "moe's", "del taco", "panda express", "pei wei",
     "panera", "jason's deli", "mcalister", "corner bakery",
     "starbucks", "dunkin", "dutch bros", "peet's coffee", "coffee bean", "caribou coffee",
-    "smoothie king", "jamba juice", "tropical smoothie",
+    "smoothie king", "jamba juice", "tropical smoothie", "biggby", "coffee",
     "olive garden", "red lobster", "outback", "chili's", "applebee", "tgi friday",
     "cheesecake factory", "red robin", "buffalo wild wing", "hooters", "texas roadhouse",
     "longhorn steakhouse", "ruth's chris", "ihop", "denny", "cracker barrel", "waffle house",
@@ -36,91 +44,122 @@ const DEFAULT_CATEGORIES = {
     "sushi", "ramen", "poke bowl", "dim sum", "taqueria", "pizzeria",
     "cafe", "diner", "restaurant", "bistro", "eatery", "steakhouse", "boba", "bakery", "deli",
     "wingstop", "raising cane", "zaxby", "bojangle", "el pollo loco",
-    "noodle", "brunch", "grille", "kitchen",
+    "noodle", "brunch", "grille", "kitchen", "grill", "bar & grill", "gastropub",
+    "first watch", "eggs up", "the breakfast", "black bear diner",
+    "moe's southwest", "habit burger", "smashburger", "freddys",
+    "captain d", "long john silver", "popeyes", "church's chicken",
+    "waba grill", "yoshinoya", "flame broiler", "l&l hawaiian",
   ],
   "Transport": [
-    "uber", "lyft",
+    "uber", "lyft", "waymo", "via ride", "curb taxi", "yellow cab", "taxi",
     "bart", "muni", "caltrain", "amtrak", "metra", "marc train", "septa", "marta", "wmata",
-    "via rail", "nj transit", "path train", "chicago transit", "la metro",
-    "zipcar", "zip car", "turo rental", "enterprise rent", "hertz car", "avis rental", "budget car",
-    "bird scooter", "lime scooter", "spin scooter", "clipper card", "metro card",
-    "toll", "e-zpass", "fastrak", "sunpass", "pikepass",
-    "parking", "spothero", "parkwhiz", "laz parking",
+    "via rail", "nj transit", "path train", "chicago transit", "la metro", "metro transit",
+    "zipcar", "turo", "enterprise rent", "hertz", "avis", "budget car", "national car",
+    "alamo car", "dollar car", "thrifty car",
+    "bird scooter", "lime scooter", "spin scooter", "clipper card", "metro card", "orca card",
+    "toll", "e-zpass", "fastrak", "sunpass", "pikepass", "peach pass",
+    "parking", "spothero", "parkwhiz", "laz parking", "sp plus", "ace parking",
     "shell", "chevron", "arco", "bp gas", "exxon", "mobil", "sunoco", "speedway",
     "circle k", "quiktrip", "wawa", "casey's", "kwik trip", "racetrac", "pilot flying",
-    "fuel", "gas station", "car wash",
+    "buc-ee", "loves travel", "flying j", "petro", "ta travel",
+    "fuel", "gas station", "car wash", "gasoline",
     "jiffy lube", "valvoline", "firestone", "pep boys", "autozone", "o'reilly auto",
-    "midas", "meineke", "discount tire", "mavis tire", "oil change",
+    "midas", "meineke", "discount tire", "mavis tire", "oil change", "jiffy",
+    "advance auto", "napa auto", "take 5 oil",
     "delta air", "united air", "southwest air", "american airlines", "jetblue", "alaska air",
     "spirit air", "frontier air", "allegiant", "hawaiian air", "sun country",
-    "amtrak ticket", "greyhound bus",
+    "greyhound", "megabus", "flixbus", "peter pan bus",
   ],
   "Subscriptions": [
-    "netflix", "spotify", "hulu", "disney+", "disney plus", "hbo max", "peacock", "paramount+",
-    "apple tv", "youtube premium", "amazon prime", "audible", "kindle unlimited", "crunchyroll",
-    "funimation", "vrv subscription", "shudder", "mubi",
-    "twitch", "patreon", "substack", "medium membership",
-    "dropbox", "adobe", "microsoft 365", "office 365", "google one", "icloud",
-    "linkedin premium", "duolingo", "babbel", "rosetta stone",
-    "calm app", "headspace", "noom", "weight watchers",
-    "nytimes", "washington post", "wsj subscription", "the atlantic", "economist",
-    "peloton", "strava", "myfitnesspal", "beachbody",
-    "apple.com/bill", "apple music", "itunes",
+    "netflix", "spotify", "hulu", "disney+", "disney plus", "hbo max", "hbomax",
+    "peacock", "paramount+", "paramount plus", "apple tv", "apple tv+",
+    "youtube premium", "youtube tv", "amazon prime", "prime video", "prime membership",
+    "audible", "kindle unlimited", "crunchyroll", "funimation", "vrv", "shudder", "mubi",
+    "twitch", "patreon", "substack", "medium membership", "masterclass",
+    "dropbox", "adobe", "creative cloud", "microsoft 365", "office 365",
+    "google one", "google storage", "icloud", "apple one", "setapp",
+    "linkedin premium", "duolingo", "babbel", "rosetta stone", "busuu",
+    "calm", "headspace", "noom", "weight watchers", "ww.com",
+    "nytimes", "new york times", "washington post", "wsj", "the atlantic", "economist",
+    "peloton", "strava", "myfitnesspal", "beachbody", "openfit",
+    "apple.com/bill", "apple music", "itunes", "apl*",
     "gym membership", "annual membership", "monthly subscription", "annual subscription",
     "planet fitness", "la fitness", "equinox", "24 hour fitness", "gold's gym",
+    "anytime fitness", "orange theory", "orangetheory", "solidcore",
+    "dashlane", "1password", "lastpass", "nordvpn", "expressvpn",
+    "canva", "figma", "notion", "airtable", "monday.com", "asana",
+    "github", "heroku", "digitalocean", "aws", "google cloud", "azure",
+    "zoom", "slack", "docusign",
   ],
   "Utilities": [
-    "electric bill", "electricity", "water bill", "internet service", "phone bill", "gas bill", "power bill",
+    "electric bill", "electricity", "water bill", "internet service", "phone bill",
+    "gas bill", "power bill", "utility", "utilities",
     "pg&e", "pge", "sdg&e", "con ed", "coned", "duke energy", "national grid", "xcel energy",
     "dominion energy", "pse&g", "eversource", "ameren", "entergy", "centerpoint energy",
+    "southern california gas", "soCalgas", "nicor gas", "peoples gas", "spire energy",
     "comcast", "xfinity", "spectrum", "cox cable", "centurylink", "frontier comm",
-    "charter comm", "cox communications",
-    "verizon bill", "at&t bill", "t-mobile bill",
+    "charter comm", "cox communications", "att internet", "optimum", "altice", "earthlink",
+    "verizon", "at&t", "t-mobile", "sprint", "metro pcs", "cricket wireless", "boost mobile",
+    "us cellular", "mint mobile", "google fi",
     "sewage", "waste management", "republic services", "clean harbors", "sewer",
+    "trash collection", "water service",
   ],
   "Shopping": [
-    "amazon.com", "ebay", "etsy", "wayfair", "wish.com", "shein", "asos", "revolve",
+    "amazon.com", "amzn", "amzn mktp", "amazon mktp", "amazon digital",
+    "ebay", "etsy", "wayfair", "wish.com", "shein", "asos", "revolve", "temu", "aliexpress",
     "nordstrom", "macy's", "bloomingdale", "neiman marcus", "saks fifth",
     "kohl's", "jcpenney", "belk", "dillard",
     "zara", "h&m", "gap", "old navy", "banana republic", "j.crew", "ann taylor",
     "forever 21", "express clothing", "american eagle", "hollister", "abercrombie",
-    "uniqlo", "anthropologie", "urban outfitters", "free people",
-    "nike", "adidas", "under armour", "lululemon", "athleta", "fabletics",
+    "uniqlo", "anthropologie", "urban outfitters", "free people", "mango",
+    "nike", "adidas", "under armour", "lululemon", "athleta", "fabletics", "vuori",
     "tj maxx", "marshalls", "ross stores", "burlington coat",
     "ikea", "home depot", "lowe's", "menards", "ace hardware", "true value",
-    "best buy", "apple store", "microsoft store", "b&h photo", "adorama", "gamestop", "micro center",
+    "best buy", "apple store", "apple retail", "microsoft store",
+    "b&h photo", "adorama", "gamestop", "micro center", "newegg",
     "target", "walmart", "dollar tree", "dollar general", "five below", "family dollar",
     "bath & body works", "sephora", "ulta", "mac cosmetics", "fenty beauty",
     "petco", "petsmart", "chewy",
     "bed bath", "crate and barrel", "west elm", "pottery barn", "restoration hardware",
     "rei outdoor", "dick's sporting", "academy sports", "bass pro",
+    "overstock", "build-a-bear", "world market", "cost plus",
+    "michaels", "joann", "hobby lobby", "craft store",
+    "auto parts", "napa", "advance auto",
+    "container store", "tuesday morning", "homegoods", "at home store",
   ],
   "Health": [
-    "pharmacy", "cvs", "walgreens", "rite aid", "duane reade",
-    "doctor", "hospital", "dental", "dentist", "orthodont",
-    "optometry", "vision care", "lenscrafters", "pearle vision",
-    "medical", "health insurance", "copay", "urgent care", "emergency room",
+    "pharmacy", "cvs", "walgreens", "rite aid", "duane reade", "good rx",
+    "doctor", "hospital", "dental", "dentist", "orthodont", "oral surgeon",
+    "optometry", "vision care", "lenscrafters", "pearle vision", "warby parker",
+    "medical", "health insurance", "copay", "urgent care", "emergency room", "er visit",
     "kaiser", "blue cross", "blue shield", "aetna", "cigna", "united health", "humana",
     "lab corp", "quest diagnostic", "blood test", "prescription", "rx",
     "therapy", "counseling", "mental health", "chiropractic", "physical therapy",
     "dermatology", "eye exam", "planned parenthood", "minute clinic",
+    "teladoc", "mdlive", "zocdoc",
+    "vitamin shoppe", "gnc", "supplement",
+    "hims", "ro health", "noom",
   ],
   "Entertainment": [
     "amc theatres", "regal cinema", "cinemark", "alamo drafthouse", "movie", "theater",
     "concert", "live music", "ticketmaster", "stubhub", "eventbrite", "live nation", "seat geek",
-    "steam", "playstation", "xbox", "nintendo", "roblox", "epic games", "blizzard", "ea games",
-    "twitch", "discord nitro",
+    "steam", "playstation", "playstation network", "xbox", "nintendo", "roblox",
+    "epic games", "blizzard", "ea games", "valve", "humble bundle",
+    "twitch sub", "discord nitro",
     "bowling", "escape room", "arcade", "dave & buster", "museum", "zoo", "aquarium",
-    "comedy club", "sports ticket", "golf", "mini golf", "laser tag", "go kart",
+    "comedy club", "sports ticket", "golf", "mini golf", "laser tag", "go kart", "topgolf",
     "six flags", "universal studio", "disneyland", "disney world", "sea world",
     "nba", "nfl", "mlb", "nhl", "mls ticket",
+    "book of the month", "audible", "kindle",
+    "national park", "state park", "trampoline park",
   ],
   "Income": [
-    "payroll", "direct dep", "direct deposit", "salary", "wage",
-    "zelle from", "venmo from", "cashapp from",
-    "tax refund", "irs treas", "state refund",
+    "payroll", "direct dep", "direct deposit", "salary", "wage", "paycheck",
+    "zelle from", "venmo from", "cashapp from", "cash app from",
+    "tax refund", "irs treas", "state refund", "federal refund",
     "cashback reward", "cash back", "rebate", "reimbursement",
     "interest payment", "dividend", "transfer from",
+    "freelance", "consulting", "commission", "bonus deposit",
   ],
   "Other": [],
 };
@@ -129,9 +168,22 @@ const PALETTE = ["#1a6b4a","#b02d21","#bfc9c0","#6f7a72","#3f4943","#8e130c","#a
 
 function cleanDesc(desc) {
   return (desc || "").toLowerCase()
+    // Bank boilerplate
     .replace(/\b(card\s+purchase|pos\s+(debit|credit|purchase)|ach\s+(debit|credit|payment|transfer)|online\s+(payment|transfer|banking)|bill\s+pay(ment)?|direct\s+dep(osit)?|wire\s+transfer|check\s+(paid|deposit|crd)|mobile\s+(payment|deposit)|contactless\s+purchase|recurring\s+(charge|payment)|autopay|preauthorized|authorized\s+on|payment\s+to|purchase\s+at|pending|memo|ref\s*#?|tran\s*#?)\b/g, " ")
+    // POS-system prefixes (Square, Toast, DoorDash, etc.)
+    .replace(/\b(sq|tst|dsh|grubhub)\s*\*/gi, "")
+    // Replace asterisks (UBER*EATS → UBER EATS)
+    .replace(/\*/g, " ")
+    // Remove date patterns
     .replace(/\b\d{1,2}\/\d{1,2}(\/\d{2,4})?\b/g, " ")
+    // Remove #StoreNumber patterns
+    .replace(/#\s*\d+/g, " ")
+    // Remove trailing 2-char state codes or city abbreviations
+    .replace(/\s+\b[a-z]{2}\b\s*$/g, "")
+    // Remove alphanumeric reference codes
     .replace(/\b[a-z]{0,3}\d{4,}\b/g, " ")
+    // Remove long all-caps codes (transaction IDs)
+    .replace(/\b[A-Z0-9]{8,}\b/g, " ")
     .replace(/\s+/g, " ").trim();
 }
 
@@ -761,12 +813,21 @@ async function parsePDF(file, onProgress = () => {}) {
 }
 
 // ─── UPLOAD SCREEN ───
-function UploadScreen({ onData }) {
+function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");
+  const [fileHistory, setFileHistory] = useState([]);
   const inputRef = useRef();
+
+  useEffect(() => {
+    if (!auth?.token) return;
+    fetch("/api/files", { headers: { Authorization: `Bearer ${auth.token}` } })
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data)) setFileHistory(data); })
+      .catch(() => {});
+  }, [auth?.token]);
 
   const handleFile = useCallback((file) => {
     if (!file) return;
@@ -848,8 +909,18 @@ function UploadScreen({ onData }) {
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: theme.bg, fontFamily: font, color: theme.text }}>
       {/* Nav */}
-      <header style={{ background: theme.bg, borderBottom: `1px solid ${theme.surfaceContainerLow}`, padding: "20px 48px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <header style={{ background: theme.bg, borderBottom: `1px solid ${theme.surfaceContainerLow}`, padding: "16px 48px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ fontSize: 22, fontFamily: fontHeadline, fontStyle: "italic", color: theme.text }}>CashCanvas</div>
+        {auth?.user && (
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ fontSize: 13, color: theme.textSubtle, fontFamily: fontMono }}>{auth.user.name}</span>
+            <button onClick={onLogout} style={{
+              padding: "7px 14px", background: "none",
+              border: `1px solid ${theme.border}`, borderRadius: 6,
+              color: theme.textSubtle, cursor: "pointer", fontFamily: font, fontSize: 12,
+            }}>Sign Out</button>
+          </div>
+        )}
       </header>
 
       {/* Main */}
@@ -964,6 +1035,65 @@ function UploadScreen({ onData }) {
             <span className="material-symbols-outlined" style={{ fontSize: 16, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>arrow_forward</span>
           </button>
         </div>
+
+        {/* ── Previous Uploads ── */}
+        {fileHistory.length > 0 && (
+          <div style={{ marginTop: 60, width: "100%" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+              <div>
+                <div style={{ fontSize: 11, fontFamily: fontMono, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.12em", color: theme.textSubtle, marginBottom: 4 }}>Previous Uploads</div>
+                <div style={{ fontSize: 13, color: theme.textSubtle }}>Click any statement to pick up where you left off.</div>
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 16 }}>
+              {fileHistory.map(f => (
+                <div key={f._id} style={{
+                  background: theme.surface, borderRadius: 8, padding: "18px 20px",
+                  boxShadow: "0 1px 3px rgba(27,28,26,0.07)",
+                  display: "flex", flexDirection: "column", gap: 10,
+                  border: `1px solid ${theme.border}`,
+                  cursor: "pointer", transition: "box-shadow 0.2s",
+                }}
+                onClick={() => onLoadFile(f._id, f.fileName, f.statementType)}
+                onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 12px rgba(27,28,26,0.12)"}
+                onMouseLeave={e => e.currentTarget.style.boxShadow = "0 1px 3px rgba(27,28,26,0.07)"}
+                >
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 20, color: theme.primary, flexShrink: 0, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>description</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: theme.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.fileName}</span>
+                    </div>
+                    <button onClick={e => {
+                      e.stopPropagation();
+                      if (!confirm("Remove this upload from history?")) return;
+                      fetch(`/api/files/${f._id}`, { method: "DELETE", headers: { Authorization: `Bearer ${auth.token}` } }).catch(() => {});
+                      setFileHistory(prev => prev.filter(x => x._id !== f._id));
+                    }} style={{
+                      background: "none", border: "none", color: theme.textSubtle, cursor: "pointer",
+                      fontSize: 16, padding: 0, flexShrink: 0, opacity: 0.5,
+                    }} title="Remove">×</button>
+                  </div>
+                  <div style={{ display: "flex", gap: 12 }}>
+                    <div>
+                      <div style={{ fontSize: 10, color: theme.textSubtle, fontFamily: fontMono, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>Transactions</div>
+                      <div style={{ fontSize: 16, fontWeight: 600, fontFamily: fontMono, color: theme.text }}>{f.transactionCount}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, color: theme.textSubtle, fontFamily: fontMono, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>Uploaded</div>
+                      <div style={{ fontSize: 13, color: theme.textSubtle }}>{new Date(f.uploadedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
+                    </div>
+                    {f.statementType !== "unknown" && (
+                      <div>
+                        <div style={{ fontSize: 10, color: theme.textSubtle, fontFamily: fontMono, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>Type</div>
+                        <div style={{ fontSize: 12, color: theme.primary, fontWeight: 600 }}>{f.statementType === "credit_card" ? "Credit Card" : "Bank"}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Footer */}
@@ -1064,6 +1194,53 @@ function CustomTooltip({ active, payload, label }) {
   );
 }
 
+// ─── DOWNLOAD REPORT HELPERS ───
+function buildTransactionsCsv(transactions) {
+  const header = "Date,Description,Category,Amount,Type";
+  const rows = transactions.map(t => {
+    const date = t.date instanceof Date ? t.date.toLocaleDateString("en-US") : "";
+    const desc = `"${(t.desc || "").replace(/"/g, '""')}"`;
+    const category = `"${(t.category || "").replace(/"/g, '""')}"`;
+    const amount = Math.abs(t.amount).toFixed(2);
+    const type = t.amount >= 0 ? "Income" : "Expense";
+    return `${date},${desc},${category},${amount},${type}`;
+  });
+  return [header, ...rows].join("\n");
+}
+
+function buildSummaryCsv(transactions, catBreakdown, monthlyData) {
+  const sections = [];
+
+  sections.push("CATEGORY SUMMARY");
+  sections.push("Category,Total Spent,Transaction Count,% of Spending");
+  const totalSpend = catBreakdown.filter(c => c.name !== "Income").reduce((s, c) => s + c.value, 0);
+  catBreakdown.forEach(c => {
+    const pct = totalSpend > 0 ? ((c.value / totalSpend) * 100).toFixed(1) : "0.0";
+    sections.push(`"${c.name}",${c.value.toFixed(2)},${c.count},${pct}%`);
+  });
+
+  sections.push("");
+  sections.push("MONTHLY BREAKDOWN");
+  sections.push("Month,Income,Expenses,Net");
+  monthlyData.forEach(m => {
+    sections.push(`"${m.month}",${m.Income},${m.Expenses},${m.Net}`);
+  });
+
+  return sections.join("\n");
+}
+
+function downloadCsv(content, filename) {
+  const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 // ─── DASHBOARD ───
 function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementType = "unknown", onReset }) {
   const [tab, setTab] = useState("Overview");
@@ -1082,6 +1259,8 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
   const [newCatModal, setNewCatModal] = useState(false);
   const [newCatForm, setNewCatForm] = useState({ name: "", icon: "🏷️", color: "#6f7a72" });
   const [aiDone, setAiDone] = useState(false);
+  const [rulesLoaded, setRulesLoaded] = useState(false);
+  const [showDownload, setShowDownload] = useState(false);
 
   // ── API helper ──
   const authFetch = useCallback(async (url, options = {}) => {
@@ -1100,12 +1279,14 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
   // ── Load merchant rules + custom categories on mount ──
   useEffect(() => {
     if (!auth?.token) return;
+    let done = 0;
+    const markDone = () => { done++; if (done === 2) setRulesLoaded(true); };
 
     authFetch("/api/merchant-rules").then(data => {
       if (Array.isArray(data)) {
         setMerchantRules(new Map(data.map(r => [r.merchantName, r.category])));
       }
-    }).catch(() => {});
+    }).catch(() => {}).finally(markDone);
 
     authFetch("/api/categories").then(data => {
       if (Array.isArray(data)) {
@@ -1114,27 +1295,29 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
         data.forEach(c => { catMap[c.categoryName] = c.keywords || []; });
         setCustomCats(catMap);
       }
-    }).catch(() => {});
+    }).catch(() => {}).finally(markDone);
   }, [auth?.token]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── AI categorization — fires once after merchant rules load ──
+  // ── AI categorization — fires once after merchant rules + custom cats are loaded ──
   useEffect(() => {
-    if (aiDone || !auth?.token) return;
+    if (!rulesLoaded || aiDone || !auth?.token) return;
     const otherTxns = rawTxns
       .map((t, i) => ({ ...t, id: i }))
       .filter(t => t.amount < 0 && !txnOverrides[t.id] && categorize(t.desc, customCats, merchantRules) === "Other");
     if (otherTxns.length === 0) { setAiDone(true); return; }
     setAiDone(true);
+    // Send in batches of 80
+    const batch = otherTxns.slice(0, 80);
     authFetch("/api/categorize", {
       method: "POST",
-      body: JSON.stringify({ transactions: otherTxns.slice(0, 100).map(t => ({ desc: t.desc, amount: t.amount })) }),
+      body: JSON.stringify({ transactions: batch.map(t => ({ desc: t.desc, amount: t.amount })) }),
     }).then(data => {
       if (Array.isArray(data.results)) {
         setTxnOverrides(prev => {
           const next = { ...prev };
           data.results.forEach(({ idx, category }) => {
             if (category && category !== "Other") {
-              const id = otherTxns[idx]?.id;
+              const id = batch[idx]?.id;
               if (id !== undefined && !next[id]) next[id] = category;
             }
           });
@@ -1142,7 +1325,7 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
         });
       }
     }).catch(() => {});
-  }, [merchantRules, aiDone]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [rulesLoaded, aiDone]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const transactions = useMemo(() => {
     return rawTxns.map((t, i) => ({
@@ -1257,19 +1440,28 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
                 )}
               </div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               {auth?.user && (
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 13, color: theme.textSubtle, fontFamily: fontMono }}>{auth.user.name}</span>
-                  <button onClick={onLogout} style={{
-                    padding: "7px 14px", background: "none",
-                    border: `1px solid ${theme.border}`, borderRadius: 6,
-                    color: theme.textSubtle, cursor: "pointer", fontFamily: font, fontSize: 12, fontWeight: 500,
-                  }}>Sign Out</button>
-                </div>
+                <span style={{ fontSize: 12, color: theme.textSubtle, fontFamily: fontMono }}>{auth.user.name}</span>
+              )}
+              <button onClick={() => setShowDownload(true)} style={{
+                padding: "8px 16px", background: "none",
+                border: `1px solid ${theme.border}`, borderRadius: 6,
+                color: theme.textMuted, cursor: "pointer", fontFamily: font, fontSize: 13, fontWeight: 500,
+                display: "flex", alignItems: "center", gap: 5,
+              }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 15, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>download</span>
+                Download
+              </button>
+              {auth?.user && (
+                <button onClick={onLogout} style={{
+                  padding: "8px 14px", background: "none",
+                  border: `1px solid ${theme.border}`, borderRadius: 6,
+                  color: theme.textSubtle, cursor: "pointer", fontFamily: font, fontSize: 12,
+                }}>Sign Out</button>
               )}
               <button onClick={onReset} style={{
-                padding: "9px 20px",
+                padding: "9px 18px",
                 background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryContainer} 100%)`,
                 border: "none", borderRadius: 6, color: "#fff",
                 cursor: "pointer", fontFamily: font, fontSize: 13, fontWeight: 600,
@@ -1279,6 +1471,43 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
                 New Upload
               </button>
             </div>
+
+            {/* Download modal */}
+            {showDownload && (
+              <div style={{
+                position: "fixed", inset: 0, background: "rgba(27,28,26,0.35)",
+                display: "flex", alignItems: "flex-start", justifyContent: "flex-end",
+                zIndex: 300, paddingTop: 70, paddingRight: 40,
+              }} onClick={() => setShowDownload(false)}>
+                <div style={{
+                  background: theme.surface, borderRadius: 10, padding: 8, minWidth: 240,
+                  boxShadow: "0 8px 32px rgba(27,28,26,0.14)",
+                }} onClick={e => e.stopPropagation()}>
+                  <div style={{ padding: "8px 12px", fontSize: 10, fontFamily: fontMono, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: theme.textSubtle }}>
+                    Export Report
+                  </div>
+                  {[
+                    { label: "Transactions CSV", desc: "All transactions with categories", icon: "table_chart", action: () => { downloadCsv(buildTransactionsCsv(transactions), `${fileName.replace(/\.[^.]+$/, "")}_transactions.csv`); setShowDownload(false); } },
+                    { label: "Summary CSV", desc: "Category totals + monthly breakdown", icon: "summarize", action: () => { downloadCsv(buildSummaryCsv(transactions, catBreakdown, monthlyData), `${fileName.replace(/\.[^.]+$/, "")}_summary.csv`); setShowDownload(false); } },
+                  ].map(opt => (
+                    <button key={opt.label} onClick={opt.action} style={{
+                      width: "100%", padding: "12px 14px", background: "none",
+                      border: "none", borderRadius: 6, cursor: "pointer", textAlign: "left",
+                      display: "flex", alignItems: "center", gap: 12, transition: "background 0.1s",
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = theme.surfaceContainerLow}
+                    onMouseLeave={e => e.currentTarget.style.background = "none"}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 18, color: theme.primary, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>{opt.icon}</span>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: theme.text, fontFamily: font }}>{opt.label}</div>
+                        <div style={{ fontSize: 11, color: theme.textSubtle, fontFamily: font }}>{opt.desc}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           <nav style={{ marginTop: 12 }}>
             <TabBar tabs={["Overview", "Categories", "Savings"]} active={tab} onChange={setTab} />
@@ -2442,14 +2671,53 @@ export default function App() {
     setTransactions(txns);
     setFileName(name);
     setStatementType(type);
-  }, []);
+    // Save to file history (non-blocking)
+    if (auth?.token && name !== "sample_data.csv") {
+      fetch("/api/files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${auth.token}` },
+        body: JSON.stringify({
+          fileName: name,
+          statementType: type,
+          transactions: txns.map(t => ({ ...t, date: t.date instanceof Date ? t.date.toISOString() : t.date })),
+        }),
+      }).catch(() => {});
+    }
+  }, [auth?.token]);
+
+  const handleLoadFile = useCallback(async (fileId, fileName, statementType) => {
+    try {
+      const res = await fetch(`/api/files/${fileId}`, {
+        headers: { Authorization: `Bearer ${auth?.token}` },
+      });
+      const data = await res.json();
+      if (!data.transactions) return;
+      // Deserialize date strings back to Date objects
+      const txns = data.transactions.map(t => ({
+        ...t,
+        date: typeof t.date === "string" ? new Date(t.date) : t.date,
+      }));
+      setTransactions(txns);
+      setFileName(data.fileName || fileName);
+      setStatementType(data.statementType || statementType);
+    } catch {
+      alert("Failed to load file. Please re-upload.");
+    }
+  }, [auth?.token]);
 
   if (!auth) {
     return <AuthScreen onAuth={handleAuth} />;
   }
 
   if (!transactions) {
-    return <UploadScreen onData={handleData} />;
+    return (
+      <UploadScreen
+        onData={handleData}
+        auth={auth}
+        onLoadFile={handleLoadFile}
+        onLogout={() => handleAuth(null)}
+      />
+    );
   }
 
   return (
