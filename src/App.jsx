@@ -318,13 +318,25 @@ const theme = {
   yellowSoft: "rgba(0,82,53,0.08)",
 };
 
+// ─── HOOKS ───
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth < 768);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+  return isMobile;
+}
+
 // ─── COMPONENTS ───
 
 function StatCard({ label, value, sub, color = theme.primary, onClick }) {
   return (
     <div style={{
       background: theme.surface,
-      borderRadius: 8, padding: "20px 24px", flex: "1 1 200px", minWidth: 200,
+      borderRadius: 8, padding: "20px 24px", flex: "1 1 140px", minWidth: 0,
       borderLeft: `3px solid ${color}`,
       boxShadow: "0 1px 3px rgba(27,28,26,0.07)",
       cursor: onClick ? "pointer" : "default", userSelect: "none",
@@ -343,7 +355,7 @@ function StatCard({ label, value, sub, color = theme.primary, onClick }) {
 
 function TabBar({ tabs, active, onChange }) {
   return (
-    <div style={{ display: "flex", gap: 32 }}>
+    <div style={{ display: "flex", gap: 24, overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
       {tabs.map(t => (
         <button key={t} onClick={() => onChange(t)} style={{
           padding: "8px 0",
@@ -357,6 +369,8 @@ function TabBar({ tabs, active, onChange }) {
           color: active === t ? theme.primary : theme.textSubtle,
           transition: "all 0.2s",
           letterSpacing: "0.01em",
+          whiteSpace: "nowrap",
+          flexShrink: 0,
         }}>{t}</button>
       ))}
     </div>
@@ -847,6 +861,7 @@ async function parsePDF(file, onProgress = () => {}) {
 
 // ─── UPLOAD SCREEN ───
 function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
+  const isMobile = useIsMobile();
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -942,11 +957,11 @@ function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: theme.bg, fontFamily: font, color: theme.text }}>
       {/* Nav */}
-      <header style={{ background: theme.bg, borderBottom: `1px solid ${theme.surfaceContainerLow}`, padding: "16px 48px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <header style={{ background: theme.bg, borderBottom: `1px solid ${theme.surfaceContainerLow}`, padding: isMobile ? "12px 16px" : "16px 48px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ fontSize: 22, fontFamily: fontHeadline, fontStyle: "italic", color: theme.text }}>CashCanvas</div>
         {auth?.user && (
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ fontSize: 13, color: theme.textSubtle, fontFamily: fontMono }}>{auth.user.name}</span>
+            {!isMobile && <span style={{ fontSize: 13, color: theme.textSubtle, fontFamily: fontMono }}>{auth.user.name}</span>}
             <button onClick={onLogout} style={{
               padding: "7px 14px", background: "none",
               border: `1px solid ${theme.border}`, borderRadius: 6,
@@ -957,10 +972,10 @@ function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
       </header>
 
       {/* Main */}
-      <main style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "48px 48px 0", maxWidth: 1000, margin: "0 auto", width: "100%" }}>
+      <main style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: isMobile ? "32px 16px 0" : "48px 48px 0", maxWidth: 1000, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
         {/* Hero */}
-        <section style={{ textAlign: "center", marginBottom: 48 }}>
-          <h1 style={{ fontSize: 56, fontFamily: fontHeadline, fontWeight: 400, color: theme.text, lineHeight: 1.1, margin: "0 0 16px", letterSpacing: "-0.02em" }}>
+        <section style={{ textAlign: "center", marginBottom: isMobile ? 32 : 48 }}>
+          <h1 style={{ fontSize: isMobile ? 40 : 56, fontFamily: fontHeadline, fontWeight: 400, color: theme.text, lineHeight: 1.1, margin: "0 0 16px", letterSpacing: "-0.02em" }}>
             Cash<span style={{ fontStyle: "italic" }}>Canvas</span>
           </h1>
           <p style={{ fontFamily: fontMono, fontSize: 13, color: theme.textSubtle, margin: 0, letterSpacing: "0.04em" }}>
@@ -969,7 +984,7 @@ function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
         </section>
 
         {/* Two-column layout */}
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 48, width: "100%", alignItems: "start" }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr", gap: isMobile ? 24 : 48, width: "100%", alignItems: "start" }}>
           {/* Left: Drop zone */}
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div
@@ -1014,7 +1029,7 @@ function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
           </div>
 
           {/* Right: Badges + image */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 32, paddingTop: 8 }}>
+          <div style={{ display: isMobile ? "none" : "flex", flexDirection: "column", gap: 32, paddingTop: 8 }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               {featureBadges.map(b => (
                 <div key={b.title} style={{ display: "flex", alignItems: "center", gap: 16 }}>
@@ -1131,7 +1146,7 @@ function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
       </main>
 
       {/* Footer */}
-      <footer style={{ background: theme.surfaceContainerLow, marginTop: 64, padding: "32px 48px" }}>
+      <footer style={{ background: theme.surfaceContainerLow, marginTop: 64, padding: isMobile ? "24px 16px" : "32px 48px" }}>
         <div style={{ maxWidth: 1000, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
           <span style={{ fontFamily: fontHeadline, fontStyle: "italic", fontSize: 18, color: theme.text }}>CashCanvas</span>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1271,6 +1286,7 @@ function downloadCsv(content, filename) {
 
 // ─── DASHBOARD ───
 function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementType = "unknown", onReset }) {
+  const isMobile = useIsMobile();
   const [tab, setTab] = useState("Overview");
   const [customCats, setCustomCats] = useState({});
   const [apiCategories, setApiCategories] = useState([]); // full objects with _id for API ops
@@ -1457,37 +1473,39 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
     <div style={{ minHeight: "100vh", background: theme.bg, fontFamily: font, color: theme.text }}>
       {/* Header */}
       <header style={{ background: theme.bg, position: "sticky", top: 0, zIndex: 100 }}>
-        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "20px 40px" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-              <span style={{ fontSize: 22, fontFamily: fontHeadline, fontStyle: "italic", color: theme.text }}>CashCanvas</span>
-              <div style={{ display: "flex", gap: 8 }}>
-                <span style={{ fontSize: 10, fontFamily: fontMono, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: theme.textSubtle, background: theme.surfaceContainerLow, padding: "4px 10px", borderRadius: 20, display: "flex", alignItems: "center", gap: 5 }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 13, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>file_present</span>
-                  {fileName}
-                </span>
-                {statementType !== "unknown" && (
-                  <span style={{ fontSize: 10, fontFamily: fontMono, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: theme.textSubtle, background: theme.surfaceContainerLow, padding: "4px 10px", borderRadius: 20, display: "flex", alignItems: "center", gap: 5 }}>
-                    <span className="material-symbols-outlined" style={{ fontSize: 13, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>account_balance</span>
-                    {statementType === "credit_card" ? "Credit Card" : "Bank Statement"}
+        <div style={{ maxWidth: 1280, margin: "0 auto", padding: isMobile ? "12px 16px" : "20px 40px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
+              <span style={{ fontSize: 20, fontFamily: fontHeadline, fontStyle: "italic", color: theme.text, flexShrink: 0 }}>CashCanvas</span>
+              {!isMobile && (
+                <div style={{ display: "flex", gap: 8, minWidth: 0 }}>
+                  <span style={{ fontSize: 10, fontFamily: fontMono, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: theme.textSubtle, background: theme.surfaceContainerLow, padding: "4px 10px", borderRadius: 20, display: "flex", alignItems: "center", gap: 5, overflow: "hidden", maxWidth: 200 }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 13, fontVariationSettings: "'FILL' 0, 'wght' 300", flexShrink: 0 }}>file_present</span>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{fileName}</span>
                   </span>
-                )}
-              </div>
+                  {statementType !== "unknown" && (
+                    <span style={{ fontSize: 10, fontFamily: fontMono, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: theme.textSubtle, background: theme.surfaceContainerLow, padding: "4px 10px", borderRadius: 20, display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 13, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>account_balance</span>
+                      {statementType === "credit_card" ? "Credit Card" : "Bank"}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              {auth?.user && (
+            <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 6 : 10, flexShrink: 0 }}>
+              {auth?.user && !isMobile && (
                 <span style={{ fontSize: 12, color: theme.textSubtle, fontFamily: fontMono }}>{auth.user.name}</span>
               )}
               <button onClick={() => setShowDownload(true)} style={{
-                padding: "8px 16px", background: "none",
+                padding: isMobile ? "8px 10px" : "8px 16px", background: "none",
                 border: `1px solid ${theme.border}`, borderRadius: 6,
                 color: theme.textMuted, cursor: "pointer", fontFamily: font, fontSize: 13, fontWeight: 500,
                 display: "flex", alignItems: "center", gap: 5,
               }}>
                 <span className="material-symbols-outlined" style={{ fontSize: 15, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>download</span>
-                Download
+                {!isMobile && "Download"}
               </button>
-              {auth?.user && (
+              {auth?.user && !isMobile && (
                 <button onClick={onLogout} style={{
                   padding: "8px 14px", background: "none",
                   border: `1px solid ${theme.border}`, borderRadius: 6,
@@ -1495,14 +1513,14 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
                 }}>Sign Out</button>
               )}
               <button onClick={onReset} style={{
-                padding: "9px 18px",
+                padding: isMobile ? "8px 12px" : "9px 18px",
                 background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryContainer} 100%)`,
                 border: "none", borderRadius: 6, color: "#fff",
                 cursor: "pointer", fontFamily: font, fontSize: 13, fontWeight: 600,
                 display: "flex", alignItems: "center", gap: 6,
               }}>
                 <span className="material-symbols-outlined" style={{ fontSize: 16, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>add</span>
-                New Upload
+                {!isMobile && "New Upload"}
               </button>
             </div>
 
@@ -1510,11 +1528,16 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
             {showDownload && (
               <div style={{
                 position: "fixed", inset: 0, background: "rgba(27,28,26,0.35)",
-                display: "flex", alignItems: "flex-start", justifyContent: "flex-end",
-                zIndex: 300, paddingTop: 70, paddingRight: 40,
+                display: "flex",
+                alignItems: isMobile ? "flex-end" : "flex-start",
+                justifyContent: isMobile ? "stretch" : "flex-end",
+                zIndex: 300,
+                paddingTop: isMobile ? 0 : 70,
+                paddingRight: isMobile ? 0 : 40,
               }} onClick={() => setShowDownload(false)}>
                 <div style={{
-                  background: theme.surface, borderRadius: 10, padding: 8, minWidth: 240,
+                  background: theme.surface, borderRadius: isMobile ? "12px 12px 0 0" : 10, padding: 8,
+                  minWidth: isMobile ? "100%" : 240,
                   boxShadow: "0 8px 32px rgba(27,28,26,0.14)",
                 }} onClick={e => e.stopPropagation()}>
                   <div style={{ padding: "8px 12px", fontSize: 10, fontFamily: fontMono, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: theme.textSubtle }}>
@@ -1550,13 +1573,13 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
         <div style={{ height: 1, background: theme.surfaceContainerLow }} />
       </header>
 
-      <div style={{ padding: "40px 40px", maxWidth: 1280, margin: "0 auto" }}>
+      <div style={{ padding: isMobile ? "20px 16px" : "40px 40px", maxWidth: 1280, margin: "0 auto", boxSizing: "border-box", width: "100%" }}>
         {/* ─── OVERVIEW TAB ─── */}
         {tab === "Overview" && (
           <div>
             {/* Hero */}
-            <section style={{ marginBottom: 36 }}>
-              <h1 style={{ fontSize: 40, fontFamily: fontHeadline, fontWeight: 400, color: theme.text, margin: "0 0 8px", lineHeight: 1.1 }}>
+            <section style={{ marginBottom: isMobile ? 24 : 36 }}>
+              <h1 style={{ fontSize: isMobile ? 28 : 40, fontFamily: fontHeadline, fontWeight: 400, color: theme.text, margin: "0 0 8px", lineHeight: 1.1 }}>
                 Welcome back, <span style={{ fontStyle: "italic", color: theme.primary }}>{auth?.user?.name?.split(" ")[0] || "there"}</span>
               </h1>
               <p style={{ fontSize: 14, color: theme.textSubtle, margin: 0, maxWidth: 520, lineHeight: 1.6 }}>
@@ -1575,7 +1598,7 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
             </div>
 
             {/* Charts Row */}
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 3fr", gap: 20, marginBottom: 24 }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 3fr", gap: 20, marginBottom: 24 }}>
               {/* Spending Composition Donut */}
               <div style={{
                 background: theme.surface, borderRadius: 8, padding: "28px 32px",
@@ -1762,23 +1785,41 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
               borderRadius: 8, overflow: "hidden",
               boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
             }}>
-              <div style={{
-                display: "grid", gridTemplateColumns: "40px 120px 1fr 140px 140px",
-                padding: "12px 20px", borderBottom: `1px solid ${theme.surfaceContainer}`,
-                fontSize: 10, fontWeight: 600, color: theme.textSubtle, textTransform: "uppercase", letterSpacing: "0.1em",
-                fontFamily: fontMono, alignItems: "center",
-              }}>
-                <div>
-                  <input type="checkbox"
-                    checked={selectedTxns.size === transactions.length && transactions.length > 0}
-                    onChange={e => setSelectedTxns(e.target.checked ? new Set(transactions.map(t => t.id)) : new Set())}
-                    style={{ cursor: "pointer", accentColor: theme.primary }}
-                  />
+              {/* Header row */}
+              {isMobile ? (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr auto", padding: "10px 16px", borderBottom: `1px solid ${theme.surfaceContainer}`, fontSize: 10, fontWeight: 600, color: theme.textSubtle, textTransform: "uppercase", letterSpacing: "0.1em", fontFamily: fontMono }}>
+                  <div>Description</div><div style={{ textAlign: "right" }}>Amount</div>
                 </div>
-                <div>Date</div><div>Description</div><div>Category</div><div style={{ textAlign: "right" }}>Amount</div>
-              </div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "40px 120px 1fr 140px 140px", padding: "12px 20px", borderBottom: `1px solid ${theme.surfaceContainer}`, fontSize: 10, fontWeight: 600, color: theme.textSubtle, textTransform: "uppercase", letterSpacing: "0.1em", fontFamily: fontMono, alignItems: "center" }}>
+                  <div>
+                    <input type="checkbox"
+                      checked={selectedTxns.size === transactions.length && transactions.length > 0}
+                      onChange={e => setSelectedTxns(e.target.checked ? new Set(transactions.map(t => t.id)) : new Set())}
+                      style={{ cursor: "pointer", accentColor: theme.primary }}
+                    />
+                  </div>
+                  <div>Date</div><div>Description</div><div>Category</div><div style={{ textAlign: "right" }}>Amount</div>
+                </div>
+              )}
               <div style={{ maxHeight: 600, overflowY: "auto" }}>
-                {transactions.map(t => (
+                {transactions.map(t => isMobile ? (
+                  <div key={t.id} style={{
+                    display: "grid", gridTemplateColumns: "1fr auto",
+                    padding: "12px 16px", borderBottom: `1px solid ${theme.surfaceContainer}`,
+                    alignItems: "center", gap: 8,
+                  }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13, fontWeight: 500, color: theme.text }}>{t.desc}</div>
+                      <div style={{ fontSize: 11, color: theme.textSubtle, marginTop: 2, fontFamily: fontMono }}>
+                        {t.date.toLocaleDateString("en-US", { month: "short", day: "numeric" })} · {t.category}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: "right", fontFamily: fontMono, fontWeight: 600, fontSize: 13, color: t.amount >= 0 ? theme.green : theme.text, fontFeatureSettings: '"tnum"', whiteSpace: "nowrap" }}>
+                      {t.amount >= 0 ? "+" : "-"}{fmt(t.amount)}
+                    </div>
+                  </div>
+                ) : (
                   <div key={t.id} style={{
                     display: "grid", gridTemplateColumns: "40px 120px 1fr 140px 140px",
                     padding: "12px 20px", borderBottom: `1px solid ${theme.surfaceContainer}`,
@@ -1805,16 +1846,9 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
                     </div>
                     <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 12, fontWeight: 500 }}>{t.desc}</div>
                     <div>
-                      <span style={{
-                        fontSize: 11, padding: "2px 8px", borderRadius: 4, fontFamily: fontMono,
-                        background: theme.surfaceContainerLow, color: theme.textSubtle,
-                      }}>{t.category}</span>
+                      <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, fontFamily: fontMono, background: theme.surfaceContainerLow, color: theme.textSubtle }}>{t.category}</span>
                     </div>
-                    <div style={{
-                      textAlign: "right", fontFamily: fontMono, fontWeight: 600, fontSize: 13,
-                      color: t.amount >= 0 ? theme.green : theme.text,
-                      fontFeatureSettings: '"tnum"', cursor: "default", userSelect: "none",
-                    }}>
+                    <div style={{ textAlign: "right", fontFamily: fontMono, fontWeight: 600, fontSize: 13, color: t.amount >= 0 ? theme.green : theme.text, fontFeatureSettings: '"tnum"', cursor: "default", userSelect: "none" }}>
                       {t.amount >= 0 ? "+" : "-"}{fmt(t.amount)}
                     </div>
                   </div>
@@ -1831,7 +1865,7 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
               }} onClick={() => { setReassignTxn(null); setNewCatName(""); }}>
                 <div style={{
                   background: theme.surface,
-                  borderRadius: 8, padding: 28, width: 360, maxHeight: "80vh", overflowY: "auto",
+                  borderRadius: 8, padding: isMobile ? 20 : 28, width: isMobile ? "100%" : 360, maxWidth: "100%", maxHeight: "80vh", overflowY: "auto",
                   boxShadow: "0 24px 48px rgba(27,28,26,0.12)",
                 }} onClick={e => e.stopPropagation()}>
                   <h3 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 400, fontFamily: fontHeadline }}>Reassign Category</h3>
@@ -1942,15 +1976,15 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
 
           return (
           <div>
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
+            <div style={{ display: "flex", alignItems: isMobile ? "center" : "flex-start", justifyContent: "space-between", marginBottom: 20, gap: 12 }}>
               <SectionTitle sub="Customize how transactions are categorized">Manage Categories</SectionTitle>
               <button onClick={() => setNewCatModal(true)} style={{
-                padding: "9px 18px", background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryContainer} 100%)`,
+                padding: "9px 14px", background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryContainer} 100%)`,
                 border: "none", borderRadius: 6, color: "#fff",
                 cursor: "pointer", fontFamily: font, fontSize: 13, fontWeight: 600,
                 display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
               }}>
-                <span style={{ fontSize: 16 }}>+</span> New Category
+                <span style={{ fontSize: 16 }}>+</span> {!isMobile && "New "}Category
               </button>
             </div>
 
@@ -1962,7 +1996,7 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
                 backdropFilter: "blur(4px)",
               }} onClick={() => { setNewCatModal(false); setNewCatForm({ name: "", icon: "🏷️", color: "#6f7a72" }); }}>
                 <div style={{
-                  background: theme.surface, borderRadius: 10, padding: 32, width: 380,
+                  background: theme.surface, borderRadius: 10, padding: isMobile ? 20 : 32, width: isMobile ? "calc(100% - 32px)" : 380, maxWidth: "100%",
                   boxShadow: "0 24px 48px rgba(27,28,26,0.12)",
                 }} onClick={e => e.stopPropagation()}>
                   <h3 style={{ margin: "0 0 20px", fontSize: 20, fontWeight: 400, fontFamily: fontHeadline }}>New Category</h3>
@@ -2256,7 +2290,7 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
         {tab === "Savings" && (
           <div style={{ maxWidth: 820, margin: "0 auto" }}>
             <section style={{ marginBottom: 32, textAlign: "center" }}>
-              <h1 style={{ fontSize: 40, fontFamily: fontHeadline, fontWeight: 400, color: theme.text, margin: "0 0 8px" }}>
+              <h1 style={{ fontSize: isMobile ? 28 : 40, fontFamily: fontHeadline, fontWeight: 400, color: theme.text, margin: "0 0 8px" }}>
                 Savings <span style={{ fontStyle: "italic", color: theme.primary }}>Goals</span>
               </h1>
               <p style={{ fontSize: 14, color: theme.textSubtle, margin: 0 }}>Set a target and get personalized suggestions based on your spending patterns.</p>

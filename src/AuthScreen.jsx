@@ -104,7 +104,7 @@ export default function AuthScreen({ onAuth }) {
 
         {/* Card */}
         <div style={{
-          background: theme.surface, borderRadius: 12, padding: "36px 40px",
+          background: theme.surface, borderRadius: 12, padding: "32px clamp(20px, 6vw, 40px)",
           boxShadow: "0 4px 24px rgba(27,28,26,0.08)",
         }}>
           {/* Tab toggle */}
