@@ -2160,7 +2160,7 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
                   }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                       {catIcon && <span style={{ fontSize: 16 }}>{catIcon}</span>}
-                      <span style={{ fontSize: 14, fontWeight: 600, flex: 1, color: theme.text }}>{cat}</span>
+                      <span style={{ fontSize: 14, fontWeight: 600, flex: 1, minWidth: 0, color: theme.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cat}</span>
                       <span style={{ fontFamily: fontMono, fontSize: 11, color: theme.textSubtle }}>{catTxns.length}</span>
                       {apiCat && (
                         <button onClick={async () => {
