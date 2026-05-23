@@ -1737,17 +1737,17 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
                     <div style={{ fontSize: 16, fontWeight: 600, color: theme.text, fontFamily: fontHeadline }}>Recent Transactions</div>
                     <div style={{ fontSize: 12, color: theme.textSubtle, marginTop: 2 }}>Last 3 transactions</div>
                   </div>
-                  <button onClick={() => setTab("Transactions")} style={{
+                  <button id="tx3m4s" onClick={() => setTab("Transactions")} style={{
                     fontSize: 12, color: theme.primary, background: "none", border: "none",
-                    cursor: "pointer", fontFamily: font, fontWeight: 600, padding: 0,
-                  }}>View all →</button>
+                    cursor: "pointer", fontFamily: font, fontWeight: 600, padding: 0, whiteSpace: "nowrap",
+                  }}>View All Transactions</button>
                 </div>
                 {recentTransactions.length === 0 ? (
                   <div style={{ color: theme.textSubtle, fontSize: 14 }}>No transactions yet</div>
                 ) : recentTransactions.map(t => (
                   <div key={t.id} style={{
                     display: "flex", alignItems: "center", gap: 12,
-                    padding: "14px 0", borderBottom: `1px solid ${theme.surfaceContainer}`,
+                    padding: "12px 0", borderBottom: `1px solid ${theme.surfaceContainer}`,
                   }}>
                     <div style={{
                       width: 36, height: 36, borderRadius: 8, flexShrink: 0,
@@ -1760,10 +1760,10 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: theme.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {t.desc.length > 28 ? t.desc.slice(0, 28).trim() + "…" : t.desc}
+                        {t.desc}
                       </div>
                       <div style={{ fontSize: 11, color: theme.textSubtle, marginTop: 2 }}>
-                        {t.date.toLocaleDateString("en-US", { month: "short", day: "numeric" })} · {t.category}
+                        {t.date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} · {t.category}
                       </div>
                     </div>
                     <div style={{ fontFamily: fontMono, fontWeight: 700, fontSize: 14, color: t.amount >= 0 ? theme.green : theme.text, whiteSpace: "nowrap", flexShrink: 0 }}>
