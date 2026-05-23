@@ -14,7 +14,7 @@ app.use(express.json());
 
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017";
 const JWT_SECRET = process.env.JWT_SECRET || "cashcanvas-dev-secret-change-in-prod";
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 let _db;
 async function getDb() {
@@ -220,8 +220,8 @@ app.post("/api/categorize", async (req, res) => {
   if (!Array.isArray(transactions) || transactions.length === 0)
     return res.json({ results: [] });
 
-  if (!ANTHROPIC_API_KEY) {
-    return res.json({ results: [], warning: "ANTHROPIC_API_KEY not configured" });
+  if (!GEMINI_API_KEY) {
+    return res.json({ results: [], warning: "GEMINI_API_KEY not configured" });
   }
 
   const batch = transactions.slice(0, 100);
@@ -229,52 +229,46 @@ app.post("/api/categorize", async (req, res) => {
     .map((t, i) => `${i + 1}. "${t.desc}" ($${Math.abs(t.amount || 0).toFixed(2)})`)
     .join("\n");
 
+  const systemPrompt = `You are an expert bank transaction categorizer. Your job is to assign EVERY transaction to a specific category. NEVER use "Other" unless the transaction is literally an ATM withdrawal, a bank fee, or a person-to-person transfer with no merchant context.
+
+Categories:
+- Housing: rent, mortgage, HOA, storage units, renters/homeowners insurance, moving services
+- Groceries: supermarkets, grocery stores, Instacart, Amazon Fresh, Costco, wholesale clubs
+- Dining: restaurants, cafes, coffee shops, fast food, food delivery (DoorDash, Uber Eats, Grubhub, GoPuff)
+- Transport: Uber/Lyft rides, gas stations, parking, tolls, transit, airlines, car rentals, auto repair, EV charging
+- Subscriptions: Netflix, Spotify, Hulu, Disney+, HBO, gym memberships, SaaS, cloud storage, news, Adobe, Microsoft 365
+- Utilities: electricity, water, gas bill, internet, phone/cell, trash collection
+- Shopping: Amazon, eBay, Target, Walmart, retail stores, clothing, electronics, online marketplaces, hardware stores
+- Health: CVS, Walgreens, pharmacies, doctors, dentists, hospitals, health insurance, prescriptions, therapy
+- Entertainment: movies, concerts, tickets, gaming (Steam, PlayStation, Xbox, Nintendo), bowling, events, parks
+- Income: payroll, salary, direct deposit, tax refunds, reimbursements, interest, dividends, Zelle/Venmo received
+
+Bank statement abbreviations: AMZN/AMAZON MKTP → Shopping; WFM/WHOLEFDS → Groceries; SQ * → Square POS; TST* → Dining; APL*/APPLE.COM → Subscriptions; VZWRLSS/VZW → Utilities; COMCAST/XFINITY → Utilities; DOORDASH → Dining; COSTCO WHSE → Groceries.
+
+CRITICAL RULE: Make your BEST guess. Only use "Other" for ATM withdrawals, unexplained bank fees, or pure person-to-person transfers.`;
+
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 1024,
-        system: `You are an expert bank transaction categorizer. Assign each transaction to exactly one category based on the merchant name and amount.
-
-Categories and what belongs in each:
-- Housing: rent, mortgage, HOA fees, storage units, renters/homeowners insurance
-- Groceries: supermarkets, grocery stores, Instacart, Amazon Fresh, wholesale clubs (Costco)
-- Dining: restaurants, cafes, coffee shops, fast food, food delivery (DoorDash, Uber Eats, Grubhub)
-- Transport: Uber/Lyft rides, gas stations, parking, tolls, public transit, airlines, car rentals, car maintenance
-- Subscriptions: streaming services (Netflix, Spotify, Hulu), gym memberships, SaaS tools, cloud storage, news subscriptions
-- Utilities: electricity, water, gas, internet, phone/cell bills, trash collection
-- Shopping: Amazon, retail stores, clothing, electronics, home goods, online marketplaces
-- Health: pharmacies (CVS, Walgreens), doctors, dentists, hospitals, health insurance, prescriptions
-- Entertainment: movie theaters, concerts, sports tickets, gaming, bowling, amusement parks
-- Income: payroll deposits, refunds, reimbursements, interest, dividends, transfers in
-- Other: transfers, ATM withdrawals, fees, or anything unclear
-
-Bank statements often abbreviate merchant names. Common patterns:
-- AMZN/AMAZON MKTP = Shopping
-- SQ * prefix = Square POS (look at the rest of the name)
-- TST* prefix = Toast restaurant POS = Dining
-- APL*/APPLE.COM = likely Subscriptions
-- WFM/WHOLEFDS = Whole Foods = Groceries
-- UBER EATS/DOORDASH = Dining, not Transport`,
-        messages: [
-          {
-            role: "user",
-            content: `Categorize each transaction. Reply with ONLY the line number and category, one per line.\nFormat: "1. Dining"\n\n${descriptions}`,
-          },
-        ],
-      }),
-    });
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: systemPrompt }] },
+          contents: [{
+            parts: [{
+              text: `Categorize each transaction. Reply with ONLY the line number and category, one per line. Format: "1. Dining"\n\n${descriptions}`,
+            }],
+          }],
+          generationConfig: { maxOutputTokens: 2048, temperature: 0 },
+        }),
+      }
+    );
 
     if (!response.ok) return res.json({ results: [] });
 
     const data = await response.json();
-    const text = (data.content || []).map((b) => b.text || "").join("");
+    const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
 
     const results = text
       .trim()

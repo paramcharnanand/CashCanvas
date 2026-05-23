@@ -5,39 +5,7 @@ const VALID_CATEGORIES = new Set([
   "Utilities", "Shopping", "Health", "Entertainment", "Income", "Other",
 ]);
 
-export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(405).end();
-
-  const user = getUser(req);
-  if (!user) return res.status(401).json({ error: "Unauthorized" });
-
-  const { transactions } = req.body || {};
-  if (!Array.isArray(transactions) || transactions.length === 0) {
-    return res.json({ results: [] });
-  }
-
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return res.json({ results: [], warning: "ANTHROPIC_API_KEY not configured" });
-  }
-
-  const batch = transactions.slice(0, 100);
-  const descriptions = batch
-    .map((t, i) => `${i + 1}. "${t.desc}" ($${Math.abs(t.amount || 0).toFixed(2)})`)
-    .join("\n");
-
-  try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 2048,
-        system: `You are an expert bank transaction categorizer. Your job is to assign EVERY transaction to a specific category. NEVER use "Other" unless the transaction is literally an ATM withdrawal, a bank fee, or a person-to-person transfer with no merchant context.
+const SYSTEM_PROMPT = `You are an expert bank transaction categorizer. Your job is to assign EVERY transaction to a specific category. NEVER use "Other" unless the transaction is literally an ATM withdrawal, a bank fee, or a person-to-person transfer with no merchant context.
 
 Categories:
 - Housing: rent, mortgage, HOA, storage units, renters/homeowners insurance, moving services
@@ -51,7 +19,7 @@ Categories:
 - Entertainment: movies, concerts, tickets, gaming (Steam, PlayStation, Xbox, Nintendo), bowling, events, parks
 - Income: payroll, salary, direct deposit, tax refunds, reimbursements, interest, dividends, Zelle/Venmo received
 
-Bank statement abbreviations to know:
+Bank statement abbreviations:
 - AMZN / AMZN MKTP / AMAZON MKTP → Shopping
 - WFM / WHOLEFDS → Groceries (Whole Foods)
 - SQ * → Square POS terminal (categorize by what follows)
@@ -64,20 +32,51 @@ Bank statement abbreviations to know:
 - PP* / PAYPAL → Shopping (usually)
 - COSTCO WHSE → Groceries
 
-CRITICAL RULE: If you cannot confidently identify the merchant, make your BEST guess based on context clues. Only use "Other" for ATM withdrawals, unexplained bank fees, or pure person-to-person transfers.`,
-        messages: [
-          {
-            role: "user",
-            content: `Categorize each transaction. Reply with ONLY the line number and category, one per line. Format: "1. Dining"\n\n${descriptions}`,
-          },
-        ],
-      }),
-    });
+CRITICAL RULE: If you cannot confidently identify the merchant, make your BEST guess based on context clues. Only use "Other" for ATM withdrawals, unexplained bank fees, or pure person-to-person transfers.`;
+
+export default async function handler(req, res) {
+  if (req.method !== "POST") return res.status(405).end();
+
+  const user = getUser(req);
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+  const { transactions } = req.body || {};
+  if (!Array.isArray(transactions) || transactions.length === 0) {
+    return res.json({ results: [] });
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return res.json({ results: [], warning: "GEMINI_API_KEY not configured" });
+  }
+
+  const batch = transactions.slice(0, 100);
+  const descriptions = batch
+    .map((t, i) => `${i + 1}. "${t.desc}" ($${Math.abs(t.amount || 0).toFixed(2)})`)
+    .join("\n");
+
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          contents: [{
+            parts: [{
+              text: `Categorize each transaction. Reply with ONLY the line number and category, one per line. Format: "1. Dining"\n\n${descriptions}`,
+            }],
+          }],
+          generationConfig: { maxOutputTokens: 2048, temperature: 0 },
+        }),
+      }
+    );
 
     if (!response.ok) return res.json({ results: [] });
 
     const data = await response.json();
-    const text = (data.content || []).map((b) => b.text || "").join("");
+    const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
 
     const results = text
       .trim()

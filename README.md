@@ -54,7 +54,7 @@ The description cleaner strips bank boilerplate (POS/ACH prefixes, Visa/Checkcar
 ### Prerequisites
 - Node.js 18+
 - A MongoDB instance (local or [MongoDB Atlas](https://www.mongodb.com/atlas) — manageable via [Studio 3T](https://studio3t.com/))
-- (Optional) An Anthropic API key for AI categorization
+- (Optional) A Google Gemini API key for AI categorization (free at [aistudio.google.com](https://aistudio.google.com))
 
 ### Setup
 
@@ -71,7 +71,7 @@ Edit `.env`:
 ```
 MONGODB_URI=mongodb://localhost:27017        # or your Atlas connection string
 JWT_SECRET=your-random-secret-here
-ANTHROPIC_API_KEY=sk-ant-...               # optional
+GEMINI_API_KEY=your-gemini-key-here        # optional — enables AI categorization
 ```
 
 ### Development
@@ -96,7 +96,7 @@ The project is configured for Vercel. The `/api` directory contains serverless f
 Set these environment variables in your Vercel project:
 - `MONGODB_URI`
 - `JWT_SECRET`
-- `ANTHROPIC_API_KEY` (optional)
+- `GEMINI_API_KEY` (optional — enables AI categorization via Gemini 1.5 Flash)
 
 ## API Routes
 
@@ -143,6 +143,6 @@ Connect Studio 3T to your `MONGODB_URI` and open the `cashcanvas` database:
 | **Backend (prod)** | Vercel Serverless Functions |
 | **Database** | MongoDB 6 (Atlas) |
 | **Auth** | JWT (`jsonwebtoken`), bcrypt (`bcryptjs`) |
-| **AI** | Anthropic Claude API (Haiku) |
+| **AI** | Google Gemini API (gemini-1.5-flash, free tier) |
 | **Utility** | Lodash |
 | **Dev tooling** | concurrently, `@vitejs/plugin-react` |
