@@ -2136,8 +2136,9 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 32 }}>
               {allCategories.filter(cat => {
                 const hasTransactions = expenses.some(t => t.category === cat);
-                const isCustom = !!customCats[cat] || !!apiCategories.find(c => c.categoryName === cat);
-                return hasTransactions || isCustom;
+                const apiCat = apiCategories.find(c => c.categoryName === cat);
+                const hasKeywords = (customCats[cat] || []).length > 0 || (apiCat?.keywords || []).length > 0;
+                return hasTransactions || hasKeywords;
               }).map((cat, ci) => {
                 const customKws = customCats[cat] || [];
                 const isEditing = editingCat === cat;
