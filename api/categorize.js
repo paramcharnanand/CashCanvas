@@ -34,6 +34,31 @@ Bank statement abbreviations:
 
 CRITICAL RULE: If you cannot confidently identify the merchant, make your BEST guess based on context clues. Only use "Other" for ATM withdrawals, unexplained bank fees, or pure person-to-person transfers.`;
 
+const ABBREVS = {
+  AMZN: "Amazon", WFM: "Whole Foods", WHOLEFDS: "Whole Foods",
+  MCDNLDS: "McDonalds", SBUX: "Starbucks", VZWRLSS: "Verizon",
+  VZW: "Verizon", TGT: "Target", WMT: "Walmart", DDD: "DoorDash",
+  GRUBHUB: "Grubhub", WHOLEFOOD: "Whole Foods", APL: "Apple",
+  NETFLIX: "Netflix", SPOTIFY: "Spotify", HULU: "Hulu",
+};
+
+function preprocessForAI(desc) {
+  let text = (desc || "").trim();
+  // Remove banking noise tokens
+  text = text.replace(/\b(POS|ACH|PURCHASE|PAYMENT|DBT|CARD|ONLINE|AUTH|REF|DEBIT|CREDIT|CHECKCARD|VISA|PENDING|MEMO|TRN|APD|EXT|PREAUTH|RECURRING|ORIG|CO)\b/gi, " ");
+  // Strip asterisks, hash, long numeric sequences, and dates
+  text = text.replace(/[*#]/g, " ").replace(/\b\d{4,}\b/g, " ").replace(/\b\d{1,2}\/\d{1,2}(\/\d{2,4})?\b/g, " ");
+  // Split camelCase (handles e.g. AMZNMktpUS)
+  text = text.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
+  // Expand known abbreviations
+  const upper = text.toUpperCase();
+  let expanded = upper;
+  for (const [abbr, full] of Object.entries(ABBREVS)) {
+    expanded = expanded.replace(new RegExp(`\\b${abbr}\\b`, "g"), full.toUpperCase());
+  }
+  return expanded.replace(/\s+/g, " ").trim() || desc;
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
 
@@ -52,7 +77,7 @@ export default async function handler(req, res) {
 
   const batch = transactions.slice(0, 100);
   const descriptions = batch
-    .map((t, i) => `${i + 1}. "${t.desc}" ($${Math.abs(t.amount || 0).toFixed(2)})`)
+    .map((t, i) => `${i + 1}. "${preprocessForAI(t.desc)}" ($${Math.abs(t.amount || 0).toFixed(2)})`)
     .join("\n");
 
   try {

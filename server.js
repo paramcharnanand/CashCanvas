@@ -212,6 +212,26 @@ const VALID_CATEGORIES = new Set([
   "Utilities", "Shopping", "Health", "Entertainment", "Income", "Other",
 ]);
 
+const ABBREVS = {
+  AMZN: "Amazon", WFM: "Whole Foods", WHOLEFDS: "Whole Foods",
+  MCDNLDS: "McDonalds", SBUX: "Starbucks", VZWRLSS: "Verizon",
+  VZW: "Verizon", TGT: "Target", WMT: "Walmart", DDD: "DoorDash",
+  GRUBHUB: "Grubhub", WHOLEFOOD: "Whole Foods", APL: "Apple",
+};
+
+function preprocessForAI(desc) {
+  let text = (desc || "").trim();
+  text = text.replace(/\b(POS|ACH|PURCHASE|PAYMENT|DBT|CARD|ONLINE|AUTH|REF|DEBIT|CREDIT|CHECKCARD|VISA|PENDING|MEMO|TRN|APD|EXT|PREAUTH|RECURRING|ORIG|CO)\b/gi, " ");
+  text = text.replace(/[*#]/g, " ").replace(/\b\d{4,}\b/g, " ").replace(/\b\d{1,2}\/\d{1,2}(\/\d{2,4})?\b/g, " ");
+  text = text.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
+  const upper = text.toUpperCase();
+  let expanded = upper;
+  for (const [abbr, full] of Object.entries(ABBREVS)) {
+    expanded = expanded.replace(new RegExp(`\\b${abbr}\\b`, "g"), full.toUpperCase());
+  }
+  return expanded.replace(/\s+/g, " ").trim() || desc;
+}
+
 app.post("/api/categorize", async (req, res) => {
   const user = getUser(req);
   if (!user) return res.status(401).json({ error: "Unauthorized" });
@@ -226,7 +246,7 @@ app.post("/api/categorize", async (req, res) => {
 
   const batch = transactions.slice(0, 100);
   const descriptions = batch
-    .map((t, i) => `${i + 1}. "${t.desc}" ($${Math.abs(t.amount || 0).toFixed(2)})`)
+    .map((t, i) => `${i + 1}. "${preprocessForAI(t.desc)}" ($${Math.abs(t.amount || 0).toFixed(2)})`)
     .join("\n");
 
   const systemPrompt = `You are an expert bank transaction categorizer. Your job is to assign EVERY transaction to a specific category. NEVER use "Other" unless the transaction is literally an ATM withdrawal, a bank fee, or a person-to-person transfer with no merchant context.
