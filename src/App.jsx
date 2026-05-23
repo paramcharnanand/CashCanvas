@@ -1048,17 +1048,23 @@ function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
               ))}
             </div>
 
-            {/* Stats preview */}
-            <div style={{
-              background: theme.surfaceContainerLow,
-              borderRadius: 8, aspectRatio: "4/3",
-              display: "flex", flexDirection: "column", justifyContent: "center", padding: 20,
-              gap: 12,
-            }}>
-              {[["Avg monthly spend", "$2,840"], ["Biggest category", "Groceries"], ["Categorization", "94%"]].map(([label, val]) => (
-                <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 11, color: theme.textSubtle, fontFamily: fontMono }}>{label}</span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: theme.text, fontFamily: fontMono }}>{val}</span>
+            {/* Sample transactions preview */}
+            <div style={{ background: theme.surface, borderRadius: 8, padding: 20, border: `1px solid ${theme.border}` }}>
+              <div style={{ fontSize: 11, fontFamily: font, fontWeight: 600, color: theme.textSubtle, marginBottom: 14 }}>Recent transactions</div>
+              {[
+                { icon: "local_grocery_store", desc: "Whole Foods", date: "May 21", amount: "-$89.40", cat: "Groceries", income: false },
+                { icon: "movie", desc: "Netflix", date: "May 19", amount: "-$15.99", cat: "Subscriptions", income: false },
+                { icon: "payments", desc: "Payroll deposit", date: "May 15", amount: "+$3,200", cat: "Income", income: true },
+              ].map(row => (
+                <div key={row.desc} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: `1px solid ${theme.border}` }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 8, background: row.income ? theme.greenSoft : theme.surfaceContainerLow, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 16, color: row.income ? theme.green : theme.textSubtle, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>{row.icon}</span>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: theme.text }}>{row.desc}</div>
+                    <div style={{ fontSize: 11, color: theme.textSubtle }}>{row.date} · {row.cat}</div>
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: row.income ? theme.green : theme.text, fontFamily: fontMono, flexShrink: 0 }}>{row.amount}</div>
                 </div>
               ))}
             </div>
@@ -1434,16 +1440,11 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
   }, [expenses]);
 
   // Top merchants
-  const topMerchants = useMemo(() => {
-    const grouped = _.groupBy(expenses, t => t.desc.toUpperCase().trim());
-    return Object.entries(grouped)
-      .map(([desc, txns]) => ({
-        desc, total: Math.abs(_.sumBy(txns, "amount")), count: txns.length,
-        category: txns[0].category,
-      }))
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 10);
-  }, [expenses]);
+  const recentTransactions = useMemo(() => {
+    return [...transactions]
+      .sort((a, b) => b.date - a.date)
+      .slice(0, 3);
+  }, [transactions]);
 
   // Savings calculation
   const savingsSuggestion = useMemo(() => {
@@ -1680,41 +1681,44 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
               </ResponsiveContainer>
             </div>
 
-            {/* Recurring + Top Merchants */}
+            {/* Recurring + Recent Transactions */}
             <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
               <div style={{
                 flex: "1 1 400px", background: theme.surface,
-                borderRadius: 8, padding: "28px 32px",
+                borderRadius: 8, padding: isMobile ? "20px 16px" : "28px 32px",
                 boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
               }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-                  <SectionTitle sub="Regular charges detected">Recurring Payments</SectionTitle>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                  <div>
+                    <div style={{ fontSize: 16, fontWeight: 600, color: theme.text, fontFamily: fontHeadline }}>Recurring Payments</div>
+                    <div style={{ fontSize: 12, color: theme.textSubtle, marginTop: 2 }}>Regular charges detected</div>
+                  </div>
                   <span className="material-symbols-outlined" style={{ color: theme.textSubtle, opacity: 0.4, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>repeat</span>
                 </div>
                 {recurring.length === 0 ? (
                   <div style={{ color: theme.textSubtle, fontSize: 14 }}>No recurring payments detected</div>
                 ) : (
                   <div style={{ maxHeight: 300, overflowY: "auto" }}>
-                    {recurring.slice(0, 8).map(r => (
+                    {recurring.slice(0, isMobile ? 4 : 8).map(r => (
                       <div key={r.desc} style={{
-                        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
-                        padding: "14px 0", borderBottom: `1px solid ${theme.surfaceContainer}`,
+                        display: "flex", alignItems: "center", gap: 12,
+                        padding: "12px 0", borderBottom: `1px solid ${theme.surfaceContainer}`,
                       }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                          <div style={{
-                            width: 32, height: 32, borderRadius: 4, flexShrink: 0,
-                            background: theme.surfaceContainerLow,
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            fontSize: 11, fontWeight: 700, color: theme.textSubtle, fontFamily: fontMono,
-                          }}>{r.desc[0].toUpperCase()}</div>
-                          <div>
-                            <div style={{ fontSize: 14, fontWeight: 600, color: theme.text }}>{r.desc}</div>
-                            <div style={{ fontSize: 10, color: theme.textSubtle, fontFamily: fontMono, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 2 }}>
-                              {r.category} · {r.isFixed ? "Fixed" : "Variable"}
-                            </div>
+                        <div style={{
+                          width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                          background: theme.surfaceContainerLow,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 12, fontWeight: 700, color: theme.textSubtle, fontFamily: fontMono,
+                        }}>{r.desc[0].toUpperCase()}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: theme.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {r.desc.length > 22 ? r.desc.slice(0, 22).trim() + "…" : r.desc}
+                          </div>
+                          <div style={{ fontSize: 11, color: theme.textSubtle, marginTop: 2 }}>
+                            {r.category} · {r.isFixed ? "Fixed" : "Variable"}
                           </div>
                         </div>
-                        <div style={{ fontFamily: fontMono, fontWeight: 600, fontSize: 14, color: theme.text, fontFeatureSettings: '"tnum"', whiteSpace: "nowrap" }}>
+                        <div style={{ fontFamily: fontMono, fontWeight: 600, fontSize: 13, color: theme.text, whiteSpace: "nowrap", flexShrink: 0 }}>
                           {fmt(r.avg)}<span style={{ color: theme.textSubtle, fontSize: 11, fontWeight: 400 }}>/mo</span>
                         </div>
                       </div>
@@ -1725,29 +1729,46 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
 
               <div style={{
                 flex: "1 1 400px", background: theme.surface,
-                borderRadius: 8, padding: "28px 32px",
+                borderRadius: 8, padding: isMobile ? "20px 16px" : "28px 32px",
                 boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
               }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-                  <SectionTitle sub="Highest total spend">Top Merchants</SectionTitle>
-                  <span className="material-symbols-outlined" style={{ color: theme.textSubtle, opacity: 0.4, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>storefront</span>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                  <div>
+                    <div style={{ fontSize: 16, fontWeight: 600, color: theme.text, fontFamily: fontHeadline }}>Recent Transactions</div>
+                    <div style={{ fontSize: 12, color: theme.textSubtle, marginTop: 2 }}>Last 3 transactions</div>
+                  </div>
+                  <button onClick={() => setTab("Transactions")} style={{
+                    fontSize: 12, color: theme.primary, background: "none", border: "none",
+                    cursor: "pointer", fontFamily: font, fontWeight: 600, padding: 0,
+                  }}>View all →</button>
                 </div>
-                {topMerchants.map((m, i) => (
-                  <div key={m.desc} style={{
+                {recentTransactions.length === 0 ? (
+                  <div style={{ color: theme.textSubtle, fontSize: 14 }}>No transactions yet</div>
+                ) : recentTransactions.map(t => (
+                  <div key={t.id} style={{
                     display: "flex", alignItems: "center", gap: 12,
                     padding: "14px 0", borderBottom: `1px solid ${theme.surfaceContainer}`,
                   }}>
                     <div style={{
-                      width: 32, height: 32, borderRadius: 4, flexShrink: 0,
-                      background: theme.surfaceContainerLow,
+                      width: 36, height: 36, borderRadius: 8, flexShrink: 0,
+                      background: t.amount >= 0 ? theme.greenSoft : theme.surfaceContainerLow,
                       display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 11, fontWeight: 700, color: theme.textSubtle, fontFamily: fontMono,
-                    }}>{m.desc[0].toUpperCase()}</div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: theme.text }}>{m.desc}</div>
-                      <div style={{ fontSize: 10, color: theme.textSubtle, fontFamily: fontMono, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 2 }}>{m.count} transactions · {m.category}</div>
+                    }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 18, color: t.amount >= 0 ? theme.green : theme.textSubtle, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>
+                        {t.amount >= 0 ? "arrow_downward" : "arrow_upward"}
+                      </span>
                     </div>
-                    <div style={{ fontFamily: fontMono, fontWeight: 600, fontSize: 14, color: theme.text, fontFeatureSettings: '"tnum"', whiteSpace: "nowrap" }}>{fmt(m.total)}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: theme.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {t.desc.length > 28 ? t.desc.slice(0, 28).trim() + "…" : t.desc}
+                      </div>
+                      <div style={{ fontSize: 11, color: theme.textSubtle, marginTop: 2 }}>
+                        {t.date.toLocaleDateString("en-US", { month: "short", day: "numeric" })} · {t.category}
+                      </div>
+                    </div>
+                    <div style={{ fontFamily: fontMono, fontWeight: 700, fontSize: 14, color: t.amount >= 0 ? theme.green : theme.text, whiteSpace: "nowrap", flexShrink: 0 }}>
+                      {t.amount >= 0 ? "+" : ""}{fmt(t.amount)}
+                    </div>
                   </div>
                 ))}
               </div>
