@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import * as Papa from "papaparse";
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend, LabelList } from "recharts";
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend, LabelList, ReferenceLine } from "recharts";
 import _ from "lodash";
 import AuthScreen from "./AuthScreen.jsx";
 
@@ -1419,7 +1419,7 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
         const exp = Math.abs(_.sumBy(txns.filter(t => t.amount < 0), "amount"));
         const inc = _.sumBy(txns.filter(t => t.amount > 0), "amount");
         const [y, m] = month.split("-");
-        const label = new Date(parseInt(y), parseInt(m) - 1).toLocaleString("default", { month: "short", year: "2-digit" });
+        const label = new Date(parseInt(y), parseInt(m) - 1).toLocaleString("default", { month: "short", year: "numeric" });
         return { month: label, Expenses: Math.round(exp), Income: Math.round(inc), Net: Math.round(inc - exp) };
       });
   }, [transactions]);
@@ -1674,7 +1674,8 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
                 <LineChart data={monthlyData}>
                   <CartesianGrid stroke={theme.surfaceContainerLow} strokeDasharray="0" vertical={false} />
                   <XAxis dataKey="month" tick={{ fill: theme.textSubtle, fontSize: 11, fontFamily: fontMono }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: theme.textSubtle, fontSize: 11, fontFamily: fontMono }} axisLine={false} tickLine={false} tickFormatter={v => `$${v.toLocaleString()}`} />
+                  <YAxis tick={{ fill: theme.textSubtle, fontSize: 11, fontFamily: fontMono }} axisLine={false} tickLine={false} tickFormatter={v => `$${v.toLocaleString()}`} domain={[dataMin => Math.min(0, dataMin), dataMax => Math.max(0, dataMax)]} />
+                  <ReferenceLine y={0} stroke={theme.border} strokeDasharray="3 3" />
                   <Tooltip content={<CustomTooltip />} />
                   <Line type="monotone" dataKey="Net" stroke={theme.primary} strokeWidth={2.5} dot={{ r: 4, fill: theme.primary, strokeWidth: 0 }} />
                 </LineChart>
