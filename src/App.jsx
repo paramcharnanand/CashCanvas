@@ -1997,16 +1997,8 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
 
           return (
           <div>
-            <div style={{ display: "flex", alignItems: isMobile ? "center" : "flex-start", justifyContent: "space-between", marginBottom: 20, gap: 12 }}>
+            <div style={{ marginBottom: 20 }}>
               <SectionTitle sub="Customize how transactions are categorized">Manage Categories</SectionTitle>
-              <button onClick={() => setNewCatModal(true)} style={{
-                padding: "9px 14px", background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryContainer} 100%)`,
-                border: "none", borderRadius: 6, color: "#fff",
-                cursor: "pointer", fontFamily: font, fontSize: 13, fontWeight: 600,
-                display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
-              }}>
-                <span style={{ fontSize: 16 }}>+</span> {!isMobile && "New "}Category
-              </button>
             </div>
 
             {/* New Category Modal */}
@@ -2261,13 +2253,23 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
 
             {/* Uncategorized transactions quick-fix */}
             {otherTxns.length > 0 && (
-              <div style={{ background: theme.surface, borderRadius: 8, padding: "24px 28px", boxShadow: "0 1px 3px rgba(27,28,26,0.06)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <div id="unc7y2" style={{ background: theme.surface, borderRadius: 8, padding: "24px 28px", boxShadow: "0 1px 3px rgba(27,28,26,0.06)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 12, flexWrap: "wrap" }}>
                   <div style={{ fontSize: 20, fontWeight: 400, fontFamily: fontHeadline, color: theme.text }}>Uncategorized Transactions</div>
-                  <span style={{ padding: "3px 10px", background: "rgba(176,45,33,0.08)", borderRadius: 4, fontSize: 10, fontFamily: fontMono, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: theme.accent }}>Action Required</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <button id="catx9q" onClick={() => setNewCatModal(true)} style={{
+                      padding: "7px 14px", background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryContainer} 100%)`,
+                      border: "none", borderRadius: 6, color: "#fff",
+                      cursor: "pointer", fontFamily: font, fontSize: 12, fontWeight: 600,
+                      display: "flex", alignItems: "center", gap: 5,
+                    }}>
+                      <span style={{ fontSize: 14 }}>+</span> New Category
+                    </button>
+                    <span style={{ padding: "3px 10px", background: "rgba(176,45,33,0.08)", borderRadius: 4, fontSize: 10, fontFamily: fontMono, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: theme.accent }}>Action Required</span>
+                  </div>
                 </div>
                 <div style={{ fontSize: 13, color: theme.textSubtle, marginBottom: 20 }}>
-                  {otherTxns.length} transactions couldn't be auto-categorized. Click a category to assign.
+                  {otherTxns.length} transaction{otherTxns.length !== 1 ? "s" : ""} couldn't be auto-categorized. Click a category to assign, or create a new one.
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
                   {otherTxns.map(t => (
