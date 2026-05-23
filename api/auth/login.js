@@ -13,14 +13,14 @@ export default async function handler(req, res) {
   try {
     const db = await getDb();
     const user = await db.collection("users").findOne({ email: email.toLowerCase() });
-    if (!user) return res.status(401).json({ error: "Invalid email or password" });
+    if (!user) return res.status(401).json({ error: "No account found with that email address" });
 
     const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) return res.status(401).json({ error: "Invalid email or password" });
+    if (!ok) return res.status(401).json({ error: "Incorrect password" });
 
     const token = signToken({ userId: user._id.toString(), email: user.email, name: user.name });
     res.json({ token, user: { name: user.name, email: user.email } });
-  } catch (err) {
-    res.status(500).json({ error: "Server error" });
+  } catch {
+    res.status(500).json({ error: "Unable to sign in. Please try again." });
   }
 }

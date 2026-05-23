@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import * as Papa from "papaparse";
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend } from "recharts";
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend, LabelList } from "recharts";
 import _ from "lodash";
 import AuthScreen from "./AuthScreen.jsx";
 
@@ -168,35 +168,51 @@ const PALETTE = ["#1a6b4a","#b02d21","#bfc9c0","#6f7a72","#3f4943","#8e130c","#a
 
 function cleanDesc(desc) {
   return (desc || "").toLowerCase()
-    // Bank boilerplate
-    .replace(/\b(card\s+purchase|pos\s+(debit|credit|purchase)|ach\s+(debit|credit|payment|transfer)|online\s+(payment|transfer|banking)|bill\s+pay(ment)?|direct\s+dep(osit)?|wire\s+transfer|check\s+(paid|deposit|crd)|mobile\s+(payment|deposit)|contactless\s+purchase|recurring\s+(charge|payment)|autopay|preauthorized|authorized\s+on|payment\s+to|purchase\s+at|pending|memo|ref\s*#?|tran\s*#?)\b/g, " ")
-    // POS-system prefixes (Square, Toast, DoorDash, etc.)
-    .replace(/\b(sq|tst|dsh|grubhub)\s*\*/gi, "")
-    // Replace asterisks (UBER*EATS → UBER EATS)
+    // Bank boilerplate prefixes/suffixes
+    .replace(/\b(card\s+purchase|pos\s+(debit|credit|purchase)|ach\s+(debit|credit|payment|transfer)|online\s+(payment|transfer|banking)|bill\s+pay(ment)?|direct\s+dep(osit)?|wire\s+transfer|check\s+(paid|deposit|crd)|mobile\s+(payment|deposit)|contactless\s+purchase|recurring\s+(charge|payment)|autopay|preauthorized|authorized\s+on|payment\s+to|purchase\s+at|pending|memo|ref\s*#?|tran\s*#?|checkcard|visa\s+debit|visa\s+credit|ext\s+credit|ext\s+debit)\b/g, " ")
+    // POS-system prefixes
+    .replace(/\b(sq|tst|dsh)\s*\*/gi, "")
+    // Replace asterisks
     .replace(/\*/g, " ")
     // Remove date patterns
     .replace(/\b\d{1,2}\/\d{1,2}(\/\d{2,4})?\b/g, " ")
-    // Remove #StoreNumber patterns
+    // Remove #StoreNumber and bare store numbers
     .replace(/#\s*\d+/g, " ")
-    // Remove trailing 2-char state codes or city abbreviations
-    .replace(/\s+\b[a-z]{2}\b\s*$/g, "")
+    .replace(/\bstore\s+\d+/g, " ")
+    .replace(/\b\d{4,}\b/g, " ")
+    // Remove US state abbreviations (standalone 2-letter codes)
+    .replace(/\b(al|ak|az|ar|ca|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy|dc)\b/g, " ")
     // Remove alphanumeric reference codes
-    .replace(/\b[a-z]{0,3}\d{4,}\b/g, " ")
-    // Remove long all-caps codes (transaction IDs)
-    .replace(/\b[A-Z0-9]{8,}\b/g, " ")
+    .replace(/\b[a-z]{0,3}\d{3,}[a-z0-9]*\b/g, " ")
+    // Remove long codes
+    .replace(/\b[a-z0-9]{9,}\b/g, " ")
     .replace(/\s+/g, " ").trim();
+}
+
+// Extract the core merchant name — first 1-3 meaningful words after cleaning
+function extractMerchant(cleaned) {
+  const stopWords = new Set(["the", "and", "for", "from", "with", "inc", "llc", "corp", "ltd", "co"]);
+  const words = cleaned.split(" ").filter(w => w.length > 1 && !stopWords.has(w));
+  return words.slice(0, 2).join(" ");
 }
 
 function categorize(desc, customCats, merchantRules) {
   const cleaned = cleanDesc(desc);
+  const merchant = extractMerchant(cleaned);
 
-  // User-learned rules take highest priority
+  // User-learned rules — try exact cleaned match, then merchant prefix match
   if (merchantRules?.size) {
-    const rule = merchantRules.get(cleaned);
-    if (rule) return rule;
+    if (merchantRules.has(cleaned)) return merchantRules.get(cleaned);
+    if (merchant && merchantRules.has(merchant)) return merchantRules.get(merchant);
+    // Partial: check if any saved rule key starts with the merchant name
+    for (const [key, cat] of merchantRules) {
+      if (merchant && key.startsWith(merchant)) return cat;
+    }
   }
 
   const cats = { ...DEFAULT_CATEGORIES, ...customCats };
+
+  // First pass: match against full cleaned description
   for (const [cat, keywords] of Object.entries(cats)) {
     if (cat === "Other") continue;
     for (const kw of keywords) {
@@ -209,6 +225,23 @@ function categorize(desc, customCats, merchantRules) {
       }
     }
   }
+
+  // Second pass: match against extracted merchant name only (shorter = less noise)
+  if (merchant && merchant !== cleaned) {
+    for (const [cat, keywords] of Object.entries(cats)) {
+      if (cat === "Other") continue;
+      for (const kw of keywords) {
+        const k = kw.toLowerCase();
+        if (k.includes(" ")) {
+          if (merchant.includes(k)) return cat;
+        } else {
+          const escaped = k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          if (new RegExp(`(?:^|[^a-z])${escaped}(?:[^a-z]|$)`).test(merchant)) return cat;
+        }
+      }
+    }
+  }
+
   return "Other";
 }
 
@@ -901,7 +934,7 @@ function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
   }, [handleFile]);
 
   const featureBadges = [
-    { icon: "encrypted", title: "Private", desc: "Client-side processing only" },
+    { icon: "encrypted", title: "Secure", desc: "Your data is private and never sold" },
     { icon: "auto_awesome", title: "Visual insights", desc: "Categorized spend patterns" },
     { icon: "track_changes", title: "Savings goals", desc: "Automated milestone tracking" },
   ];
@@ -930,8 +963,8 @@ function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
           <h1 style={{ fontSize: 56, fontFamily: fontHeadline, fontWeight: 400, color: theme.text, lineHeight: 1.1, margin: "0 0 16px", letterSpacing: "-0.02em" }}>
             Cash<span style={{ fontStyle: "italic" }}>Canvas</span>
           </h1>
-          <p style={{ fontFamily: fontHeadline, fontStyle: "italic", fontSize: 18, color: theme.textMuted, margin: 0 }}>
-            The <span style={{ fontFamily: fontMono, fontStyle: "normal", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.2em", color: theme.primary }}>Atelier</span> of your personal finance.
+          <p style={{ fontFamily: fontMono, fontSize: 13, color: theme.textSubtle, margin: 0, letterSpacing: "0.04em" }}>
+            Your personal finance dashboard
           </p>
         </section>
 
@@ -1000,18 +1033,19 @@ function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
               ))}
             </div>
 
-            {/* Decorative panel */}
+            {/* Stats preview */}
             <div style={{
               background: theme.surfaceContainerLow,
               borderRadius: 8, aspectRatio: "4/3",
-              display: "flex", alignItems: "flex-end", padding: 20,
-              overflow: "hidden", position: "relative",
+              display: "flex", flexDirection: "column", justifyContent: "center", padding: 20,
+              gap: 12,
             }}>
-              <div style={{
-                position: "absolute", inset: 0,
-                background: "linear-gradient(135deg, #efeeeb 0%, #e0ddd8 100%)",
-              }} />
-              <p style={{ position: "relative", fontFamily: fontMono, fontSize: 9, textTransform: "uppercase", letterSpacing: "0.2em", color: theme.textSubtle }}>Editorial Finance</p>
+              {[["Avg monthly spend", "$2,840"], ["Biggest category", "Groceries"], ["Categorization", "94%"]].map(([label, val]) => (
+                <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 11, color: theme.textSubtle, fontFamily: fontMono }}>{label}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: theme.text, fontFamily: fontMono }}>{val}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -1097,22 +1131,16 @@ function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
       </main>
 
       {/* Footer */}
-      <footer style={{ background: theme.surfaceContainerLow, marginTop: 64, padding: "40px 48px" }}>
-        <div style={{ maxWidth: 1000, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 32 }}>
-          <div style={{ maxWidth: 240 }}>
-            <p style={{ fontFamily: fontHeadline, fontStyle: "italic", fontSize: 18, color: theme.text, marginBottom: 10 }}>The Financial Atelier</p>
-            <p style={{ fontSize: 13, color: theme.textSubtle, lineHeight: 1.6, margin: 0 }}>Personal finance is a craft. We provide the tools to refine your spending habits into a masterpiece of wealth preservation.</p>
+      <footer style={{ background: theme.surfaceContainerLow, marginTop: 64, padding: "32px 48px" }}>
+        <div style={{ maxWidth: 1000, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
+          <span style={{ fontFamily: fontHeadline, fontStyle: "italic", fontSize: 18, color: theme.text }}>CashCanvas</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 13, color: theme.textSubtle, fontFamily: font }}>Contact:</span>
+            <a href="mailto:paramcharnanand17@gmail.com" style={{ fontSize: 13, color: theme.primary, fontFamily: fontMono, textDecoration: "none" }}>
+              paramcharnanand17@gmail.com
+            </a>
           </div>
-          <div style={{ display: "flex", gap: 48 }}>
-            <div>
-              <p style={{ fontFamily: fontMono, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.15em", color: theme.textSubtle, marginBottom: 12 }}>Platform</p>
-              {["Security", "Privacy"].map(l => <div key={l} style={{ fontSize: 13, color: theme.textSubtle, marginBottom: 8 }}>{l}</div>)}
-            </div>
-          </div>
-        </div>
-        <div style={{ maxWidth: 1000, margin: "32px auto 0", paddingTop: 20, borderTop: `1px solid ${theme.border}`, display: "flex", justifyContent: "space-between" }}>
           <span style={{ fontFamily: fontMono, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em", color: theme.textSubtle }}>© 2025 CashCanvas</span>
-          <span style={{ fontFamily: fontMono, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em", color: theme.textSubtle }}>All data processed locally</span>
         </div>
       </footer>
     </div>
@@ -1261,6 +1289,7 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
   const [aiDone, setAiDone] = useState(false);
   const [rulesLoaded, setRulesLoaded] = useState(false);
   const [showDownload, setShowDownload] = useState(false);
+  const [activeBarIndex, setActiveBarIndex] = useState(null);
 
   // ── API helper ──
   const authFetch = useCallback(async (url, options = {}) => {
@@ -1306,9 +1335,10 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
       .filter(t => t.amount < 0 && !txnOverrides[t.id] && categorize(t.desc, customCats, merchantRules) === "Other");
     if (otherTxns.length === 0) { setAiDone(true); return; }
     setAiDone(true);
-    // Send in batches of 80
-    const batch = otherTxns.slice(0, 80);
-    authFetch("/api/categorize", {
+
+    // Send all "Other" transactions in batches of 100
+    const BATCH_SIZE = 100;
+    const sendBatch = (batch) => authFetch("/api/categorize", {
       method: "POST",
       body: JSON.stringify({ transactions: batch.map(t => ({ desc: t.desc, amount: t.amount })) }),
     }).then(data => {
@@ -1325,6 +1355,10 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
         });
       }
     }).catch(() => {});
+
+    for (let i = 0; i < otherTxns.length; i += BATCH_SIZE) {
+      sendBatch(otherTxns.slice(i, i + BATCH_SIZE));
+    }
   }, [rulesLoaded, aiDone]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const transactions = useMemo(() => {
@@ -1522,11 +1556,13 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
           <div>
             {/* Hero */}
             <section style={{ marginBottom: 36 }}>
-              <h1 style={{ fontSize: 48, fontFamily: fontHeadline, fontWeight: 400, color: theme.text, margin: "0 0 8px", lineHeight: 1.1 }}>
-                The <span style={{ fontStyle: "italic", color: theme.primary }}>Canvas</span> of your wealth
+              <h1 style={{ fontSize: 40, fontFamily: fontHeadline, fontWeight: 400, color: theme.text, margin: "0 0 8px", lineHeight: 1.1 }}>
+                Welcome back, <span style={{ fontStyle: "italic", color: theme.primary }}>{auth?.user?.name?.split(" ")[0] || "there"}</span>
               </h1>
-              <p style={{ fontSize: 15, color: theme.textSubtle, margin: 0, maxWidth: 520, lineHeight: 1.6 }}>
-                A curated perspective of your financial movement. Calculated with surgical precision.
+              <p style={{ fontSize: 14, color: theme.textSubtle, margin: 0, maxWidth: 520, lineHeight: 1.6 }}>
+                {monthlyData.length > 0
+                  ? `Showing ${monthlyData.length} month${monthlyData.length !== 1 ? "s" : ""} of data · ${transactions.length} transactions`
+                  : "Upload a statement to see your spending breakdown."}
               </p>
             </section>
 
@@ -1564,22 +1600,42 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
                 </div>
               </div>
 
-              {/* Fiscal Trajectory Bar */}
+              {/* Monthly Overview Bar */}
               <div style={{
                 background: theme.surface, borderRadius: 8, padding: "28px 32px",
                 boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
               }}>
-                <SectionTitle sub={`Income vs Expenses · Last ${monthlyData.length} Months`}>Fiscal Trajectory</SectionTitle>
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={monthlyData} barGap={3} barSize={10}>
-                    <CartesianGrid stroke={theme.surfaceContainerLow} strokeDasharray="0" vertical={false} />
-                    <XAxis dataKey="month" tick={{ fill: theme.textSubtle, fontSize: 11, fontFamily: fontMono }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: theme.textSubtle, fontSize: 11, fontFamily: fontMono }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Bar dataKey="Income" fill={`${theme.green}33`} radius={[2, 2, 0, 0]} />
-                    <Bar dataKey="Expenses" fill={`${theme.accent}55`} radius={[2, 2, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <SectionTitle sub={monthlyData.length < 12 ? `Showing ${monthlyData.length} of 12 months` : "Income vs Expenses · Last 12 Months"}>Monthly Overview</SectionTitle>
+                {monthlyData.length === 0 ? (
+                  <div style={{ height: 260, display: "flex", alignItems: "center", justifyContent: "center", color: theme.textSubtle, fontSize: 14, fontFamily: font }}>
+                    Not enough data available for monthly analytics.
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart
+                      data={monthlyData}
+                      barGap={3}
+                      barSize={10}
+                      onMouseMove={s => setActiveBarIndex(s?.activeTooltipIndex ?? null)}
+                      onMouseLeave={() => setActiveBarIndex(null)}
+                    >
+                      <CartesianGrid stroke={theme.surfaceContainerLow} strokeDasharray="0" vertical={false} />
+                      <XAxis dataKey="month" tick={{ fill: theme.textSubtle, fontSize: 11, fontFamily: fontMono }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fill: theme.textSubtle, fontSize: 11, fontFamily: fontMono }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
+                      <Tooltip content={<CustomTooltip />} cursor={{ fill: "transparent" }} />
+                      <Bar dataKey="Income" radius={[2, 2, 0, 0]}>
+                        {monthlyData.map((_, i) => (
+                          <Cell key={i} fill={`${theme.green}${activeBarIndex === null || activeBarIndex === i ? "55" : "1a"}`} />
+                        ))}
+                      </Bar>
+                      <Bar dataKey="Expenses" radius={[2, 2, 0, 0]}>
+                        {monthlyData.map((_, i) => (
+                          <Cell key={i} fill={`${theme.accent}${activeBarIndex === null || activeBarIndex === i ? "77" : "22"}`} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
               </div>
             </div>
 
@@ -1589,7 +1645,7 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
               borderRadius: 8, padding: "28px 32px", marginBottom: 24,
               boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
             }}>
-              <SectionTitle sub="Net cashflow trajectory">Net Flow Dynamics</SectionTitle>
+              <SectionTitle sub={monthlyData.length < 2 ? "Upload more statements to see trends" : "Monthly net cash flow"}>Cash Flow</SectionTitle>
               <ResponsiveContainer width="100%" height={200}>
                 <LineChart data={monthlyData}>
                   <CartesianGrid stroke={theme.surfaceContainerLow} strokeDasharray="0" vertical={false} />
@@ -2031,7 +2087,11 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
             {/* Category cards */}
             <div style={{ fontSize: 11, fontFamily: fontMono, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", color: theme.textSubtle, marginBottom: 16 }}>Categories</div>
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 32 }}>
-              {allCategories.map((cat, ci) => {
+              {allCategories.filter(cat => {
+                const hasTransactions = expenses.some(t => t.category === cat);
+                const isCustom = !!customCats[cat] || !!apiCategories.find(c => c.categoryName === cat);
+                return hasTransactions || isCustom;
+              }).map((cat, ci) => {
                 const customKws = customCats[cat] || [];
                 const isEditing = editingCat === cat;
                 const catTxns = expenses.filter(t => t.category === cat);
@@ -2635,9 +2695,13 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
 
       {/* Footer */}
       <footer style={{ marginTop: 64, borderTop: `1px solid ${theme.surfaceContainerLow}`, padding: "24px 40px" }}>
-        <div style={{ maxWidth: 1280, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <p style={{ fontFamily: fontHeadline, fontStyle: "italic", fontSize: 15, color: theme.textSubtle, margin: 0 }}>Crafted with intentionality by CashCanvas.</p>
-          <p style={{ fontFamily: fontMono, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.15em", color: theme.textSubtle, margin: 0 }}>All data processed locally</p>
+        <div style={{ maxWidth: 1280, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+          <span style={{ fontFamily: fontHeadline, fontStyle: "italic", fontSize: 15, color: theme.textSubtle }}>CashCanvas</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 12, color: theme.textSubtle, fontFamily: font }}>Contact:</span>
+            <a href="mailto:paramcharnanand17@gmail.com" style={{ fontSize: 12, color: theme.primary, fontFamily: fontMono, textDecoration: "none" }}>paramcharnanand17@gmail.com</a>
+          </div>
+          <span style={{ fontFamily: fontMono, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em", color: theme.textSubtle }}>© 2025 CashCanvas</span>
         </div>
       </footer>
     </div>
@@ -2701,7 +2765,7 @@ export default function App() {
       setFileName(data.fileName || fileName);
       setStatementType(data.statementType || statementType);
     } catch {
-      alert("Failed to load file. Please re-upload.");
+      // handled gracefully — user stays on upload screen
     }
   }, [auth?.token]);
 

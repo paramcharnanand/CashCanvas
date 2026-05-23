@@ -16,7 +16,7 @@ export default async function handler(req, res) {
   try {
     const db = await getDb();
     const existing = await db.collection("users").findOne({ email: email.toLowerCase() });
-    if (existing) return res.status(409).json({ error: "Email already registered" });
+    if (existing) return res.status(409).json({ error: "An account with this email already exists. Try signing in instead." });
 
     const passwordHash = await bcrypt.hash(password, 12);
     const result = await db.collection("users").insertOne({
@@ -28,7 +28,7 @@ export default async function handler(req, res) {
 
     const token = signToken({ userId: result.insertedId.toString(), email: email.toLowerCase(), name });
     res.status(201).json({ token, user: { name, email: email.toLowerCase() } });
-  } catch (err) {
-    res.status(500).json({ error: "Server error" });
+  } catch {
+    res.status(500).json({ error: "Unable to create account. Please try again." });
   }
 }
