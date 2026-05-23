@@ -12,7 +12,7 @@ Drop a CSV or PDF bank statement and CashCanvas will:
 
 - **Auto-categorize every transaction** — 11 categories, 300+ merchant keywords, plus Claude AI fallback for anything the keyword engine misses
 - **Learn from your corrections** — reassign a transaction's category once and CashCanvas remembers that merchant forever (stored per-user in MongoDB)
-- **Save your upload history** — previous statements are saved to your account so you can pick up where you left off after logging out
+- **Resume previous sessions** — a "Previous Uploads" panel on the home screen lists past statements; click any card to reload it instantly
 - **Custom personal categories** — create your own categories with emoji icons and colors; add merchant keywords to train them
 - **Visual breakdowns** — pie charts, bar charts, and trend lines across every tab
 - **Detect recurring charges** — find subscriptions and fixed payments
@@ -36,9 +36,11 @@ Passwords are hashed with bcrypt. Sessions use JWT (7-day expiry).
 
 Transactions are categorized in priority order:
 
-1. **User-learned rules** — if you've ever reassigned a merchant, that mapping is applied first
-2. **Keyword engine** — 300+ merchants and phrases matched with word-boundary regex
-3. **Claude AI fallback** — any remaining "Other" transactions are sent to Claude Haiku for classification
+1. **User-learned rules** — if you've ever reassigned a merchant, that mapping is applied first (matched by exact cleaned description, merchant prefix, or partial key)
+2. **Keyword engine (two-pass)** — first matched against the full cleaned description, then against the extracted core merchant name (first 1–2 meaningful words) to reduce noise
+3. **Claude AI fallback** — remaining "Other" transactions are sent to Claude Haiku in batches of 100; the AI is prompted to make a best guess rather than default to "Other"
+
+The description cleaner strips bank boilerplate (POS/ACH prefixes, Visa/Checkcard labels), POS terminal prefixes (SQ\*, TST\*), store numbers, transaction IDs, and US state abbreviations before matching.
 
 ## Supported File Formats
 
@@ -89,7 +91,7 @@ Open [http://localhost:5173](http://localhost:5173).
 
 ### Deployment (Vercel)
 
-The project is configured for Vercel. The `/api` directory contains serverless functions that mirror the Express dev server.
+The project is configured for Vercel. The `/api` directory contains serverless functions that mirror the Express dev server. A `vercel.json` rewrite rule routes all `/api/*` requests to the correct handlers.
 
 Set these environment variables in your Vercel project:
 - `MONGODB_URI`
@@ -126,6 +128,21 @@ Connect Studio 3T to your `MONGODB_URI` and open the `cashcanvas` database:
 | `custom_categories` | `{ userId, categoryName, icon, color, keywords[], createdAt }` |
 | `uploaded_files` | `{ userId, fileName, statementType, transactionCount, uploadedAt, transactions[] }` |
 
-## Built With
+## Languages & Tools
 
-React · Vite · Recharts · PapaParse · PDF.js · MongoDB · Express · JWT · bcrypt · Claude API
+| Layer | Technology |
+|---|---|
+| **Language** | JavaScript (ES2022 modules throughout) |
+| **Frontend** | React 18, JSX |
+| **Build tool** | Vite 6 |
+| **Charts** | Recharts |
+| **CSV parsing** | PapaParse |
+| **PDF parsing** | PDF.js (via CDN) |
+| **Styling** | Inline styles + Google Material Symbols icon font |
+| **Backend (dev)** | Node.js, Express 4 |
+| **Backend (prod)** | Vercel Serverless Functions |
+| **Database** | MongoDB 6 (Atlas) |
+| **Auth** | JWT (`jsonwebtoken`), bcrypt (`bcryptjs`) |
+| **AI** | Anthropic Claude API (Haiku) |
+| **Utility** | Lodash |
+| **Dev tooling** | concurrently, `@vitejs/plugin-react` |

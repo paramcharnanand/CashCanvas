@@ -4,4 +4,5 @@ dist
 *.local
 .idea
 .vercel
+.env
 .env*.local
