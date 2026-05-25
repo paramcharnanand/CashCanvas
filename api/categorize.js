@@ -1,11 +1,12 @@
 import { getUser } from "./lib/auth.js";
+import { preprocessForAI } from "./lib/transaction-cleaner.js";
 
 const VALID_CATEGORIES = new Set([
   "Housing", "Groceries", "Dining", "Transport", "Subscriptions",
   "Utilities", "Shopping", "Health", "Entertainment", "Income", "Other",
 ]);
 
-const SYSTEM_PROMPT = `You are an expert bank transaction categorizer. Your job is to assign EVERY transaction to a specific category. NEVER use "Other" unless the transaction is literally an ATM withdrawal, a bank fee, or a person-to-person transfer with no merchant context.
+const SYSTEM_PROMPT = `You are an expert bank transaction categorizer. Assign EVERY transaction to a specific category. NEVER use "Other" unless the transaction is literally an ATM withdrawal, a bank fee, or a person-to-person transfer with no merchant context.
 
 Categories:
 - Housing: rent, mortgage, HOA, storage units, renters/homeowners insurance, moving services
@@ -19,45 +20,11 @@ Categories:
 - Entertainment: movies, concerts, tickets, gaming (Steam, PlayStation, Xbox, Nintendo), bowling, events, parks
 - Income: payroll, salary, direct deposit, tax refunds, reimbursements, interest, dividends, Zelle/Venmo received
 
-Bank statement abbreviations:
-- AMZN / AMZN MKTP / AMAZON MKTP → Shopping
-- WFM / WHOLEFDS → Groceries (Whole Foods)
-- SQ * → Square POS terminal (categorize by what follows)
-- TST* → Toast restaurant POS → Dining
-- APL* / APPLE.COM → Subscriptions
-- VZWRLSS / VZW → Utilities (Verizon)
-- COMCAST / XFINITY → Utilities
-- DDD / DOORDASH → Dining
-- TWC / SPECTRUM → Utilities
-- PP* / PAYPAL → Shopping (usually)
-- COSTCO WHSE → Groceries
+Bank abbreviations: AMZN/AMAZON MKTP → Shopping; WFM/WHOLEFDS → Groceries; SQ * → Square POS; TST* → Dining; APL*/APPLE.COM → Subscriptions; VZWRLSS/VZW → Utilities; COMCAST/XFINITY → Utilities; DOORDASH → Dining; COSTCO WHSE → Groceries.
 
-CRITICAL RULE: If you cannot confidently identify the merchant, make your BEST guess based on context clues. Only use "Other" for ATM withdrawals, unexplained bank fees, or pure person-to-person transfers.`;
+CRITICAL: Make your BEST guess. Only use "Other" for ATM withdrawals, unexplained bank fees, or pure person-to-person transfers.
 
-const ABBREVS = {
-  AMZN: "Amazon", WFM: "Whole Foods", WHOLEFDS: "Whole Foods",
-  MCDNLDS: "McDonalds", SBUX: "Starbucks", VZWRLSS: "Verizon",
-  VZW: "Verizon", TGT: "Target", WMT: "Walmart", DDD: "DoorDash",
-  GRUBHUB: "Grubhub", WHOLEFOOD: "Whole Foods", APL: "Apple",
-  NETFLIX: "Netflix", SPOTIFY: "Spotify", HULU: "Hulu",
-};
-
-function preprocessForAI(desc) {
-  let text = (desc || "").trim();
-  // Remove banking noise tokens
-  text = text.replace(/\b(POS|ACH|PURCHASE|PAYMENT|DBT|CARD|ONLINE|AUTH|REF|DEBIT|CREDIT|CHECKCARD|VISA|PENDING|MEMO|TRN|APD|EXT|PREAUTH|RECURRING|ORIG|CO)\b/gi, " ");
-  // Strip asterisks, hash, long numeric sequences, and dates
-  text = text.replace(/[*#]/g, " ").replace(/\b\d{4,}\b/g, " ").replace(/\b\d{1,2}\/\d{1,2}(\/\d{2,4})?\b/g, " ");
-  // Split camelCase (handles e.g. AMZNMktpUS)
-  text = text.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
-  // Expand known abbreviations
-  const upper = text.toUpperCase();
-  let expanded = upper;
-  for (const [abbr, full] of Object.entries(ABBREVS)) {
-    expanded = expanded.replace(new RegExp(`\\b${abbr}\\b`, "g"), full.toUpperCase());
-  }
-  return expanded.replace(/\s+/g, " ").trim() || desc;
-}
+For each transaction, reply with ONLY the line number, category, and confidence (0-100). Format: "1. Dining:95"`;
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
@@ -90,7 +57,7 @@ export default async function handler(req, res) {
           system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
           contents: [{
             parts: [{
-              text: `Categorize each transaction. Reply with ONLY the line number and category, one per line. Format: "1. Dining"\n\n${descriptions}`,
+              text: `Categorize each transaction. Reply with ONLY the line number, category, and confidence score. Format: "1. Dining:95"\n\n${descriptions}`,
             }],
           }],
           generationConfig: { maxOutputTokens: 2048, temperature: 0 },
@@ -107,11 +74,16 @@ export default async function handler(req, res) {
       .trim()
       .split("\n")
       .map((line) => {
-        const m = line.match(/^(\d+)\.\s+(.+)$/);
+        const m = line.match(/^(\d+)\.\s+(.+?)(?::(\d+))?$/);
         if (!m) return null;
         const idx = parseInt(m[1]) - 1;
         const category = m[2].trim();
-        return { idx, category: VALID_CATEGORIES.has(category) ? category : "Other" };
+        const confidence = m[3] ? parseInt(m[3]) : 75;
+        return {
+          idx,
+          category: VALID_CATEGORIES.has(category) ? category : "Other",
+          confidence,
+        };
       })
       .filter((r) => r !== null && r.idx >= 0 && r.idx < batch.length);
 
