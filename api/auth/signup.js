@@ -2,7 +2,7 @@ import { getDb } from "../lib/db.js";
 import { signToken } from "../lib/auth.js";
 import { verifyRecaptcha } from "../lib/recaptcha.js";
 import {
-  EMAIL_VERIFICATION_ENABLED,
+  isEmailVerificationEnabled,
   generateVerificationToken,
   sendVerificationEmail,
 } from "../lib/mailer.js";
@@ -49,11 +49,12 @@ export default async function handler(req, res) {
 
     const passwordHash = await bcrypt.hash(password, 12);
 
+    // Evaluate at request time so --env-file / Vercel runtime values are current
+    const emailEnabled = isEmailVerificationEnabled();
+
     // Email verification setup
-    const verificationToken = EMAIL_VERIFICATION_ENABLED
-      ? generateVerificationToken()
-      : null;
-    const verificationTokenExpiry = EMAIL_VERIFICATION_ENABLED
+    const verificationToken = emailEnabled ? generateVerificationToken() : null;
+    const verificationTokenExpiry = emailEnabled
       ? new Date(Date.now() + 24 * 60 * 60_000) // 24 h
       : null;
 
@@ -61,7 +62,7 @@ export default async function handler(req, res) {
       name:  name.trim(),
       email: email.toLowerCase(),
       passwordHash,
-      emailVerified:            !EMAIL_VERIFICATION_ENABLED, // auto-verified in dev
+      emailVerified:            !emailEnabled, // auto-verified in dev mode
       verificationToken,
       verificationTokenExpiry,
       failedLogins:  0,
@@ -69,7 +70,7 @@ export default async function handler(req, res) {
       createdAt:     new Date(),
     });
 
-    if (EMAIL_VERIFICATION_ENABLED) {
+    if (emailEnabled) {
       // Fire-and-forget — don't block the response
       sendVerificationEmail(email.toLowerCase(), verificationToken).catch(err =>
         console.error("[signup] Email send error:", err.message)

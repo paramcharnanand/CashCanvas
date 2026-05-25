@@ -7,7 +7,7 @@
  */
 import { getDb } from "../lib/db.js";
 import {
-  EMAIL_VERIFICATION_ENABLED,
+  isEmailVerificationEnabled,
   generateVerificationToken,
   sendVerificationEmail,
 } from "../lib/mailer.js";
@@ -25,7 +25,7 @@ export default async function handler(req, res) {
     });
   }
 
-  if (!EMAIL_VERIFICATION_ENABLED) {
+  if (!isEmailVerificationEnabled()) {
     return res.status(503).json({
       error: "Email verification is not configured on this server.",
     });

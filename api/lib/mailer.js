@@ -13,13 +13,21 @@
 import nodemailer from "nodemailer";
 import crypto from "crypto";
 
-export const EMAIL_VERIFICATION_ENABLED =
+/**
+ * Checked at call time (not import time) so env vars loaded via --env-file
+ * or Vercel's runtime are always reflected correctly.
+ */
+export const isEmailVerificationEnabled = () =>
   !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD);
 
-const APP_URL = process.env.APP_URL || "http://localhost:5173";
+// Keep the old name as an alias so any code that imported the const still compiles.
+// Deprecated — prefer isEmailVerificationEnabled().
+export const EMAIL_VERIFICATION_ENABLED = isEmailVerificationEnabled;
+
+const getAppUrl = () => process.env.APP_URL || "http://localhost:5173";
 
 function createTransporter() {
-  if (!EMAIL_VERIFICATION_ENABLED) return null;
+  if (!isEmailVerificationEnabled()) return null;
   return nodemailer.createTransport({
     service: "gmail",
     auth: {
@@ -42,7 +50,7 @@ export async function sendVerificationEmail(toEmail, token) {
     return;
   }
 
-  const verifyUrl = `${APP_URL}/verify?token=${token}`;
+  const verifyUrl = `${getAppUrl()}/verify?token=${token}`;
 
   await transporter.sendMail({
     from: `"CashCanvas" <${process.env.GMAIL_USER}>`,
@@ -104,7 +112,7 @@ export async function sendPasswordResetEmail(toEmail, token) {
   const transporter = createTransporter();
   if (!transporter) return;
 
-  const resetUrl = `${APP_URL}/reset-password?token=${token}`;
+  const resetUrl = `${getAppUrl()}/reset-password?token=${token}`;
   await transporter.sendMail({
     from: `"CashCanvas" <${process.env.GMAIL_USER}>`,
     to: toEmail,
