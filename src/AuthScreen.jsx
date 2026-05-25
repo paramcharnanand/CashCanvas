@@ -17,7 +17,25 @@ const theme = {
   accent: "#b02d21",
 };
 
-function Field({ label, type, value, onChange, placeholder, error }) {
+// Route a server error message to the field it belongs to.
+function routeError(msg) {
+  if (!msg) return { name: "", email: "", password: "", form: "" };
+  const l = msg.toLowerCase();
+  if (
+    l.includes("email") ||
+    l.includes("registered") ||
+    l.includes("sign up first") ||
+    l.includes("account found")
+  ) return { name: "", email: msg, password: "", form: "" };
+  if (
+    l.includes("password") ||
+    l.includes("incorrect password")
+  ) return { name: "", email: "", password: msg, form: "" };
+  if (l.includes("name")) return { name: msg, email: "", password: "", form: "" };
+  return { name: "", email: "", password: "", form: msg };
+}
+
+function Field({ label, type, value, onChange, placeholder, error, autoComplete, showToggle, onToggle, passwordVisible }) {
   return (
     <div style={{ marginBottom: 16 }}>
       <label style={{
@@ -25,22 +43,45 @@ function Field({ label, type, value, onChange, placeholder, error }) {
         textTransform: "uppercase", letterSpacing: "0.08em",
         color: theme.textSubtle, marginBottom: 6,
       }}>{label}</label>
-      <input
-        type={type}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        style={{
-          width: "100%", padding: "11px 14px", boxSizing: "border-box",
-          background: theme.surfaceContainerLow,
-          border: `1px solid ${error ? theme.accent : theme.border}`,
-          borderRadius: 6, color: theme.text,
-          fontFamily: font, fontSize: 14, outline: "none",
-          transition: "border-color 0.15s",
-        }}
-        onFocus={e => { e.target.style.borderColor = theme.primary; }}
-        onBlur={e => { e.target.style.borderColor = error ? theme.accent : theme.border; }}
-      />
+      <div style={{ position: "relative" }}>
+        <input
+          type={showToggle ? (passwordVisible ? "text" : "password") : type}
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          autoComplete={autoComplete}
+          style={{
+            width: "100%", padding: showToggle ? "11px 40px 11px 14px" : "11px 14px",
+            boxSizing: "border-box",
+            background: theme.surfaceContainerLow,
+            border: `1px solid ${error ? theme.accent : theme.border}`,
+            borderRadius: 6, color: theme.text,
+            fontFamily: font, fontSize: 14, outline: "none",
+            transition: "border-color 0.15s",
+          }}
+          onFocus={e => { e.target.style.borderColor = error ? theme.accent : theme.primary; }}
+          onBlur={e => { e.target.style.borderColor = error ? theme.accent : theme.border; }}
+        />
+        {showToggle && (
+          <button
+            type="button"
+            onClick={onToggle}
+            tabIndex={-1}
+            style={{
+              position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+              background: "none", border: "none", cursor: "pointer", padding: 2,
+              color: theme.textSubtle, display: "flex", alignItems: "center",
+            }}
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: 18, fontVariationSettings: "'FILL' 0, 'wght' 300" }}
+            >
+              {passwordVisible ? "visibility_off" : "visibility"}
+            </span>
+          </button>
+        )}
+      </div>
       {error && (
         <div style={{ fontSize: 12, color: theme.accent, marginTop: 5, fontFamily: font }}>{error}</div>
       )}
@@ -53,14 +94,31 @@ export default function AuthScreen({ onAuth }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({ name: "", email: "", password: "", form: "" });
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const clearErrors = () => setFieldErrors({ name: "", email: "", password: "", form: "" });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-    setLoading(true);
+    clearErrors();
 
+    // Client-side validation
+    if (mode === "signup" && !name.trim()) {
+      setFieldErrors(prev => ({ ...prev, name: "Please enter your name." }));
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setFieldErrors(prev => ({ ...prev, email: "Please enter a valid email address." }));
+      return;
+    }
+    if (mode === "signup" && password.length < 8) {
+      setFieldErrors(prev => ({ ...prev, password: "Password must be at least 8 characters." }));
+      return;
+    }
+
+    setLoading(true);
     const endpoint = mode === "login" ? "/api/auth/login" : "/api/auth/signup";
     const body = mode === "login" ? { email, password } : { name, email, password };
 
@@ -73,13 +131,13 @@ export default function AuthScreen({ onAuth }) {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || "Something went wrong");
+        setFieldErrors(routeError(data.error || "Something went wrong."));
       } else {
         localStorage.setItem("cc_auth", JSON.stringify({ token: data.token, user: data.user }));
         onAuth({ token: data.token, user: data.user });
       }
     } catch {
-      setError("Cannot connect to server. Make sure the API server is running.");
+      setFieldErrors({ name: "", email: "", password: "", form: "Cannot connect to the server. Make sure the API is running." });
     } finally {
       setLoading(false);
     }
@@ -98,7 +156,7 @@ export default function AuthScreen({ onAuth }) {
             Cash<span style={{ color: theme.primary }}>Canvas</span>
           </div>
           <p style={{ fontSize: 13, color: theme.textSubtle, margin: "10px 0 0", fontFamily: fontMono }}>
-            Expense intelligence, beautifully crafted
+            Your personal finance dashboard
           </p>
         </div>
 
@@ -113,7 +171,7 @@ export default function AuthScreen({ onAuth }) {
             borderRadius: 8, padding: 4, marginBottom: 28,
           }}>
             {["login", "signup"].map(m => (
-              <button key={m} onClick={() => { setMode(m); setError(""); }} style={{
+              <button key={m} onClick={() => { setMode(m); clearErrors(); setShowPassword(false); }} style={{
                 flex: 1, padding: "8px", border: "none",
                 borderRadius: 6,
                 background: mode === m ? theme.surface : "transparent",
@@ -128,7 +186,7 @@ export default function AuthScreen({ onAuth }) {
             ))}
           </div>
 
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} noValidate>
             {mode === "signup" && (
               <Field
                 label="Full Name"
@@ -136,6 +194,8 @@ export default function AuthScreen({ onAuth }) {
                 value={name}
                 onChange={e => setName(e.target.value)}
                 placeholder="Your name"
+                autoComplete="name"
+                error={fieldErrors.name}
               />
             )}
             <Field
@@ -144,6 +204,8 @@ export default function AuthScreen({ onAuth }) {
               value={email}
               onChange={e => setEmail(e.target.value)}
               placeholder="you@example.com"
+              autoComplete={mode === "login" ? "username" : "email"}
+              error={fieldErrors.email}
             />
             <Field
               label="Password"
@@ -151,8 +213,23 @@ export default function AuthScreen({ onAuth }) {
               value={password}
               onChange={e => setPassword(e.target.value)}
               placeholder={mode === "signup" ? "At least 8 characters" : "Your password"}
-              error={error}
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              error={fieldErrors.password}
+              showToggle
+              passwordVisible={showPassword}
+              onToggle={() => setShowPassword(v => !v)}
             />
+
+            {/* Form-level error (connection issues, server errors) */}
+            {fieldErrors.form && (
+              <div style={{
+                padding: "10px 14px", borderRadius: 6, marginBottom: 14,
+                background: "rgba(176,45,33,0.06)", border: "1px solid rgba(176,45,33,0.18)",
+                fontSize: 13, color: theme.accent, fontFamily: font,
+              }}>
+                {fieldErrors.form}
+              </div>
+            )}
 
             <button
               type="submit"
@@ -166,10 +243,18 @@ export default function AuthScreen({ onAuth }) {
                 color: "#fff", fontFamily: font, fontSize: 14, fontWeight: 600,
                 cursor: loading ? "not-allowed" : "pointer",
                 transition: "opacity 0.2s", marginTop: 4,
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
               }}
               onMouseEnter={e => { if (!loading) e.currentTarget.style.opacity = "0.9"; }}
               onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
             >
+              {loading && (
+                <span style={{
+                  width: 14, height: 14, border: "2px solid rgba(255,255,255,0.4)",
+                  borderTopColor: "#fff", borderRadius: "50%",
+                  animation: "spin 0.7s linear infinite", flexShrink: 0,
+                }} />
+              )}
               {loading ? "Please wait…" : mode === "login" ? "Sign In" : "Create Account"}
             </button>
           </form>
@@ -179,6 +264,10 @@ export default function AuthScreen({ onAuth }) {
           Your data stays private — no selling, no sharing.
         </p>
       </div>
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
     </div>
   );
 }

@@ -899,6 +899,7 @@ function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");
   const [fileHistory, setFileHistory] = useState([]);
+  const [yearFilter, setYearFilter] = useState("all");
   const inputRef = useRef();
 
   useEffect(() => {
@@ -1131,16 +1132,52 @@ function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
         </div>
 
         {/* ── Previous Uploads ── */}
-        {fileHistory.length > 0 && (
+        {fileHistory.length > 0 && (() => {
+          // Derive available years from upload dates
+          const availableYears = [...new Set(
+            fileHistory
+              .map(f => f.detectedYear || (f.uploadedAt ? new Date(f.uploadedAt).getFullYear() : null))
+              .filter(Boolean)
+          )].sort((a, b) => b - a);
+
+          const visibleFiles = yearFilter === "all"
+            ? fileHistory
+            : fileHistory.filter(f => {
+                const y = f.detectedYear || (f.uploadedAt ? new Date(f.uploadedAt).getFullYear() : null);
+                return String(y) === String(yearFilter);
+              });
+
+          return (
           <div style={{ marginTop: 60, width: "100%" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
               <div>
                 <div style={{ fontSize: 11, fontFamily: fontMono, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.12em", color: theme.textSubtle, marginBottom: 4 }}>Previous Uploads</div>
                 <div style={{ fontSize: 13, color: theme.textSubtle }}>Click any statement to pick up where you left off.</div>
               </div>
+              {availableYears.length > 1 && (
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {["all", ...availableYears].map(y => (
+                    <button
+                      key={y}
+                      onClick={() => setYearFilter(String(y))}
+                      style={{
+                        padding: "5px 12px",
+                        borderRadius: 20,
+                        border: `1px solid ${String(yearFilter) === String(y) ? theme.primary : theme.border}`,
+                        background: String(yearFilter) === String(y) ? theme.primary : "transparent",
+                        color: String(yearFilter) === String(y) ? "#fff" : theme.textSubtle,
+                        fontFamily: fontMono, fontSize: 11, fontWeight: 600,
+                        cursor: "pointer", transition: "all 0.15s",
+                        textTransform: y === "all" ? "uppercase" : "none",
+                        letterSpacing: y === "all" ? "0.06em" : 0,
+                      }}
+                    >{y === "all" ? "All" : y}</button>
+                  ))}
+                </div>
+              )}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 16 }}>
-              {fileHistory.map(f => (
+              {visibleFiles.map(f => (
                 <div key={f._id} style={{
                   background: theme.surface, borderRadius: 8, padding: "18px 20px",
                   boxShadow: "0 1px 3px rgba(27,28,26,0.07)",
@@ -1192,7 +1229,8 @@ function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
               ))}
             </div>
           </div>
-        )}
+          );
+        })()}
       </main>
 
       {/* Footer */}
