@@ -167,7 +167,12 @@ const DEFAULT_CATEGORIES = {
 const PALETTE = ["#1a6b4a","#b02d21","#bfc9c0","#6f7a72","#3f4943","#8e130c","#a0b0a8","#005235","#d4a57a","#c8bfb0","#7a6b5a","#4a7a6a"];
 
 function cleanDesc(desc) {
-  return (desc || "").toLowerCase()
+  if (!desc) return "";
+  // Segment merged/camelCase words before lowercasing (e.g. "AMZNMktpUS" → "AMZN Mktp US")
+  let text = desc.trim()
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
+  return text.toLowerCase()
     // Bank boilerplate prefixes/suffixes
     .replace(/\b(card\s+purchase|pos\s+(debit|credit|purchase)|ach\s+(debit|credit|payment|transfer)|online\s+(payment|transfer|banking)|bill\s+pay(ment)?|direct\s+dep(osit)?|wire\s+transfer|check\s+(paid|deposit|crd)|mobile\s+(payment|deposit)|contactless\s+purchase|recurring\s+(charge|payment)|autopay|preauthorized|authorized\s+on|payment\s+to|purchase\s+at|pending|memo|ref\s*#?|tran\s*#?|checkcard|visa\s+debit|visa\s+credit|ext\s+credit|ext\s+debit)\b/g, " ")
     // POS-system prefixes
@@ -189,6 +194,25 @@ function cleanDesc(desc) {
     .replace(/\s+/g, " ").trim();
 }
 
+// Dice-coefficient similarity (0–1). Used for fuzzy merchant matching in categorize().
+function diceCoefficient(a, b) {
+  if (!a || !b) return 0;
+  const al = a.toLowerCase().trim();
+  const bl = b.toLowerCase().trim();
+  if (al === bl) return 1.0;
+  if (al.length < 2 || bl.length < 2) return 0;
+  const bigrams = (s) => {
+    const set = new Set();
+    for (let i = 0; i < s.length - 1; i++) set.add(s.substring(i, i + 2));
+    return set;
+  };
+  const bigramsA = bigrams(al);
+  const bigramsB = bigrams(bl);
+  let intersection = 0;
+  for (const bg of bigramsA) { if (bigramsB.has(bg)) intersection++; }
+  return (2 * intersection) / (bigramsA.size + bigramsB.size);
+}
+
 // Extract the core merchant name — first 1-3 meaningful words after cleaning
 function extractMerchant(cleaned) {
   const stopWords = new Set(["the", "and", "for", "from", "with", "inc", "llc", "corp", "ltd", "co"]);
@@ -200,14 +224,22 @@ function categorize(desc, customCats, merchantRules) {
   const cleaned = cleanDesc(desc);
   const merchant = extractMerchant(cleaned);
 
-  // User-learned rules — try exact cleaned match, then merchant prefix match
+  // User-learned rules — exact, prefix, then fuzzy (dice ≥ 0.65)
   if (merchantRules?.size) {
     if (merchantRules.has(cleaned)) return merchantRules.get(cleaned);
     if (merchant && merchantRules.has(merchant)) return merchantRules.get(merchant);
-    // Partial: check if any saved rule key starts with the merchant name
+    // Prefix match
     for (const [key, cat] of merchantRules) {
       if (merchant && key.startsWith(merchant)) return cat;
     }
+    // Fuzzy match via Dice coefficient
+    let bestScore = 0;
+    let bestCat = null;
+    for (const [key, cat] of merchantRules) {
+      const score = Math.max(diceCoefficient(cleaned, key), diceCoefficient(merchant, key));
+      if (score > bestScore) { bestScore = score; bestCat = cat; }
+    }
+    if (bestScore >= 0.65) return bestCat;
   }
 
   const cats = { ...DEFAULT_CATEGORIES, ...customCats };
@@ -346,8 +378,8 @@ function StatCard({ label, value, sub, color = theme.primary, onClick }) {
     onMouseEnter={e => { if (onClick) e.currentTarget.style.boxShadow = "0 3px 8px rgba(27,28,26,0.12)"; }}
     onMouseLeave={e => { if (onClick) e.currentTarget.style.boxShadow = "0 1px 3px rgba(27,28,26,0.07)"; }}
     >
-      <div style={{ fontSize: 11, fontFamily: fontMono, color: theme.textMuted, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 500, marginBottom: 6 }}>{label}</div>
-      <div style={{ fontSize: 30, fontWeight: 600, color: theme.text, fontFamily: fontMono, fontFeatureSettings: '"tnum"', letterSpacing: "-0.02em" }}>{value}</div>
+      <div style={{ fontSize: 11, fontFamily: fontMono, color: theme.textMuted, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 500, marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</div>
+      <div style={{ fontSize: 30, fontWeight: 600, color: theme.text, fontFamily: fontMono, fontFeatureSettings: '"tnum"', letterSpacing: "-0.02em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value}</div>
       {sub && <div style={{ fontSize: 11, color: color, marginTop: 6, display: "flex", alignItems: "center", gap: 4, fontFamily: font, fontWeight: 500 }}>{sub}</div>}
     </div>
   );
@@ -880,6 +912,13 @@ function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
   const handleFile = useCallback((file) => {
     if (!file) return;
     setError(null);
+
+    // Client-side size guard (10 MB max)
+    if (file.size > 10 * 1024 * 1024) {
+      setError("File is too large. Maximum size is 10 MB — try exporting a smaller date range from your bank.");
+      return;
+    }
+
     setLoading(true);
     const ext = file.name.split(".").pop().toLowerCase();
 
@@ -909,14 +948,14 @@ function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
                 transactions.push({ date, desc, amount, originalCategory: null });
               }
             }
-            if (transactions.length === 0) throw new Error("No valid transactions found");
+            if (transactions.length === 0) throw new Error("No transactions found in this file. Make sure you're exporting a statement CSV — not an account summary.");
             onData(transactions, file.name, "bank");
           } catch (e) {
             setError(e.message);
           }
           setLoading(false);
         },
-        error: () => { setError("Failed to parse CSV"); setLoading(false); }
+        error: () => { setError("Unable to read this CSV. Try re-exporting it from your bank's website."); setLoading(false); }
       });
     } else if (ext === "pdf") {
       setLoadingMsg("Reading PDF...");
@@ -1014,7 +1053,7 @@ function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
                 {loading ? (loadingMsg || "Parsing your statement...") : "Drop your bank statement"}
               </p>
               <p style={{ fontFamily: fontMono, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.15em", color: theme.textSubtle, margin: 0 }}>
-                CSV, PDF or OFX files accepted
+                CSV or PDF files accepted
               </p>
               <input ref={inputRef} type="file" accept=".csv,.tsv,.pdf" style={{ display: "none" }}
                 onChange={(e) => handleFile(e.target.files[0])} />
@@ -1161,7 +1200,7 @@ function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
               paramcharnanand17@gmail.com
             </a>
           </div>
-          <span style={{ fontFamily: fontMono, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em", color: theme.textSubtle }}>© 2025 CashCanvas</span>
+          <span style={{ fontFamily: fontMono, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em", color: theme.textSubtle }}>© 2026 CashCanvas</span>
         </div>
       </footer>
     </div>
@@ -1669,17 +1708,23 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
               borderRadius: 8, padding: "28px 32px", marginBottom: 24,
               boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
             }}>
-              <SectionTitle sub={monthlyData.length < 2 ? "Upload more statements to see trends" : "Monthly net cash flow"}>Cash Flow</SectionTitle>
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={monthlyData}>
-                  <CartesianGrid stroke={theme.surfaceContainerLow} strokeDasharray="0" vertical={false} />
-                  <XAxis dataKey="month" tick={{ fill: theme.textSubtle, fontSize: 11, fontFamily: fontMono }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: theme.textSubtle, fontSize: 11, fontFamily: fontMono }} axisLine={false} tickLine={false} tickFormatter={v => `$${v.toLocaleString()}`} domain={[dataMin => Math.min(0, dataMin), dataMax => Math.max(0, dataMax)]} />
-                  <ReferenceLine y={0} stroke={theme.border} strokeDasharray="3 3" />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Line type="monotone" dataKey="Net" stroke={theme.primary} strokeWidth={2.5} dot={{ r: 4, fill: theme.primary, strokeWidth: 0 }} />
-                </LineChart>
-              </ResponsiveContainer>
+              <SectionTitle sub="Monthly net cash flow">Cash Flow</SectionTitle>
+              {monthlyData.length < 2 ? (
+                <div style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center", color: theme.textSubtle, fontSize: 14, fontFamily: font }}>
+                  Upload statements from multiple months to see cash flow trends.
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={200}>
+                  <LineChart data={monthlyData}>
+                    <CartesianGrid stroke={theme.surfaceContainerLow} strokeDasharray="0" vertical={false} />
+                    <XAxis dataKey="month" tick={{ fill: theme.textSubtle, fontSize: 11, fontFamily: fontMono }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: theme.textSubtle, fontSize: 11, fontFamily: fontMono }} axisLine={false} tickLine={false} tickFormatter={v => `$${v.toLocaleString()}`} domain={[dataMin => Math.min(0, dataMin), dataMax => Math.max(0, dataMax)]} />
+                    <ReferenceLine y={0} stroke={theme.border} strokeDasharray="3 3" />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Line type="monotone" dataKey="Net" stroke={theme.primary} strokeWidth={2.5} dot={{ r: 4, fill: theme.primary, strokeWidth: 0 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
             </div>
 
             {/* Recurring + Recent Transactions */}
@@ -2760,7 +2805,7 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
             <span style={{ fontSize: 12, color: theme.textSubtle, fontFamily: font }}>Contact:</span>
             <a href="mailto:paramcharnanand17@gmail.com" style={{ fontSize: 12, color: theme.primary, fontFamily: fontMono, textDecoration: "none" }}>paramcharnanand17@gmail.com</a>
           </div>
-          <span style={{ fontFamily: fontMono, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em", color: theme.textSubtle }}>© 2025 CashCanvas</span>
+          <span style={{ fontFamily: fontMono, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em", color: theme.textSubtle }}>© 2026 CashCanvas</span>
         </div>
       </footer>
     </div>
