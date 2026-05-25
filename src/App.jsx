@@ -1155,7 +1155,12 @@ function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                       <span className="material-symbols-outlined" style={{ fontSize: 20, color: theme.primary, flexShrink: 0, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>description</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: theme.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.fileName}</span>
+                      <div style={{ minWidth: 0 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: theme.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{f.fileName}</span>
+                        {f.internalName && f.internalName !== f.fileName && (
+                          <span style={{ fontSize: 10, color: theme.textSubtle, fontFamily: fontMono, textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginTop: 1 }}>{f.internalName}</span>
+                        )}
+                      </div>
                     </div>
                     <button onClick={e => {
                       e.stopPropagation();
@@ -2039,7 +2044,14 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
           const otherTxns = expenses.filter(t => t.category === "Other");
           const categorizedTxns = expenses.filter(t => t.category !== "Other");
           const categorizedPct = expenses.length > 0 ? Math.round((categorizedTxns.length / expenses.length) * 100) : 0;
-          const topCats = allCategories.filter(c => c !== "Other" && c !== "Income");
+          // Only show categories that are visible in the organized view (have transactions or keywords)
+          const topCats = allCategories.filter(c => {
+            if (c === "Other" || c === "Income") return false;
+            const hasTxns = expenses.some(t => t.category === c);
+            const apiCat = apiCategories.find(ac => ac.categoryName === c);
+            const hasKws = (customCats[c] || []).length > 0 || (apiCat?.keywords || []).length > 0;
+            return hasTxns || hasKws;
+          });
 
           return (
           <div>
@@ -2817,6 +2829,7 @@ export default function App() {
   const [transactions, setTransactions] = useState(null);
   const [fileName, setFileName] = useState("");
   const [statementType, setStatementType] = useState("unknown");
+  const [autoRestoring, setAutoRestoring] = useState(false);
   const [auth, setAuth] = useState(() => {
     try {
       const stored = localStorage.getItem("cc_auth");
@@ -2825,6 +2838,32 @@ export default function App() {
       return null;
     }
   });
+
+  // Auto-restore the most recent statement on login
+  useEffect(() => {
+    if (!auth?.token || transactions !== null || autoRestoring) return;
+    setAutoRestoring(true);
+    fetch("/api/files", { headers: { Authorization: `Bearer ${auth.token}` } })
+      .then(r => r.json())
+      .then(files => {
+        if (!Array.isArray(files) || files.length === 0) return;
+        const latest = files[0]; // already sorted by uploadedAt desc
+        return fetch(`/api/files/${latest._id}`, { headers: { Authorization: `Bearer ${auth.token}` } })
+          .then(r => r.json())
+          .then(data => {
+            if (!data.transactions) return;
+            const txns = data.transactions.map(t => ({
+              ...t,
+              date: typeof t.date === "string" ? new Date(t.date) : t.date,
+            }));
+            setTransactions(txns);
+            setFileName(data.fileName || latest.fileName);
+            setStatementType(data.statementType || "unknown");
+          });
+      })
+      .catch(() => {})
+      .finally(() => setAutoRestoring(false));
+  }, [auth?.token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAuth = useCallback((authData) => {
     setAuth(authData);
