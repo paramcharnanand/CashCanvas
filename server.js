@@ -571,9 +571,7 @@ For each transaction, reply with ONLY the line number, category, and confidence 
 });
 
 // ── PDF PARSING (AI EXTRACTION) ───────────────────────────────────────────────
-// Secure server-side proxy: the Anthropic API key never reaches the browser.
-
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+// Secure server-side proxy: the Gemini API key never reaches the browser.
 
 app.post("/api/parse-pdf", parsePdfLimiter, async (req, res) => {
   const user = getUser(req);
@@ -590,8 +588,8 @@ app.post("/api/parse-pdf", parsePdfLimiter, async (req, res) => {
       .json({ error: "PDF too large for AI extraction. Maximum supported size is approximately 7 MB." });
   }
 
-  if (!ANTHROPIC_API_KEY) {
-    return res.json({ transactions: [], warning: "ANTHROPIC_API_KEY not configured" });
+  if (!GEMINI_API_KEY) {
+    return res.json({ transactions: [], warning: "GEMINI_API_KEY not configured" });
   }
 
   const isCreditCard = statementType === "credit_card";
@@ -614,46 +612,39 @@ Return ONLY the JSON array.`;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 60_000);
 
-    let anthropicRes;
+    let geminiRes;
     try {
-      anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        signal: controller.signal,
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": ANTHROPIC_API_KEY,
-          "anthropic-version": "2023-06-01",
-          "anthropic-beta": "pdfs-2024-09-25",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 4096,
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "document",
-                  source: { type: "base64", media_type: "application/pdf", data: pdfBase64 },
-                },
-                { type: "text", text: prompt },
+      geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: "POST",
+          signal: controller.signal,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { inlineData: { mimeType: "application/pdf", data: pdfBase64 } },
+                { text: prompt },
               ],
-            },
-          ],
-        }),
-      });
+            }],
+            generationConfig: { maxOutputTokens: 8192, temperature: 0 },
+          }),
+        }
+      );
     } finally {
       clearTimeout(timeout);
     }
 
-    if (!anthropicRes.ok) {
-      const errText = await anthropicRes.text().catch(() => "");
-      console.error("[parse-pdf] Anthropic error:", anthropicRes.status, errText.slice(0, 300));
+    if (!geminiRes.ok) {
+      const errText = await geminiRes.text().catch(() => "");
+      console.error("[parse-pdf] Gemini error:", geminiRes.status, errText.slice(0, 300));
       return res.json({ transactions: [] });
     }
 
-    const data = await anthropicRes.json();
-    const rawText = (data.content || []).map((b) => b.text || "").join("");
+    const data = await geminiRes.json();
+    const rawText = (data.candidates?.[0]?.content?.parts || [])
+      .map((p) => p.text || "")
+      .join("");
     const cleanText = rawText.replace(/```json|```/g, "").trim();
 
     let parsed;

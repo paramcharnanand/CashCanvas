@@ -1,8 +1,8 @@
 /**
- * /api/parse-pdf — Secure backend proxy for Anthropic PDF extraction.
+ * /api/parse-pdf — Secure backend proxy for Gemini PDF extraction.
  *
- * The frontend sends the raw PDF as base64; this endpoint calls the Anthropic
- * API using the secret key stored only on the server and returns the parsed
+ * The frontend sends the raw PDF as base64; this endpoint calls the Gemini
+ * API using the secret key stored only on the server and returns parsed
  * transactions. No credentials are ever exposed to the browser.
  *
  * Rate limited to 10 requests per user per hour (PDF parsing is expensive).
@@ -50,9 +50,9 @@ export default async function handler(req, res) {
   }
 
   // ── API key guard ───────────────────────────────────────────────────────────
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return res.json({ transactions: [], warning: "ANTHROPIC_API_KEY not configured" });
+    return res.json({ transactions: [], warning: "GEMINI_API_KEY not configured" });
   }
 
   // ── Build extraction prompt ─────────────────────────────────────────────────
@@ -73,51 +73,44 @@ Example: [{"date":"2025-01-15","desc":"WHOLE FOODS MARKET","amount":-87.32},{"da
 Return ONLY the JSON array.`;
 
   try {
-    // ── Call Anthropic API server-side (key never sent to browser) ──────────
+    // ── Call Gemini API server-side (key never sent to browser) ─────────────
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 60_000); // 60 s timeout
 
-    let anthropicRes;
+    let geminiRes;
     try {
-      anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        signal: controller.signal,
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-beta": "pdfs-2024-09-25",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 4096,
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "document",
-                  source: { type: "base64", media_type: "application/pdf", data: pdfBase64 },
-                },
-                { type: "text", text: prompt },
+      geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          signal: controller.signal,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { inlineData: { mimeType: "application/pdf", data: pdfBase64 } },
+                { text: prompt },
               ],
-            },
-          ],
-        }),
-      });
+            }],
+            generationConfig: { maxOutputTokens: 8192, temperature: 0 },
+          }),
+        }
+      );
     } finally {
       clearTimeout(timeout);
     }
 
-    if (!anthropicRes.ok) {
+    if (!geminiRes.ok) {
       // Log internally; never leak provider error details to the client
-      const errText = await anthropicRes.text().catch(() => "");
-      console.error("[parse-pdf] Anthropic error:", anthropicRes.status, errText.slice(0, 300));
+      const errText = await geminiRes.text().catch(() => "");
+      console.error("[parse-pdf] Gemini error:", geminiRes.status, errText.slice(0, 300));
       return res.json({ transactions: [] });
     }
 
-    const data = await anthropicRes.json();
-    const rawText = (data.content || []).map((b) => b.text || "").join("");
+    const data = await geminiRes.json();
+    const rawText = (data.candidates?.[0]?.content?.parts || [])
+      .map((p) => p.text || "")
+      .join("");
     const cleanText = rawText.replace(/```json|```/g, "").trim();
 
     let parsed;
@@ -148,7 +141,7 @@ Return ONLY the JSON array.`;
     res.json({ transactions });
   } catch (err) {
     if (err.name === "AbortError") {
-      console.error("[parse-pdf] Anthropic request timed out");
+      console.error("[parse-pdf] Gemini request timed out");
       return res
         .status(504)
         .json({ transactions: [], error: "AI parsing timed out. Please try again." });
