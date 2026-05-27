@@ -19,6 +19,14 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 export async function getDb() {
-  const c = await clientPromise;
-  return c.db("cashcanvas");
+  const c  = await clientPromise;
+  const db = c.db("cashcanvas");
+
+  // Ensure TTL index on pending_signups so MongoDB auto-removes expired docs.
+  // createIndex is a no-op if the index already exists.
+  db.collection("pending_signups")
+    .createIndex({ otpExpiry: 1 }, { expireAfterSeconds: 0 })
+    .catch(() => {}); // non-blocking, non-fatal
+
+  return db;
 }

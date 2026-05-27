@@ -1,3 +1,10 @@
+/**
+ * POST /api/auth/resend-otp
+ * Body: { email }
+ *
+ * Regenerates and resends a 6-digit OTP.
+ * Checks `pending_signups` first (signup flow), then `users` (login flow).
+ */
 import { getDb } from "../lib/db.js";
 import { generateOtp, sendOtpEmail, isEmailVerificationEnabled } from "../lib/mailer.js";
 import { checkRateLimit, getClientIp } from "../lib/ratelimit.js";
@@ -16,35 +23,43 @@ export default async function handler(req, res) {
   }
 
   const { email } = req.body || {};
-  if (!email)
-    return res.status(400).json({ error: "Email is required." });
+  if (!email) return res.status(400).json({ error: "Email is required." });
 
   if (!isEmailVerificationEnabled())
     return res.status(503).json({ error: "Email is not configured on this server." });
 
   try {
-    const db   = await getDb();
-    const user = await db.collection("users").findOne({ email: email.toLowerCase() });
-
-    // Don't reveal whether the address exists
-    if (!user) return res.json({ ok: true });
-
+    const db     = await getDb();
+    const lEmail = email.toLowerCase();
     const otp    = generateOtp();
     const expiry = new Date(Date.now() + OTP_TTL_MS);
 
-    await db.collection("users").updateOne({ _id: user._id }, {
-      $set: {
-        pendingOtp:         otp,
-        pendingOtpExpiry:   expiry,
-        pendingOtpAttempts: 0,
-      },
-    });
+    // Check pending_signups first (signup flow)
+    const pending = await db.collection("pending_signups").findOne({ email: lEmail });
+    if (pending) {
+      await db.collection("pending_signups").updateOne(
+        { email: lEmail },
+        { $set: { otp, otpExpiry: expiry, otpAttempts: 0 } }
+      );
+      sendOtpEmail(lEmail, otp, "signup").catch(err =>
+        console.error("[resend-otp] Email error:", err.message)
+      );
+      return res.json({ ok: true });
+    }
 
-    const purpose = user.pendingOtpPurpose || "login";
-    sendOtpEmail(user.email, otp, purpose).catch(err =>
-      console.error("[resend-otp] Email error:", err.message)
-    );
+    // Fallback: login OTP stored on user document
+    const user = await db.collection("users").findOne({ email: lEmail });
+    if (user) {
+      await db.collection("users").updateOne(
+        { email: lEmail },
+        { $set: { pendingOtp: otp, pendingOtpExpiry: expiry, pendingOtpAttempts: 0 } }
+      );
+      sendOtpEmail(lEmail, otp, user.pendingOtpPurpose || "login").catch(err =>
+        console.error("[resend-otp] Email error:", err.message)
+      );
+    }
 
+    // Always return ok — don't reveal whether the address is registered
     res.json({ ok: true });
   } catch (err) {
     console.error("[resend-otp]", err);

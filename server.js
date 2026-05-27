@@ -92,6 +92,27 @@ const parsePdfLimiter = rateLimit({ windowMs: 60 * 60_000, max: 10,  keyPrefix: 
 
 const OTP_TTL_MS = 10 * 60_000;
 
+// ── reCAPTCHA v3 (signup only) ────────────────────────────────────────────────
+async function verifyRecaptcha(token) {
+  const secret = process.env.RECAPTCHA_SECRET_KEY;
+  if (!secret) return { ok: true, skipped: true }; // not configured — dev mode
+  if (!token)  return { ok: false, error: "Security check token missing. Please refresh and try again." };
+  try {
+    const resp = await fetch("https://www.google.com/recaptcha/api/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `secret=${encodeURIComponent(secret)}&response=${encodeURIComponent(token)}`,
+    });
+    const data = await resp.json();
+    const minScore = parseFloat(process.env.RECAPTCHA_MIN_SCORE || "0.5");
+    if (!data.success || data.score < minScore)
+      return { ok: false, error: "Request flagged as suspicious. Please refresh and try again." };
+    return { ok: true, score: data.score };
+  } catch {
+    return { ok: true, skipped: true }; // don't block if Google is unreachable
+  }
+}
+
 // ── Email helpers ─────────────────────────────────────────────────────────────
 const isEmailEnabled = () => !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD);
 
@@ -199,7 +220,7 @@ function getUser(req) {
 // ── AUTH ──────────────────────────────────────────────────────────────────────
 
 app.post("/api/auth/signup", authLimiter, async (req, res) => {
-  const { name, email, password } = req.body || {};
+  const { name, email, password, captchaToken } = req.body || {};
   if (!name?.trim() || !email || !password)
     return res.status(400).json({ error: "Name, email and password are required." });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
@@ -207,39 +228,39 @@ app.post("/api/auth/signup", authLimiter, async (req, res) => {
   if (password.length < 8)
     return res.status(400).json({ error: "Password must be at least 8 characters." });
 
+  const captcha = await verifyRecaptcha(captchaToken);
+  if (!captcha.ok) return res.status(400).json({ error: captcha.error });
+
   try {
     const db = await getDb();
     const existing = await db.collection("users").findOne({ email: email.toLowerCase() });
     if (existing) return res.status(409).json({ error: "This email is already registered. Try signing in instead." });
 
-    const passwordHash   = await bcrypt.hash(password, 12);
-    const emailEnabled   = isEmailEnabled();
-    const otp            = emailEnabled ? generateOtp() : null;
-    const otpExpiry      = emailEnabled ? new Date(Date.now() + OTP_TTL_MS) : null;
+    const passwordHash = await bcrypt.hash(password, 12);
+    const emailEnabled = isEmailEnabled();
 
-    const result = await db.collection("users").insertOne({
-      name:  name.trim(),
-      email: email.toLowerCase(),
-      passwordHash,
-      emailVerified:      !emailEnabled,
-      pendingOtp:         otp,
-      pendingOtpExpiry:   otpExpiry,
-      pendingOtpAttempts: 0,
-      pendingOtpPurpose:  "signup",
-      failedLogins:       0,
-      lockedUntil:        null,
-      createdAt:          new Date(),
-    });
-
-    if (emailEnabled) {
-      sendOtpEmail(email.toLowerCase(), otp, "signup").catch(err =>
-        console.error("[signup] OTP send error:", err.message)
-      );
-      return res.status(201).json({ otpRequired: true, email: email.toLowerCase() });
+    if (!emailEnabled) {
+      // Dev mode — no email configured: create user directly
+      const result = await db.collection("users").insertOne({
+        name: name.trim(), email: email.toLowerCase(), passwordHash,
+        emailVerified: true, failedLogins: 0, lockedUntil: null, createdAt: new Date(),
+      });
+      const token = signToken({ userId: result.insertedId.toString(), email: email.toLowerCase(), name: name.trim() });
+      return res.status(201).json({ token, user: { name: name.trim(), email: email.toLowerCase() } });
     }
 
-    const token = signToken({ userId: result.insertedId.toString(), email: email.toLowerCase(), name: name.trim() });
-    res.status(201).json({ token, user: { name: name.trim(), email: email.toLowerCase() } });
+    // Store as pending signup — user account created only after OTP verified
+    const otp    = generateOtp();
+    const expiry = new Date(Date.now() + OTP_TTL_MS);
+    await db.collection("pending_signups").updateOne(
+      { email: email.toLowerCase() },
+      { $set: { name: name.trim(), email: email.toLowerCase(), passwordHash, otp, otpExpiry: expiry, otpAttempts: 0, createdAt: new Date() } },
+      { upsert: true }
+    );
+    sendOtpEmail(email.toLowerCase(), otp, "signup").catch(err =>
+      console.error("[signup] OTP send error:", err.message)
+    );
+    res.status(201).json({ otpRequired: true, email: email.toLowerCase() });
   } catch (err) {
     console.error("[signup]", err);
     res.status(500).json({ error: "Unable to create your account. Please try again." });
@@ -313,49 +334,68 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
 
 app.post("/api/auth/verify-otp", otpLimiter, async (req, res) => {
   const { email, otp } = req.body || {};
-  if (!email || !otp)
-    return res.status(400).json({ error: "Email and code are required." });
-  if (!/^\d{6}$/.test(otp))
-    return res.status(400).json({ error: "Code must be 6 digits." });
+  if (!email || !otp) return res.status(400).json({ error: "Email and code are required." });
+  if (!/^\d{6}$/.test(otp)) return res.status(400).json({ error: "Code must be 6 digits." });
 
   try {
-    const db   = await getDb();
-    const user = await db.collection("users").findOne({ email: email.toLowerCase() });
+    const db     = await getDb();
+    const lEmail = email.toLowerCase();
 
+    // ── Signup OTP (pending_signups collection) ──────────────────────────────
+    const pending = await db.collection("pending_signups").findOne({ email: lEmail });
+    if (pending) {
+      if (new Date() > new Date(pending.otpExpiry)) {
+        await db.collection("pending_signups").deleteOne({ email: lEmail });
+        return res.status(400).json({ error: "Code expired. Please request a new one.", expired: true });
+      }
+      const attempts = (pending.otpAttempts || 0) + 1;
+      if (pending.otp !== otp) {
+        if (attempts >= 3) {
+          await db.collection("pending_signups").deleteOne({ email: lEmail });
+          return res.status(400).json({ error: "Too many incorrect attempts. Please request a new code.", expired: true });
+        }
+        await db.collection("pending_signups").updateOne({ email: lEmail }, { $set: { otpAttempts: attempts } });
+        const left = 3 - attempts;
+        return res.status(400).json({ error: `Incorrect code. ${left} attempt${left !== 1 ? "s" : ""} remaining.` });
+      }
+      // OTP correct — create account now
+      const result = await db.collection("users").insertOne({
+        name: pending.name, email: lEmail, passwordHash: pending.passwordHash,
+        emailVerified: true, verifiedAt: new Date(), failedLogins: 0,
+        lockedUntil: null, lastLoginAt: new Date(), createdAt: new Date(),
+      });
+      await db.collection("pending_signups").deleteOne({ email: lEmail });
+      const token = signToken({ userId: result.insertedId.toString(), email: lEmail, name: pending.name });
+      return res.json({ token, user: { name: pending.name, email: lEmail } });
+    }
+
+    // ── Login OTP (pendingOtp on user document) ──────────────────────────────
+    const user = await db.collection("users").findOne({ email: lEmail });
     if (!user || !user.pendingOtp)
       return res.status(400).json({ error: "No verification code found. Please request a new one." });
 
     if (new Date() > new Date(user.pendingOtpExpiry)) {
-      await db.collection("users").updateOne({ _id: user._id }, {
-        $unset: { pendingOtp: "", pendingOtpExpiry: "", pendingOtpAttempts: "", pendingOtpPurpose: "" },
-      });
+      await db.collection("users").updateOne({ _id: user._id },
+        { $unset: { pendingOtp: "", pendingOtpExpiry: "", pendingOtpAttempts: "", pendingOtpPurpose: "" } }
+      );
       return res.status(400).json({ error: "Code expired. Please request a new one.", expired: true });
     }
-
     const attempts = (user.pendingOtpAttempts || 0) + 1;
     if (user.pendingOtp !== otp) {
       if (attempts >= 3) {
-        await db.collection("users").updateOne({ _id: user._id }, {
-          $unset: { pendingOtp: "", pendingOtpExpiry: "", pendingOtpAttempts: "", pendingOtpPurpose: "" },
-        });
+        await db.collection("users").updateOne({ _id: user._id },
+          { $unset: { pendingOtp: "", pendingOtpExpiry: "", pendingOtpAttempts: "", pendingOtpPurpose: "" } }
+        );
         return res.status(400).json({ error: "Too many incorrect attempts. Please request a new code.", expired: true });
       }
       await db.collection("users").updateOne({ _id: user._id }, { $set: { pendingOtpAttempts: attempts } });
       const left = 3 - attempts;
       return res.status(400).json({ error: `Incorrect code. ${left} attempt${left !== 1 ? "s" : ""} remaining.` });
     }
-
-    const isSignup = user.pendingOtpPurpose === "signup";
     await db.collection("users").updateOne({ _id: user._id }, {
-      $set: {
-        ...(isSignup ? { emailVerified: true, verifiedAt: new Date() } : {}),
-        lastLoginAt:  new Date(),
-        failedLogins: 0,
-        lockedUntil:  null,
-      },
+      $set:   { lastLoginAt: new Date(), failedLogins: 0, lockedUntil: null },
       $unset: { pendingOtp: "", pendingOtpExpiry: "", pendingOtpAttempts: "", pendingOtpPurpose: "" },
     });
-
     const token = signToken({ userId: user._id.toString(), email: user.email, name: user.name });
     res.json({ token, user: { name: user.name, email: user.email } });
   } catch (err) {
@@ -367,23 +407,32 @@ app.post("/api/auth/verify-otp", otpLimiter, async (req, res) => {
 app.post("/api/auth/resend-otp", resendLimiter, async (req, res) => {
   if (!isEmailEnabled())
     return res.status(503).json({ error: "Email is not configured on this server." });
-
   const { email } = req.body || {};
   if (!email) return res.status(400).json({ error: "Email is required." });
 
   try {
-    const db   = await getDb();
-    const user = await db.collection("users").findOne({ email: email.toLowerCase() });
-    if (!user) return res.json({ ok: true }); // Don't reveal if email exists
-
+    const db     = await getDb();
+    const lEmail = email.toLowerCase();
     const otp    = generateOtp();
     const expiry = new Date(Date.now() + OTP_TTL_MS);
-    await db.collection("users").updateOne({ _id: user._id }, {
-      $set: { pendingOtp: otp, pendingOtpExpiry: expiry, pendingOtpAttempts: 0 },
-    });
-    sendOtpEmail(user.email, otp, user.pendingOtpPurpose || "login").catch(err =>
-      console.error("[resend-otp] Email error:", err.message)
-    );
+
+    const pending = await db.collection("pending_signups").findOne({ email: lEmail });
+    if (pending) {
+      await db.collection("pending_signups").updateOne({ email: lEmail },
+        { $set: { otp, otpExpiry: expiry, otpAttempts: 0 } }
+      );
+      sendOtpEmail(lEmail, otp, "signup").catch(err => console.error("[resend-otp]", err.message));
+      return res.json({ ok: true });
+    }
+    const user = await db.collection("users").findOne({ email: lEmail });
+    if (user) {
+      await db.collection("users").updateOne({ _id: user._id },
+        { $set: { pendingOtp: otp, pendingOtpExpiry: expiry, pendingOtpAttempts: 0 } }
+      );
+      sendOtpEmail(lEmail, otp, user.pendingOtpPurpose || "login").catch(err =>
+        console.error("[resend-otp]", err.message)
+      );
+    }
     res.json({ ok: true });
   } catch (err) {
     console.error("[resend-otp]", err);
