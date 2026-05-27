@@ -869,6 +869,72 @@ async function parsePDF(file, onProgress = () => {}, authToken = null) {
   return { txns: bestTxns, statementType };
 }
 
+// ─── DELETE ACCOUNT MODAL ───
+function DeleteAccountModal({ auth, onLogout, onClose }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState("");
+
+  async function handleDelete() {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/auth/delete-account", {
+        method:  "DELETE",
+        headers: { Authorization: `Bearer ${auth.token}` },
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error || "Something went wrong. Please try again.");
+        setLoading(false);
+        return;
+      }
+      onLogout();
+    } catch {
+      setError("Network error. Please try again.");
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(27,28,26,0.4)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      zIndex: 9999, padding: 20,
+    }} onClick={onClose}>
+      <div style={{
+        background: theme.surface, borderRadius: 12, padding: "32px 28px",
+        maxWidth: 420, width: "100%", boxShadow: "0 8px 40px rgba(27,28,26,0.2)",
+      }} onClick={e => e.stopPropagation()}>
+        <div style={{ fontSize: 20, fontFamily: fontHeadline, fontWeight: 500, color: theme.text, marginBottom: 10 }}>
+          Delete your account?
+        </div>
+        <p style={{ fontSize: 14, color: theme.textMuted, lineHeight: 1.6, margin: "0 0 24px", fontFamily: font }}>
+          This will permanently delete your account and all your data — uploaded statements, categories, and saved rules.
+          <strong style={{ color: theme.text }}> This cannot be undone.</strong>
+        </p>
+        {error && (
+          <div style={{ fontSize: 13, color: "#b02d21", background: "rgba(176,45,33,0.07)", borderRadius: 6, padding: "10px 14px", marginBottom: 16, fontFamily: font }}>
+            {error}
+          </div>
+        )}
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <button onClick={onClose} disabled={loading} style={{
+            padding: "9px 18px", background: "none", border: `1px solid ${theme.border}`,
+            borderRadius: 7, color: theme.textSubtle, cursor: "pointer", fontFamily: font, fontSize: 13,
+          }}>Cancel</button>
+          <button onClick={handleDelete} disabled={loading} style={{
+            padding: "9px 18px", background: loading ? "#d97070" : "#b02d21",
+            border: "none", borderRadius: 7, color: "#fff", cursor: loading ? "default" : "pointer",
+            fontFamily: font, fontSize: 13, fontWeight: 600, transition: "background 0.15s",
+          }}>
+            {loading ? "Deleting…" : "Delete Account"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── UPLOAD SCREEN ───
 function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
   const isMobile = useIsMobile();
@@ -878,6 +944,7 @@ function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
   const [loadingMsg, setLoadingMsg] = useState("");
   const [fileHistory, setFileHistory] = useState([]);
   const [yearFilter, setYearFilter] = useState("all");
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const inputRef = useRef();
 
   useEffect(() => {
@@ -978,14 +1045,22 @@ function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
       <header style={{ background: theme.bg, borderBottom: `1px solid ${theme.surfaceContainerLow}`, padding: isMobile ? "12px 16px" : "16px 48px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ fontSize: 22, fontFamily: fontHeadline, fontStyle: "italic", color: theme.text }}>CashCanvas</div>
         {auth?.user && (
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             {!isMobile && <span style={{ fontSize: 13, color: theme.textSubtle, fontFamily: fontMono }}>{auth.user.name}</span>}
+            <button onClick={() => setShowDeleteModal(true)} style={{
+              padding: "7px 12px", background: "none",
+              border: `1px solid rgba(176,45,33,0.3)`, borderRadius: 6,
+              color: "#b02d21", cursor: "pointer", fontFamily: font, fontSize: 12,
+            }}>Delete Account</button>
             <button onClick={onLogout} style={{
               padding: "7px 14px", background: "none",
               border: `1px solid ${theme.border}`, borderRadius: 6,
               color: theme.textSubtle, cursor: "pointer", fontFamily: font, fontSize: 12,
             }}>Sign Out</button>
           </div>
+        )}
+        {showDeleteModal && (
+          <DeleteAccountModal auth={auth} onLogout={onLogout} onClose={() => setShowDeleteModal(false)} />
         )}
       </header>
 
@@ -1372,6 +1447,7 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
   const [rulesLoaded, setRulesLoaded] = useState(false);
   const [showDownload, setShowDownload] = useState(false);
   const [activeBarIndex, setActiveBarIndex] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // ── API helper ──
   const authFetch = useCallback(async (url, options = {}) => {
@@ -1567,11 +1643,18 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
                 {!isMobile && "Download"}
               </button>
               {auth?.user && !isMobile && (
-                <button onClick={onLogout} style={{
-                  padding: "8px 14px", background: "none",
-                  border: `1px solid ${theme.border}`, borderRadius: 6,
-                  color: theme.textSubtle, cursor: "pointer", fontFamily: font, fontSize: 12,
-                }}>Sign Out</button>
+                <>
+                  <button onClick={() => setShowDeleteModal(true)} style={{
+                    padding: "8px 12px", background: "none",
+                    border: `1px solid rgba(176,45,33,0.3)`, borderRadius: 6,
+                    color: "#b02d21", cursor: "pointer", fontFamily: font, fontSize: 12,
+                  }}>Delete Account</button>
+                  <button onClick={onLogout} style={{
+                    padding: "8px 14px", background: "none",
+                    border: `1px solid ${theme.border}`, borderRadius: 6,
+                    color: theme.textSubtle, cursor: "pointer", fontFamily: font, fontSize: 12,
+                  }}>Sign Out</button>
+                </>
               )}
               <button onClick={onReset} style={{
                 padding: isMobile ? "8px 12px" : "9px 18px",
@@ -1584,6 +1667,15 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
                 {!isMobile && "New Upload"}
               </button>
             </div>
+
+            {/* Delete account modal */}
+            {showDeleteModal && (
+              <DeleteAccountModal
+                auth={auth}
+                onLogout={onLogout}
+                onClose={() => setShowDeleteModal(false)}
+              />
+            )}
 
             {/* Download modal */}
             {showDownload && (
