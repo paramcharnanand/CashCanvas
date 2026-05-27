@@ -42,7 +42,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json({ limit: "5mb" }));
+app.use(express.json({ limit: "10mb" }));
 
 // ── Rate limiter ──────────────────────────────────────────────────────────────
 // Prune old entries every 15 minutes to prevent unbounded memory growth
@@ -83,10 +83,11 @@ function rateLimit({ windowMs = 60_000, max = 30, keyPrefix = "req" } = {}) {
   };
 }
 
-// Auth: 5 per 15 minutes; Resend email: 3 per hour; General API: 100 per minute
-const authLimiter   = rateLimit({ windowMs: 15 * 60_000, max: 5,   keyPrefix: "auth" });
-const resendLimiter = rateLimit({ windowMs: 60 * 60_000, max: 3,   keyPrefix: "resend" });
-const apiLimiter    = rateLimit({ windowMs: 60_000,      max: 100, keyPrefix: "api" });
+// Auth: 5 per 15 minutes; Resend email: 3 per hour; General API: 100 per minute; AI PDF: 10 per hour
+const authLimiter    = rateLimit({ windowMs: 15 * 60_000, max: 5,   keyPrefix: "auth" });
+const resendLimiter  = rateLimit({ windowMs: 60 * 60_000, max: 3,   keyPrefix: "resend" });
+const apiLimiter     = rateLimit({ windowMs: 60_000,      max: 100, keyPrefix: "api" });
+const parsePdfLimiter = rateLimit({ windowMs: 60 * 60_000, max: 10,  keyPrefix: "parsepdf" });
 
 // ── reCAPTCHA v3 verification ─────────────────────────────────────────────────
 async function verifyRecaptcha(token) {
@@ -567,6 +568,129 @@ For each transaction, reply with ONLY the line number, category, and confidence 
   }
 
   res.json({ results });
+});
+
+// ── PDF PARSING (AI EXTRACTION) ───────────────────────────────────────────────
+// Secure server-side proxy: the Anthropic API key never reaches the browser.
+
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+
+app.post("/api/parse-pdf", parsePdfLimiter, async (req, res) => {
+  const user = getUser(req);
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+  const { pdfBase64, statementType = "unknown" } = req.body || {};
+  if (!pdfBase64 || typeof pdfBase64 !== "string") {
+    return res.status(400).json({ error: "pdfBase64 is required" });
+  }
+  // base64 chars × 0.75 ≈ binary bytes; 9.5M chars ≈ 7.1 MB PDF
+  if (pdfBase64.length > 9_500_000) {
+    return res
+      .status(413)
+      .json({ error: "PDF too large for AI extraction. Maximum supported size is approximately 7 MB." });
+  }
+
+  if (!ANTHROPIC_API_KEY) {
+    return res.json({ transactions: [], warning: "ANTHROPIC_API_KEY not configured" });
+  }
+
+  const isCreditCard = statementType === "credit_card";
+  const prompt = `Extract ALL transactions from this ${
+    isCreditCard ? "credit card statement" : "bank statement"
+  }. Return ONLY a JSON array, no markdown, no backticks, no explanation. Each object must have:
+- "date": string in "YYYY-MM-DD" format
+- "desc": merchant/description string
+- "amount": number (negative for expenses/charges/purchases, positive for income/payments/credits/deposits)${
+    isCreditCard
+      ? "\nIMPORTANT: This is a credit card statement. Purchases and charges must be NEGATIVE. Payments you made to the card must be POSITIVE."
+      : ""
+  }
+
+Example: [{"date":"2025-01-15","desc":"WHOLE FOODS MARKET","amount":-87.32},{"date":"2025-01-14","desc":"PAYROLL DEPOSIT","amount":3200.00}]
+
+Return ONLY the JSON array.`;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60_000);
+
+    let anthropicRes;
+    try {
+      anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+          "anthropic-beta": "pdfs-2024-09-25",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 4096,
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "document",
+                  source: { type: "base64", media_type: "application/pdf", data: pdfBase64 },
+                },
+                { type: "text", text: prompt },
+              ],
+            },
+          ],
+        }),
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (!anthropicRes.ok) {
+      const errText = await anthropicRes.text().catch(() => "");
+      console.error("[parse-pdf] Anthropic error:", anthropicRes.status, errText.slice(0, 300));
+      return res.json({ transactions: [] });
+    }
+
+    const data = await anthropicRes.json();
+    const rawText = (data.content || []).map((b) => b.text || "").join("");
+    const cleanText = rawText.replace(/```json|```/g, "").trim();
+
+    let parsed;
+    try {
+      parsed = JSON.parse(cleanText);
+    } catch {
+      console.error("[parse-pdf] JSON parse failed:", cleanText.slice(0, 200));
+      return res.json({ transactions: [] });
+    }
+
+    if (!Array.isArray(parsed)) return res.json({ transactions: [] });
+
+    const transactions = parsed
+      .filter((t) => t.date && t.desc && typeof t.amount === "number")
+      .map((t) => ({
+        date: String(t.date).trim(),
+        desc: String(t.desc).trim(),
+        amount: Number(t.amount),
+      }))
+      .filter(
+        (t) =>
+          /^\d{4}-\d{2}-\d{2}$/.test(t.date) &&
+          t.desc.length > 0 &&
+          t.amount !== 0
+      );
+
+    res.json({ transactions });
+  } catch (err) {
+    if (err.name === "AbortError") {
+      console.error("[parse-pdf] Anthropic request timed out");
+      return res
+        .status(504)
+        .json({ transactions: [], error: "AI parsing timed out. Please try again." });
+    }
+    console.error("[parse-pdf]", err);
+    res.json({ transactions: [] });
+  }
 });
 
 // ── FILE HISTORY ──────────────────────────────────────────────────────────────
