@@ -1,18 +1,14 @@
 import { getDb } from "../lib/db.js";
 import { signToken } from "../lib/auth.js";
-import { verifyRecaptcha } from "../lib/recaptcha.js";
-import {
-  isEmailVerificationEnabled,
-  generateVerificationToken,
-  sendVerificationEmail,
-} from "../lib/mailer.js";
+import { generateOtp, sendOtpEmail, isEmailVerificationEnabled } from "../lib/mailer.js";
 import { checkRateLimit, getClientIp } from "../lib/ratelimit.js";
 import bcrypt from "bcryptjs";
+
+const OTP_TTL_MS = 10 * 60_000;
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
 
-  // Rate limiting — 5 sign-ups per IP per 15 minutes
   const ip = getClientIp(req);
   const limit = checkRateLimit(`signup:${ip}`, 15 * 60_000, 5);
   if (!limit.ok) {
@@ -22,9 +18,8 @@ export default async function handler(req, res) {
     });
   }
 
-  const { name, email, password, captchaToken } = req.body || {};
+  const { name, email, password } = req.body || {};
 
-  // Basic validation
   if (!name?.trim() || !email || !password)
     return res.status(400).json({ error: "Name, email and password are required." });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
@@ -32,53 +27,36 @@ export default async function handler(req, res) {
   if (password.length < 8)
     return res.status(400).json({ error: "Password must be at least 8 characters." });
 
-  // reCAPTCHA v3
-  const captcha = await verifyRecaptcha(captchaToken);
-  if (!captcha.ok)
-    return res.status(400).json({ error: captcha.error });
-
   try {
     const db = await getDb();
-
-    // Prevent duplicate accounts
     const existing = await db.collection("users").findOne({ email: email.toLowerCase() });
     if (existing)
-      return res.status(409).json({
-        error: "This email is already registered. Try signing in instead.",
-      });
+      return res.status(409).json({ error: "This email is already registered. Try signing in instead." });
 
     const passwordHash = await bcrypt.hash(password, 12);
-
-    // Evaluate at request time so --env-file / Vercel runtime values are current
     const emailEnabled = isEmailVerificationEnabled();
-
-    // Email verification setup
-    const verificationToken = emailEnabled ? generateVerificationToken() : null;
-    const verificationTokenExpiry = emailEnabled
-      ? new Date(Date.now() + 24 * 60 * 60_000) // 24 h
-      : null;
+    const otp          = emailEnabled ? generateOtp() : null;
+    const otpExpiry    = emailEnabled ? new Date(Date.now() + OTP_TTL_MS) : null;
 
     const result = await db.collection("users").insertOne({
       name:  name.trim(),
       email: email.toLowerCase(),
       passwordHash,
-      emailVerified:            !emailEnabled, // auto-verified in dev mode
-      verificationToken,
-      verificationTokenExpiry,
-      failedLogins:  0,
-      lockedUntil:   null,
-      createdAt:     new Date(),
+      emailVerified:      !emailEnabled, // auto-verified in dev mode
+      pendingOtp:         otp,
+      pendingOtpExpiry:   otpExpiry,
+      pendingOtpAttempts: 0,
+      pendingOtpPurpose:  "signup",
+      failedLogins:       0,
+      lockedUntil:        null,
+      createdAt:          new Date(),
     });
 
     if (emailEnabled) {
-      // Fire-and-forget — don't block the response
-      sendVerificationEmail(email.toLowerCase(), verificationToken).catch(err =>
-        console.error("[signup] Email send error:", err.message)
+      sendOtpEmail(email.toLowerCase(), otp, "signup").catch(err =>
+        console.error("[signup] OTP send error:", err.message)
       );
-      return res.status(201).json({
-        verificationRequired: true,
-        message: "Account created! Check your email for a verification link.",
-      });
+      return res.status(201).json({ otpRequired: true, email: email.toLowerCase() });
     }
 
     // Dev mode: auto sign-in immediately

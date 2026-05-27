@@ -83,69 +83,52 @@ function rateLimit({ windowMs = 60_000, max = 30, keyPrefix = "req" } = {}) {
   };
 }
 
-// Auth: 5 per 15 minutes; Resend email: 3 per hour; General API: 100 per minute; AI PDF: 10 per hour
-const authLimiter    = rateLimit({ windowMs: 15 * 60_000, max: 5,   keyPrefix: "auth" });
-const resendLimiter  = rateLimit({ windowMs: 60 * 60_000, max: 3,   keyPrefix: "resend" });
-const apiLimiter     = rateLimit({ windowMs: 60_000,      max: 100, keyPrefix: "api" });
+// Auth: 10 per 15 min; OTP verify: 5 per 15 min; Resend OTP: 3 per hour; General: 100 per min; PDF: 10 per hour
+const authLimiter     = rateLimit({ windowMs: 15 * 60_000, max: 10,  keyPrefix: "auth" });
+const otpLimiter      = rateLimit({ windowMs: 15 * 60_000, max: 5,   keyPrefix: "otp" });
+const resendLimiter   = rateLimit({ windowMs: 60 * 60_000, max: 3,   keyPrefix: "resend" });
+const apiLimiter      = rateLimit({ windowMs: 60_000,      max: 100, keyPrefix: "api" });
 const parsePdfLimiter = rateLimit({ windowMs: 60 * 60_000, max: 10,  keyPrefix: "parsepdf" });
 
-// ── reCAPTCHA v3 verification ─────────────────────────────────────────────────
-async function verifyRecaptcha(token) {
-  const secret = process.env.RECAPTCHA_SECRET_KEY;
-  if (!secret) return { ok: true, skipped: true }; // Not configured — dev mode
-  if (!token)  return { ok: false, error: "Security check token missing. Please refresh and try again." };
-  try {
-    const resp = await fetch("https://www.google.com/recaptcha/api/siteverify", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: `secret=${encodeURIComponent(secret)}&response=${encodeURIComponent(token)}`,
-    });
-    const data = await resp.json();
-    const minScore = parseFloat(process.env.RECAPTCHA_MIN_SCORE || "0.5");
-    if (!data.success || data.score < minScore) {
-      return { ok: false, error: "Request flagged as suspicious. Please refresh and try again." };
-    }
-    return { ok: true, score: data.score };
-  } catch {
-    return { ok: true, skipped: true }; // Don't block if Google is unreachable
-  }
-}
+const OTP_TTL_MS = 10 * 60_000;
 
 // ── Email helpers ─────────────────────────────────────────────────────────────
-const EMAIL_VERIFICATION_ENABLED =
-  !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD);
-
-const APP_URL = process.env.APP_URL || "http://localhost:5173";
+const isEmailEnabled = () => !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD);
 
 function createMailer() {
-  if (!EMAIL_VERIFICATION_ENABLED) return null;
+  if (!isEmailEnabled()) return null;
   return nodemailer.createTransport({
     service: "gmail",
     auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD },
   });
 }
 
-async function sendVerificationEmail(toEmail, token) {
+function generateOtp() {
+  // crypto.randomInt is available in Node 14.10+
+  return (Math.floor(Math.random() * 900000) + 100000).toString();
+}
+
+async function sendOtpEmail(toEmail, otp, purpose = "login") {
   const transporter = createMailer();
   if (!transporter) {
-    console.warn("[mailer] Email not configured — skipping verification email for", toEmail);
+    console.warn("[mailer] Email not configured — OTP for", toEmail, "is", otp);
     return;
   }
-  const verifyUrl = `${APP_URL}/verify?token=${token}`;
+  const action = purpose === "signup" ? "activate your account" : "sign in";
   await transporter.sendMail({
     from: `"CashCanvas" <${process.env.GMAIL_USER}>`,
     to: toEmail,
-    subject: "Verify your CashCanvas account",
+    subject: purpose === "signup" ? "Your CashCanvas verification code" : "Your CashCanvas sign-in code",
     html: `
-<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px;background:#fbf9f6;">
-  <h2 style="font-family:Georgia,serif;font-weight:400;color:#1b1c1a;">Verify your email</h2>
-  <p style="color:#3f4943;line-height:1.7;">Thanks for signing up for CashCanvas. Click the button below to verify your email and activate your account.</p>
-  <a href="${verifyUrl}" style="display:inline-block;margin:20px 0;padding:14px 28px;background:#005235;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">Verify Email Address</a>
-  <p style="color:#6f7a72;font-size:13px;">This link expires in 24 hours. If you didn't sign up for CashCanvas, ignore this email.</p>
+<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#fbf9f6;">
+  <p style="font-family:Georgia,serif;font-style:italic;font-size:22px;color:#005235;margin:0 0 24px;">CashCanvas</p>
+  <p style="color:#3f4943;margin:0 0 8px;">Your code to ${action}:</p>
+  <div style="letter-spacing:10px;font-size:40px;font-weight:700;color:#005235;font-family:monospace;text-align:center;margin:20px 0;">${otp}</div>
+  <p style="color:#6f7a72;font-size:13px;text-align:center;">Expires in 10 minutes. If you didn't request this, ignore this email.</p>
   <hr style="border:none;border-top:1px solid #efeeeb;margin:24px 0;">
   <p style="color:#6f7a72;font-size:11px;">© 2026 CashCanvas</p>
 </div>`,
-    text: `Verify your CashCanvas account\n\n${verifyUrl}\n\nExpires in 24 hours.`,
+    text: `Your CashCanvas code: ${otp}\n\nEnter this code to ${action}. Expires in 10 minutes.`,
   });
 }
 
@@ -185,7 +168,7 @@ function getUser(req) {
 // ── AUTH ──────────────────────────────────────────────────────────────────────
 
 app.post("/api/auth/signup", authLimiter, async (req, res) => {
-  const { name, email, password, captchaToken } = req.body || {};
+  const { name, email, password } = req.body || {};
   if (!name?.trim() || !email || !password)
     return res.status(400).json({ error: "Name, email and password are required." });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
@@ -193,38 +176,35 @@ app.post("/api/auth/signup", authLimiter, async (req, res) => {
   if (password.length < 8)
     return res.status(400).json({ error: "Password must be at least 8 characters." });
 
-  const captcha = await verifyRecaptcha(captchaToken);
-  if (!captcha.ok) return res.status(400).json({ error: captcha.error });
-
   try {
     const db = await getDb();
     const existing = await db.collection("users").findOne({ email: email.toLowerCase() });
     if (existing) return res.status(409).json({ error: "This email is already registered. Try signing in instead." });
 
-    const passwordHash = await bcrypt.hash(password, 12);
-    const verificationToken   = EMAIL_VERIFICATION_ENABLED ? crypto.randomBytes(32).toString("hex") : null;
-    const verificationExpiry  = EMAIL_VERIFICATION_ENABLED ? new Date(Date.now() + 24 * 60 * 60_000) : null;
+    const passwordHash   = await bcrypt.hash(password, 12);
+    const emailEnabled   = isEmailEnabled();
+    const otp            = emailEnabled ? generateOtp() : null;
+    const otpExpiry      = emailEnabled ? new Date(Date.now() + OTP_TTL_MS) : null;
 
     const result = await db.collection("users").insertOne({
       name:  name.trim(),
       email: email.toLowerCase(),
       passwordHash,
-      emailVerified:           !EMAIL_VERIFICATION_ENABLED,
-      verificationToken,
-      verificationTokenExpiry: verificationExpiry,
-      failedLogins:  0,
-      lockedUntil:   null,
-      createdAt:     new Date(),
+      emailVerified:      !emailEnabled,
+      pendingOtp:         otp,
+      pendingOtpExpiry:   otpExpiry,
+      pendingOtpAttempts: 0,
+      pendingOtpPurpose:  "signup",
+      failedLogins:       0,
+      lockedUntil:        null,
+      createdAt:          new Date(),
     });
 
-    if (EMAIL_VERIFICATION_ENABLED) {
-      sendVerificationEmail(email.toLowerCase(), verificationToken).catch(err =>
-        console.error("[signup] Email error:", err.message)
+    if (emailEnabled) {
+      sendOtpEmail(email.toLowerCase(), otp, "signup").catch(err =>
+        console.error("[signup] OTP send error:", err.message)
       );
-      return res.status(201).json({
-        verificationRequired: true,
-        message: "Account created! Check your email for a verification link.",
-      });
+      return res.status(201).json({ otpRequired: true, email: email.toLowerCase() });
     }
 
     const token = signToken({ userId: result.insertedId.toString(), email: email.toLowerCase(), name: name.trim() });
@@ -236,12 +216,9 @@ app.post("/api/auth/signup", authLimiter, async (req, res) => {
 });
 
 app.post("/api/auth/login", authLimiter, async (req, res) => {
-  const { email, password, captchaToken } = req.body || {};
+  const { email, password } = req.body || {};
   if (!email || !password)
     return res.status(400).json({ error: "Email and password are required." });
-
-  const captcha = await verifyRecaptcha(captchaToken);
-  if (!captcha.ok) return res.status(400).json({ error: captcha.error });
 
   try {
     const db = await getDb();
@@ -274,71 +251,112 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
       return res.status(401).json({ error: `Incorrect password. Please try again.${suffix}` });
     }
 
-    // Email verification gate (only blocks users explicitly set to false)
-    if (user.emailVerified === false) {
-      return res.status(403).json({
-        error: "Please verify your email address before signing in.",
-        emailNotVerified: true,
-        email: user.email,
-      });
+    // Reset failed count
+    await db.collection("users").updateOne(
+      { _id: user._id },
+      { $set: { failedLogins: 0, lockedUntil: null } }
+    );
+
+    // Dev mode (no email configured): issue JWT directly
+    if (!isEmailEnabled()) {
+      await db.collection("users").updateOne({ _id: user._id }, { $set: { lastLoginAt: new Date() } });
+      const token = signToken({ userId: user._id.toString(), email: user.email, name: user.name });
+      return res.json({ token, user: { name: user.name, email: user.email } });
     }
 
-    // Success
+    // Generate and email OTP
+    const otp    = generateOtp();
+    const expiry = new Date(Date.now() + OTP_TTL_MS);
     await db.collection("users").updateOne({ _id: user._id }, {
-      $set: { failedLogins: 0, lockedUntil: null, lastLoginAt: new Date() },
+      $set: { pendingOtp: otp, pendingOtpExpiry: expiry, pendingOtpAttempts: 0, pendingOtpPurpose: "login" },
     });
-    const token = signToken({ userId: user._id.toString(), email: user.email, name: user.name });
-    res.json({ token, user: { name: user.name, email: user.email } });
+    sendOtpEmail(user.email, otp, "login").catch(err =>
+      console.error("[login] OTP send error:", err.message)
+    );
+    res.json({ otpRequired: true, email: user.email });
   } catch (err) {
     console.error("[login]", err);
     res.status(500).json({ error: "Unable to sign in. Please try again." });
   }
 });
 
-app.get("/api/auth/verify", async (req, res) => {
-  const { token } = req.query;
-  if (!token || token.length < 32)
-    return res.status(400).json({ error: "Invalid verification link." });
+app.post("/api/auth/verify-otp", otpLimiter, async (req, res) => {
+  const { email, otp } = req.body || {};
+  if (!email || !otp)
+    return res.status(400).json({ error: "Email and code are required." });
+  if (!/^\d{6}$/.test(otp))
+    return res.status(400).json({ error: "Code must be 6 digits." });
+
   try {
     const db   = await getDb();
-    const user = await db.collection("users").findOne({ verificationToken: token });
-    if (!user) return res.status(400).json({ error: "This verification link is invalid or has already been used." });
-    if (new Date() > new Date(user.verificationTokenExpiry)) {
-      return res.status(400).json({ error: "This verification link has expired. Request a new one below.", expired: true, email: user.email });
+    const user = await db.collection("users").findOne({ email: email.toLowerCase() });
+
+    if (!user || !user.pendingOtp)
+      return res.status(400).json({ error: "No verification code found. Please request a new one." });
+
+    if (new Date() > new Date(user.pendingOtpExpiry)) {
+      await db.collection("users").updateOne({ _id: user._id }, {
+        $unset: { pendingOtp: "", pendingOtpExpiry: "", pendingOtpAttempts: "", pendingOtpPurpose: "" },
+      });
+      return res.status(400).json({ error: "Code expired. Please request a new one.", expired: true });
     }
+
+    const attempts = (user.pendingOtpAttempts || 0) + 1;
+    if (user.pendingOtp !== otp) {
+      if (attempts >= 3) {
+        await db.collection("users").updateOne({ _id: user._id }, {
+          $unset: { pendingOtp: "", pendingOtpExpiry: "", pendingOtpAttempts: "", pendingOtpPurpose: "" },
+        });
+        return res.status(400).json({ error: "Too many incorrect attempts. Please request a new code.", expired: true });
+      }
+      await db.collection("users").updateOne({ _id: user._id }, { $set: { pendingOtpAttempts: attempts } });
+      const left = 3 - attempts;
+      return res.status(400).json({ error: `Incorrect code. ${left} attempt${left !== 1 ? "s" : ""} remaining.` });
+    }
+
+    const isSignup = user.pendingOtpPurpose === "signup";
     await db.collection("users").updateOne({ _id: user._id }, {
-      $set: { emailVerified: true, verificationToken: null, verificationTokenExpiry: null, verifiedAt: new Date() },
+      $set: {
+        ...(isSignup ? { emailVerified: true, verifiedAt: new Date() } : {}),
+        lastLoginAt:  new Date(),
+        failedLogins: 0,
+        lockedUntil:  null,
+      },
+      $unset: { pendingOtp: "", pendingOtpExpiry: "", pendingOtpAttempts: "", pendingOtpPurpose: "" },
     });
-    const jwtToken = signToken({ userId: user._id.toString(), email: user.email, name: user.name });
-    res.json({ ok: true, token: jwtToken, user: { name: user.name, email: user.email } });
+
+    const token = signToken({ userId: user._id.toString(), email: user.email, name: user.name });
+    res.json({ token, user: { name: user.name, email: user.email } });
   } catch (err) {
-    console.error("[verify]", err);
+    console.error("[verify-otp]", err);
     res.status(500).json({ error: "Verification failed. Please try again." });
   }
 });
 
-app.post("/api/auth/resend-verification", resendLimiter, async (req, res) => {
-  if (!EMAIL_VERIFICATION_ENABLED)
-    return res.status(503).json({ error: "Email verification is not configured on this server." });
+app.post("/api/auth/resend-otp", resendLimiter, async (req, res) => {
+  if (!isEmailEnabled())
+    return res.status(503).json({ error: "Email is not configured on this server." });
 
   const { email } = req.body || {};
   if (!email) return res.status(400).json({ error: "Email is required." });
+
   try {
     const db   = await getDb();
     const user = await db.collection("users").findOne({ email: email.toLowerCase() });
-    if (!user || user.emailVerified) {
-      return res.json({ ok: true, message: "If that email is registered and unverified, a new link is on its way." });
-    }
-    const token  = crypto.randomBytes(32).toString("hex");
-    const expiry = new Date(Date.now() + 24 * 60 * 60_000);
+    if (!user) return res.json({ ok: true }); // Don't reveal if email exists
+
+    const otp    = generateOtp();
+    const expiry = new Date(Date.now() + OTP_TTL_MS);
     await db.collection("users").updateOne({ _id: user._id }, {
-      $set: { verificationToken: token, verificationTokenExpiry: expiry },
+      $set: { pendingOtp: otp, pendingOtpExpiry: expiry, pendingOtpAttempts: 0 },
     });
-    sendVerificationEmail(user.email, token).catch(err => console.error("[resend] Email error:", err.message));
-    res.json({ ok: true, message: "A new verification link has been sent to your inbox." });
+    sendOtpEmail(user.email, otp, user.pendingOtpPurpose || "login").catch(err =>
+      console.error("[resend-otp] Email error:", err.message)
+    );
+    res.json({ ok: true });
   } catch (err) {
-    console.error("[resend]", err);
-    res.status(500).json({ error: "Unable to resend verification email. Please try again." });
+    console.error("[resend-otp]", err);
+    res.status(500).json({ error: "Unable to resend code. Please try again." });
   }
 });
 

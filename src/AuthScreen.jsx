@@ -1,60 +1,22 @@
 import { useState, useEffect, useRef } from "react";
 
-const font = `'Manrope', sans-serif`;
-const fontMono = `'Inter', monospace`;
+const font         = `'Manrope', sans-serif`;
+const fontMono     = `'Inter', monospace`;
 const fontHeadline = `'Newsreader', serif`;
 
 const theme = {
-  bg: "#fbf9f6",
-  surface: "#ffffff",
-  surfaceContainerLow: "#f5f3f0",
-  border: "#efeeeb",
-  text: "#1b1c1a",
-  textMuted: "#3f4943",
-  textSubtle: "#6f7a72",
-  primary: "#005235",
-  primaryContainer: "#1a6b4a",
-  accent: "#b02d21",
-  greenSoft: "rgba(26,107,74,0.08)",
+  bg:                   "#fbf9f6",
+  surface:              "#ffffff",
+  surfaceContainerLow:  "#f5f3f0",
+  border:               "#efeeeb",
+  text:                 "#1b1c1a",
+  textMuted:            "#3f4943",
+  textSubtle:           "#6f7a72",
+  primary:              "#005235",
+  primaryContainer:     "#1a6b4a",
+  accent:               "#b02d21",
+  greenSoft:            "rgba(26,107,74,0.08)",
 };
-
-// ── reCAPTCHA v3 ─────────────────────────────────────────────────────────────
-const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY || "";
-
-function useRecaptcha() {
-  const loaded = useRef(false);
-
-  useEffect(() => {
-    if (!RECAPTCHA_SITE_KEY || loaded.current) return;
-    loaded.current = true;
-    const script = document.createElement("script");
-    script.src = `https://www.google.com/recaptcha/api.js?render=${RECAPTCHA_SITE_KEY}`;
-    script.async = true;
-    document.head.appendChild(script);
-    // Hide the default badge — we show our own attribution
-    const style = document.createElement("style");
-    style.textContent = ".grecaptcha-badge { visibility: hidden !important; }";
-    document.head.appendChild(style);
-    return () => {
-      try { document.head.removeChild(script); } catch {}
-      try { document.head.removeChild(style); } catch {}
-    };
-  }, []);
-
-  const execute = async (action = "auth") => {
-    if (!RECAPTCHA_SITE_KEY || !window.grecaptcha) return null;
-    return new Promise((resolve) => {
-      window.grecaptcha.ready(() => {
-        window.grecaptcha
-          .execute(RECAPTCHA_SITE_KEY, { action })
-          .then(resolve)
-          .catch(() => resolve(null));
-      });
-    });
-  };
-
-  return execute;
-}
 
 // ── Error routing ─────────────────────────────────────────────────────────────
 function routeError(msg) {
@@ -69,7 +31,7 @@ function routeError(msg) {
   return { name: "", email: "", password: "", form: msg };
 }
 
-// ── Field component ───────────────────────────────────────────────────────────
+// ── Field ─────────────────────────────────────────────────────────────────────
 function Field({ label, type, value, onChange, placeholder, error, autoComplete, showToggle, passwordVisible, onToggle }) {
   return (
     <div style={{ marginBottom: 16 }}>
@@ -93,8 +55,8 @@ function Field({ label, type, value, onChange, placeholder, error, autoComplete,
             borderRadius: 6, color: theme.text, fontFamily: font, fontSize: 14, outline: "none",
             transition: "border-color 0.15s",
           }}
-          onFocus={e => { e.target.style.borderColor = error ? theme.accent : theme.primary; }}
-          onBlur={e => { e.target.style.borderColor = error ? theme.accent : theme.border; }}
+          onFocus={e  => { e.target.style.borderColor = error ? theme.accent : theme.primary; }}
+          onBlur={e   => { e.target.style.borderColor = error ? theme.accent : theme.border; }}
         />
         {showToggle && (
           <button type="button" onClick={onToggle} tabIndex={-1} style={{
@@ -124,86 +86,202 @@ function Spinner({ color = "#fff" }) {
   );
 }
 
-// ── "Check your email" screen ─────────────────────────────────────────────────
-function VerifyPendingScreen({ email, onResend, onBackToLogin }) {
-  const [resendLoading, setResendLoading] = useState(false);
-  const [resendMsg, setResendMsg]         = useState("");
-  const [cooldown, setCooldown]           = useState(0);
+// ── OTP Entry Screen ──────────────────────────────────────────────────────────
+function OtpScreen({ email, onVerified, onBack }) {
+  const [digits, setDigits]     = useState(["", "", "", "", "", ""]);
+  const [error, setError]       = useState("");
+  const [loading, setLoading]   = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const [resendMsg, setResendMsg] = useState("");
+  const inputRefs               = useRef([]);
+
+  // Auto-submit when all 6 digits filled
+  useEffect(() => {
+    if (digits.every(d => d !== "")) handleVerify(digits.join(""));
+  }, [digits]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleDigitChange = (index, value) => {
+    const cleaned = value.replace(/\D/g, "").slice(-1);
+    const next    = [...digits];
+    next[index]   = cleaned;
+    setDigits(next);
+    setError("");
+    if (cleaned && index < 5) inputRefs.current[index + 1]?.focus();
+  };
+
+  const handleKeyDown = (index, e) => {
+    if (e.key === "Backspace") {
+      if (digits[index]) {
+        const next = [...digits]; next[index] = ""; setDigits(next);
+      } else if (index > 0) {
+        const next = [...digits]; next[index - 1] = ""; setDigits(next);
+        inputRefs.current[index - 1]?.focus();
+      }
+    } else if (e.key === "ArrowLeft" && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    } else if (e.key === "ArrowRight" && index < 5) {
+      inputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handlePaste = (e) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (!pasted) return;
+    const next = [...digits];
+    for (let i = 0; i < 6; i++) next[i] = pasted[i] || "";
+    setDigits(next);
+    const focusIdx = Math.min(pasted.length, 5);
+    inputRefs.current[focusIdx]?.focus();
+  };
+
+  const handleVerify = async (code) => {
+    if (loading) return;
+    setLoading(true);
+    setError("");
+    try {
+      const res  = await fetch("/api/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, otp: code }),
+      });
+      const data = await res.json();
+      if (data.token) {
+        localStorage.setItem("cc_auth", JSON.stringify({ token: data.token, user: data.user }));
+        onVerified({ token: data.token, user: data.user });
+      } else {
+        setError(data.error || "Incorrect code. Please try again.");
+        if (data.expired) {
+          setDigits(["", "", "", "", "", ""]);
+          inputRefs.current[0]?.focus();
+        } else {
+          setDigits(["", "", "", "", "", ""]);
+          inputRefs.current[0]?.focus();
+        }
+      }
+    } catch {
+      setError("Cannot connect to server.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleResend = async () => {
-    setResendLoading(true);
     setResendMsg("");
+    setError("");
     try {
-      const res  = await fetch("/api/auth/resend-verification", {
+      await fetch("/api/auth/resend-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
-      const data = await res.json();
-      setResendMsg(data.ok ? "New link sent! Check your inbox." : (data.error || "Failed to resend."));
-      if (data.ok) {
-        setCooldown(60);
-        const t = setInterval(() => setCooldown(c => { if (c <= 1) { clearInterval(t); return 0; } return c - 1; }), 1000);
-      }
+      setResendMsg("New code sent!");
+      setCooldown(60);
+      const t = setInterval(() => setCooldown(c => { if (c <= 1) { clearInterval(t); return 0; } return c - 1; }), 1000);
+      setDigits(["", "", "", "", "", ""]);
+      setTimeout(() => inputRefs.current[0]?.focus(), 50);
     } catch {
-      setResendMsg("Cannot connect to server.");
-    } finally {
-      setResendLoading(false);
+      setResendMsg("Failed to resend. Try again.");
     }
   };
 
   return (
     <div style={{ textAlign: "center" }}>
+      {/* Icon */}
       <div style={{
-        width: 64, height: 64, borderRadius: "50%",
-        background: theme.greenSoft,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        margin: "0 auto 24px",
+        width: 56, height: 56, borderRadius: "50%", background: theme.greenSoft,
+        display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px",
       }}>
-        <span className="material-symbols-outlined" style={{ fontSize: 32, color: theme.primary, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>mark_email_unread</span>
+        <span className="material-symbols-outlined" style={{ fontSize: 28, color: theme.primary, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>
+          mark_email_read
+        </span>
       </div>
-      <h2 style={{ fontFamily: fontHeadline, fontWeight: 400, fontSize: 22, color: theme.text, margin: "0 0 12px" }}>
+
+      <h2 style={{ fontFamily: fontHeadline, fontWeight: 400, fontSize: 22, color: theme.text, margin: "0 0 8px" }}>
         Check your email
       </h2>
-      <p style={{ fontSize: 14, color: theme.textSubtle, margin: "0 0 8px", lineHeight: 1.6 }}>
-        We sent a verification link to
+      <p style={{ fontSize: 13, color: theme.textSubtle, margin: "0 0 4px", lineHeight: 1.6 }}>
+        We sent a 6-digit code to
       </p>
-      <p style={{ fontSize: 14, fontWeight: 600, color: theme.text, margin: "0 0 28px", fontFamily: fontMono }}>
+      <p style={{ fontSize: 14, fontWeight: 600, color: theme.text, margin: "0 0 24px", fontFamily: fontMono }}>
         {email}
       </p>
-      <p style={{ fontSize: 13, color: theme.textSubtle, margin: "0 0 24px", lineHeight: 1.6 }}>
-        Click the link in the email to activate your account. The link expires in 24 hours.
-      </p>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {/* OTP digit inputs */}
+      <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 20 }}>
+        {digits.map((d, i) => (
+          <input
+            key={i}
+            ref={el => (inputRefs.current[i] = el)}
+            type="text"
+            inputMode="numeric"
+            maxLength={1}
+            value={d}
+            onChange={e => handleDigitChange(i, e.target.value)}
+            onKeyDown={e => handleKeyDown(i, e)}
+            onPaste={i === 0 ? handlePaste : undefined}
+            autoFocus={i === 0}
+            style={{
+              width: 44, height: 52, textAlign: "center",
+              fontSize: 22, fontWeight: 700, fontFamily: fontMono,
+              background: theme.surfaceContainerLow,
+              border: `1.5px solid ${error ? theme.accent : d ? theme.primary : theme.border}`,
+              borderRadius: 8, color: theme.text, outline: "none",
+              transition: "border-color 0.15s",
+            }}
+            onFocus={e  => { e.target.style.borderColor = error ? theme.accent : theme.primary; }}
+            onBlur={e   => { e.target.style.borderColor = error ? theme.accent : d ? theme.primary : theme.border; }}
+          />
+        ))}
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div style={{
+          padding: "9px 14px", borderRadius: 6, marginBottom: 14,
+          background: "rgba(176,45,33,0.06)", border: "1px solid rgba(176,45,33,0.18)",
+          fontSize: 13, color: theme.accent, fontFamily: font,
+        }}>
+          {error}
+        </div>
+      )}
+
+      {/* Verify button (shown while loading) */}
+      {loading && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 16, color: theme.textSubtle, fontSize: 13 }}>
+          <Spinner color={theme.primary} /> Verifying…
+        </div>
+      )}
+
+      {/* Resend */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
         <button
           onClick={handleResend}
-          disabled={resendLoading || cooldown > 0}
+          disabled={cooldown > 0 || loading}
           style={{
-            padding: "11px", borderRadius: 8,
-            background: cooldown > 0 ? theme.surfaceContainerLow : theme.primary,
-            border: "none", color: cooldown > 0 ? theme.textSubtle : "#fff",
-            fontFamily: font, fontSize: 14, fontWeight: 600, cursor: cooldown > 0 || resendLoading ? "not-allowed" : "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-            transition: "all 0.2s",
+            padding: "10px", borderRadius: 8, border: `1px solid ${theme.border}`,
+            background: "none", color: cooldown > 0 ? theme.textSubtle : theme.primary,
+            fontFamily: font, fontSize: 13, fontWeight: 600,
+            cursor: cooldown > 0 || loading ? "not-allowed" : "pointer",
           }}
         >
-          {resendLoading && <Spinner color={theme.primary} />}
-          {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend verification email"}
+          {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}
         </button>
-
-        <button onClick={onBackToLogin} style={{
-          padding: "11px", borderRadius: 8, background: "none",
-          border: `1px solid ${theme.border}`, color: theme.textSubtle,
-          fontFamily: font, fontSize: 14, cursor: "pointer",
-        }}>
+        <button
+          onClick={onBack}
+          style={{
+            padding: "10px", borderRadius: 8, border: `1px solid ${theme.border}`,
+            background: "none", color: theme.textSubtle,
+            fontFamily: font, fontSize: 13, cursor: "pointer",
+          }}
+        >
           Back to Sign In
         </button>
       </div>
 
       {resendMsg && (
         <div style={{
-          marginTop: 16, padding: "10px 14px", borderRadius: 6,
+          marginTop: 14, padding: "9px 14px", borderRadius: 6,
           background: resendMsg.includes("sent") ? theme.greenSoft : "rgba(176,45,33,0.06)",
           border: `1px solid ${resendMsg.includes("sent") ? theme.primary + "33" : "rgba(176,45,33,0.2)"}`,
           fontSize: 13, color: resendMsg.includes("sent") ? theme.primary : theme.accent, fontFamily: font,
@@ -211,54 +289,6 @@ function VerifyPendingScreen({ email, onResend, onBackToLogin }) {
           {resendMsg}
         </div>
       )}
-    </div>
-  );
-}
-
-// ── "Verifying…" / result screen ─────────────────────────────────────────────
-function VerifyingScreen({ state, message, email, onRetry, onBack }) {
-  if (state === "verifying") {
-    return (
-      <div style={{ textAlign: "center", padding: "16px 0" }}>
-        <Spinner color={theme.primary} />
-        <p style={{ fontSize: 14, color: theme.textSubtle, marginTop: 16, fontFamily: font }}>Verifying your email…</p>
-      </div>
-    );
-  }
-  if (state === "verified") {
-    return (
-      <div style={{ textAlign: "center" }}>
-        <div style={{ width: 64, height: 64, borderRadius: "50%", background: theme.greenSoft, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px" }}>
-          <span className="material-symbols-outlined" style={{ fontSize: 32, color: theme.primary, fontVariationSettings: "'FILL' 1, 'wght' 300" }}>check_circle</span>
-        </div>
-        <h2 style={{ fontFamily: fontHeadline, fontWeight: 400, fontSize: 22, color: theme.text, margin: "0 0 12px" }}>Email verified!</h2>
-        <p style={{ fontSize: 14, color: theme.textSubtle, margin: 0, lineHeight: 1.6 }}>Signing you in…</p>
-      </div>
-    );
-  }
-  // expired or error
-  return (
-    <div style={{ textAlign: "center" }}>
-      <div style={{ width: 64, height: 64, borderRadius: "50%", background: "rgba(176,45,33,0.08)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px" }}>
-        <span className="material-symbols-outlined" style={{ fontSize: 32, color: theme.accent, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>error</span>
-      </div>
-      <h2 style={{ fontFamily: fontHeadline, fontWeight: 400, fontSize: 22, color: theme.text, margin: "0 0 12px" }}>Link {state === "expired" ? "expired" : "invalid"}</h2>
-      <p style={{ fontSize: 14, color: theme.textSubtle, margin: "0 0 24px", lineHeight: 1.6 }}>{message}</p>
-      {state === "expired" && email && (
-        <button onClick={onRetry} style={{
-          width: "100%", padding: "11px", borderRadius: 8, background: theme.primary, border: "none",
-          color: "#fff", fontFamily: font, fontSize: 14, fontWeight: 600, cursor: "pointer", marginBottom: 10,
-        }}>
-          Send a new verification email
-        </button>
-      )}
-      <button onClick={onBack} style={{
-        width: "100%", padding: "11px", borderRadius: 8, background: "none",
-        border: `1px solid ${theme.border}`, color: theme.textSubtle,
-        fontFamily: font, fontSize: 14, cursor: "pointer",
-      }}>
-        Back to Sign In
-      </button>
     </div>
   );
 }
@@ -273,48 +303,15 @@ export default function AuthScreen({ onAuth }) {
   const [loading, setLoading]         = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Email verification states
-  const [verifyState, setVerifyState]   = useState(null); // null | "pending" | "verifying" | "verified" | "expired" | "error"
-  const [verifyMessage, setVerifyMessage] = useState("");
-  const [pendingEmail, setPendingEmail]   = useState("");
+  // OTP step
+  const [otpEmail, setOtpEmail]       = useState("");
 
-  const getCaptchaToken = useRecaptcha();
   const clearErrors = () => setFieldErrors({ name: "", email: "", password: "", form: "" });
 
-  // ── Deep-link email verification (e.g. /verify?token=xxx) ──────────────────
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const token  = params.get("token");
-    if (!token) return;
-
-    setVerifyState("verifying");
-    window.history.replaceState({}, "", "/"); // clean the URL
-
-    fetch(`/api/auth/verify?token=${encodeURIComponent(token)}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.ok && data.token) {
-          setVerifyState("verified");
-          localStorage.setItem("cc_auth", JSON.stringify({ token: data.token, user: data.user }));
-          setTimeout(() => onAuth({ token: data.token, user: data.user }), 800);
-        } else {
-          setVerifyState(data.expired ? "expired" : "error");
-          setVerifyMessage(data.error || "Verification failed.");
-          setPendingEmail(data.email || "");
-        }
-      })
-      .catch(() => {
-        setVerifyState("error");
-        setVerifyMessage("Cannot connect to the server. Please try again.");
-      });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Form submission ──────────────────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
     clearErrors();
 
-    // Client-side validation
     if (mode === "signup" && !name.trim()) {
       setFieldErrors(p => ({ ...p, name: "Please enter your name." })); return;
     }
@@ -326,12 +323,10 @@ export default function AuthScreen({ onAuth }) {
     }
 
     setLoading(true);
-    const captchaToken = await getCaptchaToken(mode);
-
     const endpoint = mode === "login" ? "/api/auth/login" : "/api/auth/signup";
     const body     = mode === "login"
-      ? { email, password, captchaToken }
-      : { name, email, password, captchaToken };
+      ? { email, password }
+      : { name, email, password };
 
     try {
       const res  = await fetch(endpoint, {
@@ -342,18 +337,10 @@ export default function AuthScreen({ onAuth }) {
       const data = await res.json();
 
       if (!res.ok) {
-        // emailNotVerified from login → show resend screen
-        if (data.emailNotVerified) {
-          setPendingEmail(data.email || email);
-          setVerifyState("pending");
-          return;
-        }
         setFieldErrors(routeError(data.error || "Something went wrong."));
-      } else if (data.verificationRequired) {
-        // Signup: email verification required
-        setPendingEmail(email);
-        setVerifyState("pending");
-      } else {
+      } else if (data.otpRequired) {
+        setOtpEmail(data.email || email);
+      } else if (data.token) {
         localStorage.setItem("cc_auth", JSON.stringify({ token: data.token, user: data.user }));
         onAuth({ token: data.token, user: data.user });
       }
@@ -364,33 +351,20 @@ export default function AuthScreen({ onAuth }) {
     }
   };
 
-  // ── Render states ─────────────────────────────────────────────────────────
-  if (verifyState === "verifying" || verifyState === "verified" || verifyState === "expired" || verifyState === "error") {
+  // ── OTP step ───────────────────────────────────────────────────────────────
+  if (otpEmail) {
     return (
       <AuthShell>
-        <VerifyingScreen
-          state={verifyState}
-          message={verifyMessage}
-          email={pendingEmail}
-          onRetry={() => { setVerifyState("pending"); }}
-          onBack={() => { setVerifyState(null); clearErrors(); }}
+        <OtpScreen
+          email={otpEmail}
+          onVerified={onAuth}
+          onBack={() => { setOtpEmail(""); clearErrors(); }}
         />
       </AuthShell>
     );
   }
 
-  if (verifyState === "pending") {
-    return (
-      <AuthShell>
-        <VerifyPendingScreen
-          email={pendingEmail}
-          onBackToLogin={() => { setVerifyState(null); setMode("login"); clearErrors(); }}
-        />
-      </AuthShell>
-    );
-  }
-
-  // ── Sign in / Create account form ─────────────────────────────────────────
+  // ── Credentials form ───────────────────────────────────────────────────────
   return (
     <AuthShell>
       {/* Tab toggle */}
@@ -452,21 +426,11 @@ export default function AuthScreen({ onAuth }) {
           {loading ? "Please wait…" : mode === "login" ? "Sign In" : "Create Account"}
         </button>
       </form>
-
-      {/* reCAPTCHA attribution (required by Google's terms when badge is hidden) */}
-      {RECAPTCHA_SITE_KEY && (
-        <p style={{ fontSize: 11, color: theme.textSubtle, marginTop: 18, textAlign: "center", fontFamily: fontMono, lineHeight: 1.5 }}>
-          Protected by reCAPTCHA —&nbsp;
-          <a href="https://policies.google.com/privacy" style={{ color: theme.textSubtle }}>Privacy</a>
-          &nbsp;&amp;&nbsp;
-          <a href="https://policies.google.com/terms" style={{ color: theme.textSubtle }}>Terms</a>
-        </p>
-      )}
     </AuthShell>
   );
 }
 
-// ── Layout shell (shared across all auth screens) ─────────────────────────────
+// ── Layout shell ──────────────────────────────────────────────────────────────
 function AuthShell({ children }) {
   return (
     <div style={{

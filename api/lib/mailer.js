@@ -42,6 +42,69 @@ export function generateVerificationToken() {
   return crypto.randomBytes(32).toString("hex");
 }
 
+/** Generate a cryptographically secure 6-digit OTP. */
+export function generateOtp() {
+  return crypto.randomInt(100000, 999999).toString();
+}
+
+/** Send a 6-digit OTP to a user's email for login or signup verification. */
+export async function sendOtpEmail(toEmail, otp, purpose = "login") {
+  const transporter = createTransporter();
+  if (!transporter) {
+    console.warn("[mailer] Email not configured — OTP for", toEmail, "is", otp);
+    return;
+  }
+
+  const action = purpose === "signup" ? "activate your account" : "sign in";
+  const subject = purpose === "signup"
+    ? "Your CashCanvas verification code"
+    : "Your CashCanvas sign-in code";
+
+  await transporter.sendMail({
+    from: `"CashCanvas" <${process.env.GMAIL_USER}>`,
+    to: toEmail,
+    subject,
+    html: `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#fbf9f6;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#fbf9f6;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(27,28,26,0.08);">
+        <tr>
+          <td style="background:#005235;padding:24px 36px;">
+            <p style="margin:0;font-family:Georgia,serif;font-style:italic;font-size:24px;color:#ffffff;">CashCanvas</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:36px;">
+            <p style="margin:0 0 8px;font-size:14px;color:#6f7a72;">Your verification code to ${action}:</p>
+            <div style="margin:20px 0;letter-spacing:10px;font-size:40px;font-weight:700;color:#005235;font-family:'Courier New',monospace;text-align:center;">
+              ${otp}
+            </div>
+            <p style="margin:0 0 8px;font-size:13px;color:#6f7a72;text-align:center;">
+              This code expires in <strong>10 minutes</strong>.
+            </p>
+            <p style="margin:16px 0 0;font-size:13px;color:#6f7a72;text-align:center;">
+              If you didn't request this, you can safely ignore this email.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 36px;border-top:1px solid #efeeeb;">
+            <p style="margin:0;font-size:11px;color:#6f7a72;">© 2026 CashCanvas</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
+    text: `Your CashCanvas code: ${otp}\n\nEnter this code to ${action}. It expires in 10 minutes.\n\nIf you didn't request this, ignore this email.`,
+  });
+}
+
 /** Send the email-verification link to a new user. */
 export async function sendVerificationEmail(toEmail, token) {
   const transporter = createTransporter();
