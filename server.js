@@ -446,6 +446,26 @@ app.get("/api/auth/profile", (req, res) => {
   res.json({ name: user.name, email: user.email });
 });
 
+app.delete("/api/auth/delete-account", async (req, res) => {
+  const user = getUser(req);
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+  try {
+    const db  = await getDb();
+    const uid = user.userId;
+    await Promise.all([
+      db.collection("users").deleteOne({ _id: new ObjectId(uid) }),
+      db.collection("uploaded_files").deleteMany({ userId: uid }),
+      db.collection("custom_categories").deleteMany({ userId: uid }),
+      db.collection("merchant_category_rules").deleteMany({ userId: uid }),
+      db.collection("pending_signups").deleteOne({ email: user.email }),
+    ]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[delete-account]", err);
+    res.status(500).json({ error: "Unable to delete account. Please try again." });
+  }
+});
+
 // ── CUSTOM CATEGORIES ─────────────────────────────────────────────────────────
 
 app.get("/api/categories", async (req, res) => {

@@ -13,7 +13,14 @@
     }
   ],
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/api/auth/:path*",       "destination": "/api/auth" },
+    { "source": "/api/categorize",        "destination": "/api/ai" },
+    { "source": "/api/parse-pdf",         "destination": "/api/ai" },
+    { "source": "/api/files/:path*",      "destination": "/api/data" },
+    { "source": "/api/files",             "destination": "/api/data" },
+    { "source": "/api/categories/:path*", "destination": "/api/data" },
+    { "source": "/api/categories",        "destination": "/api/data" },
+    { "source": "/api/merchant-rules",    "destination": "/api/data" },
+    { "source": "/(.*)",                  "destination": "/index.html" }
   ]
 }
