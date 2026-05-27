@@ -114,21 +114,52 @@ async function sendOtpEmail(toEmail, otp, purpose = "login") {
     console.warn("[mailer] Email not configured — OTP for", toEmail, "is", otp);
     return;
   }
-  const action = purpose === "signup" ? "activate your account" : "sign in";
+  const isSignup = purpose === "signup";
+  const subject  = isSignup ? "Verify your CashCanvas account" : "Your CashCanvas sign-in code";
+  const headline = isSignup ? "Verify your email" : "Sign-in code";
+  const subtext  = isSignup
+    ? "Enter this code to verify your email and activate your CashCanvas account."
+    : "Enter this code to sign in to your CashCanvas account.";
+
+  const digitBoxes = otp.split("").map(d =>
+    `<td style="padding:0 4px;"><table cellpadding="0" cellspacing="0"><tr>` +
+    `<td style="width:44px;height:52px;background:#f5f3f0;border:1.5px solid #d4e5d8;` +
+    `border-radius:8px;text-align:center;vertical-align:middle;">` +
+    `<span style="font-size:22px;font-weight:700;color:#005235;font-family:'Courier New',Courier,monospace;">${d}</span>` +
+    `</td></tr></table></td>`
+  ).join("");
+
   await transporter.sendMail({
     from: `"CashCanvas" <${process.env.GMAIL_USER}>`,
-    to: toEmail,
-    subject: purpose === "signup" ? "Your CashCanvas verification code" : "Your CashCanvas sign-in code",
-    html: `
-<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#fbf9f6;">
-  <p style="font-family:Georgia,serif;font-style:italic;font-size:22px;color:#005235;margin:0 0 24px;">CashCanvas</p>
-  <p style="color:#3f4943;margin:0 0 8px;">Your code to ${action}:</p>
-  <div style="letter-spacing:10px;font-size:40px;font-weight:700;color:#005235;font-family:monospace;text-align:center;margin:20px 0;">${otp}</div>
-  <p style="color:#6f7a72;font-size:13px;text-align:center;">Expires in 10 minutes. If you didn't request this, ignore this email.</p>
-  <hr style="border:none;border-top:1px solid #efeeeb;margin:24px 0;">
-  <p style="color:#6f7a72;font-size:11px;">© 2026 CashCanvas</p>
-</div>`,
-    text: `Your CashCanvas code: ${otp}\n\nEnter this code to ${action}. Expires in 10 minutes.`,
+    to:   toEmail,
+    subject,
+    html: `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#fbf9f6;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#fbf9f6;padding:48px 20px;">
+<tr><td align="center">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border-radius:16px;border:1px solid #efeeeb;box-shadow:0 4px 24px rgba(27,28,26,0.07);">
+<tr><td style="background:#005235;padding:22px 36px;border-radius:16px 16px 0 0;">
+  <span style="font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:24px;color:#ffffff;">Cash<span style="color:#86efbe;">Canvas</span></span>
+</td></tr>
+<tr><td style="padding:36px 36px 28px;">
+  <p style="margin:0 0 6px;font-size:11px;font-weight:600;color:#6f7a72;letter-spacing:0.09em;text-transform:uppercase;">${isSignup ? "Account Verification" : "Sign-In Code"}</p>
+  <h1 style="margin:0 0 16px;font-family:Georgia,serif;font-weight:400;font-style:italic;font-size:24px;color:#1b1c1a;">${headline}</h1>
+  <p style="margin:0 0 32px;font-size:14px;color:#3f4943;line-height:1.7;">${subtext}</p>
+  <table cellpadding="0" cellspacing="0" style="margin:0 auto 28px;"><tr>${digitBoxes}</tr></table>
+  <table cellpadding="0" cellspacing="0" style="background:#f5f3f0;border-radius:8px;width:100%;"><tr>
+    <td style="padding:12px 16px;text-align:center;font-size:13px;color:#6f7a72;">
+      Code expires in <strong style="color:#1b1c1a;">10 minutes</strong> · Single use only
+    </td>
+  </tr></table>
+</td></tr>
+<tr><td style="padding:0 36px;"><div style="height:1px;background:#efeeeb;"></div></td></tr>
+<tr><td style="padding:20px 36px;">
+  <p style="margin:0;font-size:12px;color:#6f7a72;line-height:1.6;">If you didn't request this, you can safely ignore this email.</p>
+  <p style="margin:10px 0 0;font-size:11px;color:#a0a89e;">© 2026 CashCanvas · Your personal finance dashboard</p>
+</td></tr>
+</table></td></tr></table></body></html>`,
+    text: `${subject}\n\nYour code: ${otp}\n\n${subtext}\n\nExpires in 10 minutes. Single use only.\n\nIf you didn't request this, ignore this email.`,
   });
 }
 
