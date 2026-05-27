@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 const font         = `'Manrope', sans-serif`;
 const fontMono     = `'Inter', monospace`;
@@ -17,6 +17,34 @@ const theme = {
   accent:               "#b02d21",
   greenSoft:            "rgba(26,107,74,0.08)",
 };
+
+// ── reCAPTCHA v3 (used on signup only) ───────────────────────────────────────
+const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY || "";
+
+function useRecaptcha() {
+  const loaded = useRef(false);
+
+  useEffect(() => {
+    if (!RECAPTCHA_SITE_KEY || loaded.current) return;
+    loaded.current = true;
+    const script = document.createElement("script");
+    script.src = `https://www.google.com/recaptcha/api.js?render=${RECAPTCHA_SITE_KEY}`;
+    script.async = true;
+    document.head.appendChild(script);
+    const style = document.createElement("style");
+    style.textContent = ".grecaptcha-badge { visibility: hidden !important; }";
+    document.head.appendChild(style);
+  }, []);
+
+  return useCallback(async (action = "signup") => {
+    if (!RECAPTCHA_SITE_KEY || !window.grecaptcha) return null;
+    return new Promise((resolve) => {
+      window.grecaptcha.ready(() => {
+        window.grecaptcha.execute(RECAPTCHA_SITE_KEY, { action }).then(resolve).catch(() => resolve(null));
+      });
+    });
+  }, []);
+}
 
 // ── Error routing ─────────────────────────────────────────────────────────────
 function routeError(msg) {
@@ -306,6 +334,7 @@ export default function AuthScreen({ onAuth }) {
   // OTP step
   const [otpEmail, setOtpEmail]       = useState("");
 
+  const getCaptchaToken = useRecaptcha();
   const clearErrors = () => setFieldErrors({ name: "", email: "", password: "", form: "" });
 
   const handleSubmit = async (e) => {
@@ -323,10 +352,13 @@ export default function AuthScreen({ onAuth }) {
     }
 
     setLoading(true);
+    // reCAPTCHA token only sent for signup
+    const captchaToken = mode === "signup" ? await getCaptchaToken("signup") : undefined;
+
     const endpoint = mode === "login" ? "/api/auth/login" : "/api/auth/signup";
     const body     = mode === "login"
       ? { email, password }
-      : { name, email, password };
+      : { name, email, password, captchaToken };
 
     try {
       const res  = await fetch(endpoint, {
