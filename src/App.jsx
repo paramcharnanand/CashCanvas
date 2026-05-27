@@ -764,8 +764,9 @@ function strategyMultiLine(lines, inferredYear = null) {
   return txns;
 }
 
-// Strategy 3: AI-powered extraction using Claude API
-async function strategyAI(file, statementType = "unknown") {
+// Strategy 3: AI-powered extraction via secure backend proxy (/api/parse-pdf).
+// The Anthropic API key lives only on the server — never in the browser bundle.
+async function strategyAI(file, statementType = "unknown", authToken = null) {
   try {
     const base64 = await new Promise((res, rej) => {
       const reader = new FileReader();
@@ -774,43 +775,20 @@ async function strategyAI(file, statementType = "unknown") {
       reader.readAsDataURL(file);
     });
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await fetch("/api/parse-pdf", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 4096,
-        messages: [{
-          role: "user",
-          content: [
-            {
-              type: "document",
-              source: { type: "base64", media_type: "application/pdf", data: base64 }
-            },
-            {
-              type: "text",
-              text: `Extract ALL transactions from this ${statementType === "credit_card" ? "credit card statement" : "bank statement"}. Return ONLY a JSON array, no markdown, no backticks, no explanation. Each object must have:
-- "date": string in "YYYY-MM-DD" format
-- "desc": merchant/description string
-- "amount": number (negative for expenses/charges/purchases, positive for income/payments/credits/deposits)${statementType === "credit_card" ? "\nIMPORTANT: This is a credit card statement. Purchases and charges must be NEGATIVE. Payments you made to the card must be POSITIVE." : ""}
-
-Example: [{"date":"2025-01-15","desc":"WHOLE FOODS MARKET","amount":-87.32},{"date":"2025-01-14","desc":"PAYROLL DEPOSIT","amount":3200.00}]
-
-Return ONLY the JSON array.`
-            }
-          ]
-        }]
-      })
+      headers: {
+        "Content-Type": "application/json",
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      },
+      body: JSON.stringify({ pdfBase64: base64, statementType }),
     });
 
     if (!response.ok) return [];
     const data = await response.json();
-    const text = (data.content || []).map(b => b.text || "").join("");
-    const clean = text.replace(/```json|```/g, "").trim();
-    const parsed = JSON.parse(clean);
-    
-    if (!Array.isArray(parsed)) return [];
-    return parsed
+    const txns = data.transactions || [];
+
+    return txns
       .filter(t => t.date && t.desc && typeof t.amount === "number")
       .map(t => ({
         date: new Date(t.date + "T00:00:00"),
@@ -825,7 +803,7 @@ Return ONLY the JSON array.`
   }
 }
 
-async function parsePDF(file, onProgress = () => {}) {
+async function parsePDF(file, onProgress = () => {}, authToken = null) {
   let pages;
   let extractionError = null;
   try {
@@ -881,7 +859,7 @@ async function parsePDF(file, onProgress = () => {}) {
 
   // Fallback: use Claude AI to read the PDF directly
   onProgress("Using AI to read the statement...");
-  const aiTxns = await strategyAI(file, statementType);
+  const aiTxns = await strategyAI(file, statementType, authToken);
   if (aiTxns.length > bestTxns.length) {
     aiTxns.sort((a, b) => b.date - a.date);
     return { txns: aiTxns, statementType };
@@ -960,7 +938,7 @@ function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
       });
     } else if (ext === "pdf") {
       setLoadingMsg("Reading PDF...");
-      parsePDF(file, (msg) => setLoadingMsg(msg)).then(({ txns, statementType }) => {
+      parsePDF(file, (msg) => setLoadingMsg(msg), auth?.token).then(({ txns, statementType }) => {
         if (txns.length === 0) {
           setError("No transactions found in PDF. This can happen with scanned/image-based PDFs. Try exporting a CSV from your bank's website instead.");
           setLoading(false);
