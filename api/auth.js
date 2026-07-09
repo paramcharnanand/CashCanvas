@@ -6,7 +6,8 @@
 import { getDb }                                               from "./lib/db.js";
 import { signToken, getUser }                                  from "./lib/auth.js";
 import { generateOtp, sendOtpEmail, isEmailVerificationEnabled,
-         generateVerificationToken, sendVerificationEmail }    from "./lib/mailer.js";
+         generateVerificationToken, sendVerificationEmail,
+         sendPasswordResetEmail }                              from "./lib/mailer.js";
 import { verifyRecaptcha }                                     from "./lib/recaptcha.js";
 import { checkRateLimit, getClientIp }                        from "./lib/ratelimit.js";
 import bcrypt                                                  from "bcryptjs";
@@ -92,9 +93,12 @@ async function signup(req, res) {
       { upsert: true }
     );
 
-    sendOtpEmail(email.toLowerCase(), otp, "signup").catch(err =>
-      console.error("[signup] OTP send error:", err.message)
-    );
+    try {
+      await sendOtpEmail(email.toLowerCase(), otp, "signup");
+    } catch (err) {
+      console.error("[signup] OTP send error:", err.message);
+      return res.status(502).json({ error: "Couldn't send the verification email. Please try again in a moment." });
+    }
 
     res.status(201).json({ otpRequired: true, email: email.toLowerCase() });
   } catch (err) {
@@ -144,12 +148,7 @@ async function login(req, res) {
           ...(shouldLock ? { lockedUntil: new Date(Date.now() + LOCKOUT_MS) } : {}),
         },
       });
-      const left   = Math.max(0, MAX_FAILED - failedCount);
-      const suffix = shouldLock
-        ? " Account locked for 15 minutes."
-        : left === 1 ? " 1 attempt remaining before lockout."
-        : left > 0   ? ` ${left} attempts remaining.`
-        : "";
+      const suffix = shouldLock ? " Account locked for 15 minutes." : "";
       return res.status(401).json({ error: `Incorrect password. Please try again.${suffix}` });
     }
 
@@ -173,9 +172,12 @@ async function login(req, res) {
       $set: { pendingOtp: otp, pendingOtpExpiry: expiry, pendingOtpAttempts: 0, pendingOtpPurpose: "login" },
     });
 
-    sendOtpEmail(user.email, otp, "login").catch(err =>
-      console.error("[login] OTP send error:", err.message)
-    );
+    try {
+      await sendOtpEmail(user.email, otp, "login");
+    } catch (err) {
+      console.error("[login] OTP send error:", err.message);
+      return res.status(502).json({ error: "Couldn't send the sign-in code. Please try again in a moment." });
+    }
 
     res.json({ otpRequired: true, email: user.email });
   } catch (err) {
@@ -299,9 +301,12 @@ async function resendOtp(req, res) {
         { email: lEmail },
         { $set: { otp, otpExpiry: expiry, otpAttempts: 0 } }
       );
-      sendOtpEmail(lEmail, otp, "signup").catch(err =>
-        console.error("[resend-otp] Email error:", err.message)
-      );
+      try {
+        await sendOtpEmail(lEmail, otp, "signup");
+      } catch (err) {
+        console.error("[resend-otp] Email error:", err.message);
+        return res.status(502).json({ error: "Couldn't send the code. Please try again in a moment." });
+      }
       return res.json({ ok: true });
     }
 
@@ -311,9 +316,12 @@ async function resendOtp(req, res) {
         { email: lEmail },
         { $set: { pendingOtp: otp, pendingOtpExpiry: expiry, pendingOtpAttempts: 0 } }
       );
-      sendOtpEmail(lEmail, otp, user.pendingOtpPurpose || "login").catch(err =>
-        console.error("[resend-otp] Email error:", err.message)
-      );
+      try {
+        await sendOtpEmail(lEmail, otp, user.pendingOtpPurpose || "login");
+      } catch (err) {
+        console.error("[resend-otp] Email error:", err.message);
+        return res.status(502).json({ error: "Couldn't send the code. Please try again in a moment." });
+      }
     }
     res.json({ ok: true });
   } catch (err) {
@@ -422,6 +430,91 @@ async function deleteAccount(req, res) {
   }
 }
 
+async function forgotPassword(req, res) {
+  if (req.method !== "POST") return res.status(405).end();
+
+  const ip    = getClientIp(req);
+  const limit = checkRateLimit(`forgot-password:${ip}`, 60 * 60_000, 5);
+  if (!limit.ok) {
+    res.setHeader("Retry-After", String(limit.retryAfter));
+    return res.status(429).json({ error: "Too many requests. Please wait before trying again." });
+  }
+
+  const { email } = req.body || {};
+  if (!email) return res.status(400).json({ error: "Email is required." });
+
+  if (!isEmailVerificationEnabled())
+    return res.status(503).json({ error: "Password reset is not available at the moment." });
+
+  try {
+    const db   = await getDb();
+    const user = await db.collection("users").findOne({ email: email.toLowerCase() });
+
+    if (user) {
+      const token  = generateVerificationToken();
+      const otp    = generateOtp();
+      const expiry = new Date(Date.now() + 60 * 60_000);
+
+      await db.collection("users").updateOne({ _id: user._id }, {
+        $set: { passwordResetToken: token, passwordResetOtp: otp, passwordResetExpiry: expiry },
+      });
+
+      sendPasswordResetEmail(user.email, token, otp).catch(err =>
+        console.error("[forgot-password] Email error:", err.message)
+      );
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[forgot-password]", err);
+    res.status(500).json({ error: "Unable to process request. Please try again." });
+  }
+}
+
+async function resetPassword(req, res) {
+  if (req.method !== "POST") return res.status(405).end();
+
+  const ip    = getClientIp(req);
+  const limit = checkRateLimit(`reset-password:${ip}`, 15 * 60_000, 5);
+  if (!limit.ok) {
+    res.setHeader("Retry-After", String(limit.retryAfter));
+    return res.status(429).json({ error: "Too many attempts. Please wait before trying again." });
+  }
+
+  const { token, otp, newPassword } = req.body || {};
+  if (!token || !otp || !newPassword)
+    return res.status(400).json({ error: "All fields are required." });
+  if (newPassword.length < 8)
+    return res.status(400).json({ error: "Password must be at least 8 characters." });
+  if (!/^\d{6}$/.test(otp))
+    return res.status(400).json({ error: "Code must be 6 digits." });
+
+  try {
+    const db   = await getDb();
+    const user = await db.collection("users").findOne({ passwordResetToken: token });
+
+    if (!user)
+      return res.status(400).json({ error: "Invalid or expired reset link. Please request a new one." });
+
+    if (new Date() > new Date(user.passwordResetExpiry))
+      return res.status(400).json({ error: "This reset link has expired. Please request a new one.", expired: true });
+
+    if (user.passwordResetOtp !== otp)
+      return res.status(400).json({ error: "Incorrect code. Please check your email and try again." });
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await db.collection("users").updateOne({ _id: user._id }, {
+      $set:   { passwordHash, failedLogins: 0, lockedUntil: null },
+      $unset: { passwordResetToken: "", passwordResetOtp: "", passwordResetExpiry: "" },
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[reset-password]", err);
+    res.status(500).json({ error: "Unable to reset password. Please try again." });
+  }
+}
+
 // ── router ────────────────────────────────────────────────────────────────────
 
 export default async function handler(req, res) {
@@ -435,6 +528,8 @@ export default async function handler(req, res) {
   if (req.method === "GET"    && path === "/api/auth/verify")               return verifyLink(req, res);
   if (req.method === "POST"   && path === "/api/auth/resend-verification")  return resendVerification(req, res);
   if (req.method === "DELETE" && path === "/api/auth/delete-account")       return deleteAccount(req, res);
+  if (req.method === "POST"   && path === "/api/auth/forgot-password")       return forgotPassword(req, res);
+  if (req.method === "POST"   && path === "/api/auth/reset-password")        return resetPassword(req, res);
 
   res.status(404).json({ error: "Not found" });
 }

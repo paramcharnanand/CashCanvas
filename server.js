@@ -257,9 +257,12 @@ app.post("/api/auth/signup", authLimiter, async (req, res) => {
       { $set: { name: name.trim(), email: email.toLowerCase(), passwordHash, otp, otpExpiry: expiry, otpAttempts: 0, createdAt: new Date() } },
       { upsert: true }
     );
-    sendOtpEmail(email.toLowerCase(), otp, "signup").catch(err =>
-      console.error("[signup] OTP send error:", err.message)
-    );
+    try {
+      await sendOtpEmail(email.toLowerCase(), otp, "signup");
+    } catch (err) {
+      console.error("[signup] OTP send error:", err.message);
+      return res.status(502).json({ error: "Couldn't send the verification email. Please try again in a moment." });
+    }
     res.status(201).json({ otpRequired: true, email: email.toLowerCase() });
   } catch (err) {
     console.error("[signup]", err);
@@ -322,9 +325,12 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
     await db.collection("users").updateOne({ _id: user._id }, {
       $set: { pendingOtp: otp, pendingOtpExpiry: expiry, pendingOtpAttempts: 0, pendingOtpPurpose: "login" },
     });
-    sendOtpEmail(user.email, otp, "login").catch(err =>
-      console.error("[login] OTP send error:", err.message)
-    );
+    try {
+      await sendOtpEmail(user.email, otp, "login");
+    } catch (err) {
+      console.error("[login] OTP send error:", err.message);
+      return res.status(502).json({ error: "Couldn't send the sign-in code. Please try again in a moment." });
+    }
     res.json({ otpRequired: true, email: user.email });
   } catch (err) {
     console.error("[login]", err);
@@ -421,7 +427,12 @@ app.post("/api/auth/resend-otp", resendLimiter, async (req, res) => {
       await db.collection("pending_signups").updateOne({ email: lEmail },
         { $set: { otp, otpExpiry: expiry, otpAttempts: 0 } }
       );
-      sendOtpEmail(lEmail, otp, "signup").catch(err => console.error("[resend-otp]", err.message));
+      try {
+        await sendOtpEmail(lEmail, otp, "signup");
+      } catch (err) {
+        console.error("[resend-otp]", err.message);
+        return res.status(502).json({ error: "Couldn't send the code. Please try again in a moment." });
+      }
       return res.json({ ok: true });
     }
     const user = await db.collection("users").findOne({ email: lEmail });
@@ -429,9 +440,12 @@ app.post("/api/auth/resend-otp", resendLimiter, async (req, res) => {
       await db.collection("users").updateOne({ _id: user._id },
         { $set: { pendingOtp: otp, pendingOtpExpiry: expiry, pendingOtpAttempts: 0 } }
       );
-      sendOtpEmail(lEmail, otp, user.pendingOtpPurpose || "login").catch(err =>
-        console.error("[resend-otp]", err.message)
-      );
+      try {
+        await sendOtpEmail(lEmail, otp, user.pendingOtpPurpose || "login");
+      } catch (err) {
+        console.error("[resend-otp]", err.message);
+        return res.status(502).json({ error: "Couldn't send the code. Please try again in a moment." });
+      }
     }
     res.json({ ok: true });
   } catch (err) {

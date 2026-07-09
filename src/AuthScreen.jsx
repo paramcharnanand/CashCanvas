@@ -179,13 +179,8 @@ function OtpScreen({ email, onVerified, onBack }) {
         onVerified({ token: data.token, user: data.user });
       } else {
         setError(data.error || "Incorrect code. Please try again.");
-        if (data.expired) {
-          setDigits(["", "", "", "", "", ""]);
-          inputRefs.current[0]?.focus();
-        } else {
-          setDigits(["", "", "", "", "", ""]);
-          inputRefs.current[0]?.focus();
-        }
+        setDigits(["", "", "", "", "", ""]);
+        inputRefs.current[0]?.focus();
       }
     } catch {
       setError("Cannot connect to server.");
@@ -198,11 +193,16 @@ function OtpScreen({ email, onVerified, onBack }) {
     setResendMsg("");
     setError("");
     try {
-      await fetch("/api/auth/resend-otp", {
+      const res  = await fetch("/api/auth/resend-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
+      const data = await res.json();
+      if (!res.ok) {
+        setResendMsg(data.error || "Failed to resend. Try again.");
+        return;
+      }
       setResendMsg("New code sent!");
       setCooldown(60);
       const t = setInterval(() => setCooldown(c => { if (c <= 1) { clearInterval(t); return 0; } return c - 1; }), 1000);
@@ -215,7 +215,6 @@ function OtpScreen({ email, onVerified, onBack }) {
 
   return (
     <div style={{ textAlign: "center" }}>
-      {/* Icon */}
       <div style={{
         width: 56, height: 56, borderRadius: "50%", background: theme.greenSoft,
         display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px",
@@ -235,7 +234,6 @@ function OtpScreen({ email, onVerified, onBack }) {
         {email}
       </p>
 
-      {/* OTP digit inputs */}
       <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 20 }}>
         {digits.map((d, i) => (
           <input
@@ -263,7 +261,6 @@ function OtpScreen({ email, onVerified, onBack }) {
         ))}
       </div>
 
-      {/* Error */}
       {error && (
         <div style={{
           padding: "9px 14px", borderRadius: 6, marginBottom: 14,
@@ -274,14 +271,12 @@ function OtpScreen({ email, onVerified, onBack }) {
         </div>
       )}
 
-      {/* Verify button (shown while loading) */}
       {loading && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 16, color: theme.textSubtle, fontSize: 13 }}>
           <Spinner color={theme.primary} /> Verifying…
         </div>
       )}
 
-      {/* Resend */}
       <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
         <button
           onClick={handleResend}
@@ -321,6 +316,321 @@ function OtpScreen({ email, onVerified, onBack }) {
   );
 }
 
+// ── Forgot Password Screen ────────────────────────────────────────────────────
+function ForgotPasswordScreen({ onBack }) {
+  const [email, setEmail]     = useState("");
+  const [sent, setSent]       = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState("");
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!email.trim()) { setError("Please enter your email."); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError("Please enter a valid email address."); return; }
+    setLoading(true);
+    setError("");
+    try {
+      await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.toLowerCase() }),
+      });
+      setSent(true);
+    } catch {
+      setError("Cannot connect to server. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (sent) {
+    return (
+      <div style={{ textAlign: "center" }}>
+        <div style={{
+          width: 56, height: 56, borderRadius: "50%", background: theme.greenSoft,
+          display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px",
+        }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 28, color: theme.primary, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>
+            mark_email_read
+          </span>
+        </div>
+        <h2 style={{ fontFamily: fontHeadline, fontWeight: 400, fontStyle: "italic", fontSize: 22, color: theme.text, margin: "0 0 8px" }}>
+          Check your email
+        </h2>
+        <p style={{ fontSize: 13, color: theme.textSubtle, margin: "0 0 4px", lineHeight: 1.6 }}>
+          If an account exists for
+        </p>
+        <p style={{ fontSize: 14, fontWeight: 600, color: theme.text, margin: "0 0 16px", fontFamily: fontMono }}>
+          {email}
+        </p>
+        <p style={{ fontSize: 13, color: theme.textMuted, margin: "0 0 28px", lineHeight: 1.6 }}>
+          we've sent a reset link and a 6-digit code. Click the link in the email, then enter the code to set your new password.
+        </p>
+        <button onClick={onBack} style={{
+          width: "100%", padding: "12px", borderRadius: 8,
+          border: `1px solid ${theme.border}`, background: "none",
+          color: theme.textSubtle, fontFamily: font, fontSize: 13, cursor: "pointer",
+        }}>
+          Back to Sign In
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <button type="button" onClick={onBack} style={{
+        background: "none", border: "none", color: theme.textSubtle, fontFamily: font,
+        fontSize: 12, cursor: "pointer", padding: "0 0 20px",
+        display: "flex", alignItems: "center", gap: 4,
+      }}>
+        <span className="material-symbols-outlined" style={{ fontSize: 16, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>
+          arrow_back
+        </span>
+        Back to Sign In
+      </button>
+
+      <div style={{
+        width: 48, height: 48, borderRadius: "50%", background: theme.greenSoft,
+        display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16,
+      }}>
+        <span className="material-symbols-outlined" style={{ fontSize: 24, color: theme.primary, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>
+          lock_reset
+        </span>
+      </div>
+
+      <h2 style={{ fontFamily: fontHeadline, fontWeight: 400, fontStyle: "italic", fontSize: 22, color: theme.text, margin: "0 0 8px" }}>
+        Reset password
+      </h2>
+      <p style={{ fontSize: 13, color: theme.textSubtle, margin: "0 0 24px", lineHeight: 1.6 }}>
+        Enter your email and we'll send you a reset link and a one-time code.
+      </p>
+
+      <form onSubmit={handleSubmit} noValidate>
+        <Field
+          label="Email" type="email" value={email}
+          onChange={e => { setEmail(e.target.value); setError(""); }}
+          placeholder="you@example.com" autoComplete="email" error={error}
+        />
+        <button type="submit" disabled={loading} style={{
+          width: "100%", padding: "12px",
+          background: loading ? theme.textSubtle
+            : `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryContainer} 100%)`,
+          border: "none", borderRadius: 8, color: "#fff",
+          fontFamily: font, fontSize: 14, fontWeight: 600,
+          cursor: loading ? "not-allowed" : "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+        }}
+        onMouseEnter={e => { if (!loading) e.currentTarget.style.opacity = "0.9"; }}
+        onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
+        >
+          {loading && <Spinner />}
+          {loading ? "Sending…" : "Send reset link"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+// ── Reset Password Screen ─────────────────────────────────────────────────────
+function ResetPasswordScreen({ token, onBack }) {
+  const [digits, setDigits]               = useState(["", "", "", "", "", ""]);
+  const [newPassword, setNewPassword]     = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPass, setShowPass]           = useState(false);
+  const [showConfirm, setShowConfirm]     = useState(false);
+  const [loading, setLoading]             = useState(false);
+  const [error, setError]                 = useState("");
+  const [done, setDone]                   = useState(false);
+  const inputRefs                         = useRef([]);
+
+  const handleDigitChange = (index, value) => {
+    const cleaned = value.replace(/\D/g, "").slice(-1);
+    const next    = [...digits];
+    next[index]   = cleaned;
+    setDigits(next);
+    setError("");
+    if (cleaned && index < 5) inputRefs.current[index + 1]?.focus();
+  };
+
+  const handleKeyDown = (index, e) => {
+    if (e.key === "Backspace") {
+      if (digits[index]) {
+        const next = [...digits]; next[index] = ""; setDigits(next);
+      } else if (index > 0) {
+        const next = [...digits]; next[index - 1] = ""; setDigits(next);
+        inputRefs.current[index - 1]?.focus();
+      }
+    } else if (e.key === "ArrowLeft"  && index > 0) inputRefs.current[index - 1]?.focus();
+    else if   (e.key === "ArrowRight" && index < 5) inputRefs.current[index + 1]?.focus();
+  };
+
+  const handlePaste = (e) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (!pasted) return;
+    const next = [...digits];
+    for (let i = 0; i < 6; i++) next[i] = pasted[i] || "";
+    setDigits(next);
+    inputRefs.current[Math.min(pasted.length, 5)]?.focus();
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const otp = digits.join("");
+    if (otp.length !== 6)               { setError("Please enter the 6-digit code from your email."); return; }
+    if (newPassword.length < 8)         { setError("Password must be at least 8 characters."); return; }
+    if (newPassword !== confirmPassword) { setError("Passwords don't match."); return; }
+
+    setLoading(true);
+    setError("");
+    try {
+      const res  = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, otp, newPassword }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setDone(true);
+        window.history.replaceState({}, "", "/");
+      } else {
+        setError(data.error || "Failed to reset password. Please try again.");
+        if (data.expired) { setDigits(["", "", "", "", "", ""]); setTimeout(() => inputRefs.current[0]?.focus(), 50); }
+      }
+    } catch {
+      setError("Cannot connect to server.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (done) {
+    return (
+      <div style={{ textAlign: "center" }}>
+        <div style={{
+          width: 56, height: 56, borderRadius: "50%", background: theme.greenSoft,
+          display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px",
+        }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 28, color: theme.primary, fontVariationSettings: "'FILL' 1, 'wght' 400" }}>
+            check_circle
+          </span>
+        </div>
+        <h2 style={{ fontFamily: fontHeadline, fontWeight: 400, fontStyle: "italic", fontSize: 22, color: theme.text, margin: "0 0 8px" }}>
+          Password updated!
+        </h2>
+        <p style={{ fontSize: 13, color: theme.textSubtle, margin: "0 0 28px", lineHeight: 1.6 }}>
+          Your password has been reset. Sign in with your new password.
+        </p>
+        <button onClick={onBack} style={{
+          width: "100%", padding: "12px", border: "none", borderRadius: 8,
+          background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryContainer} 100%)`,
+          color: "#fff", fontFamily: font, fontSize: 14, fontWeight: 600, cursor: "pointer",
+        }}>
+          Sign In
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h2 style={{ fontFamily: fontHeadline, fontWeight: 400, fontStyle: "italic", fontSize: 22, color: theme.text, margin: "0 0 6px" }}>
+        Set new password
+      </h2>
+      <p style={{ fontSize: 13, color: theme.textSubtle, margin: "0 0 24px", lineHeight: 1.6 }}>
+        Enter the 6-digit code from your email, then choose a new password.
+      </p>
+
+      <form onSubmit={handleSubmit} noValidate>
+        {/* OTP inputs */}
+        <div style={{ marginBottom: 20 }}>
+          <label style={{
+            display: "block", fontSize: 11, fontFamily: fontMono, fontWeight: 600,
+            textTransform: "uppercase", letterSpacing: "0.08em", color: theme.textSubtle, marginBottom: 10,
+          }}>
+            Code from email
+          </label>
+          <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+            {digits.map((d, i) => (
+              <input
+                key={i}
+                ref={el => (inputRefs.current[i] = el)}
+                type="text"
+                inputMode="numeric"
+                maxLength={1}
+                value={d}
+                onChange={e => handleDigitChange(i, e.target.value)}
+                onKeyDown={e => handleKeyDown(i, e)}
+                onPaste={i === 0 ? handlePaste : undefined}
+                autoFocus={i === 0}
+                style={{
+                  width: 44, height: 52, textAlign: "center",
+                  fontSize: 22, fontWeight: 700, fontFamily: fontMono,
+                  background: theme.surfaceContainerLow,
+                  border: `1.5px solid ${error ? theme.accent : d ? theme.primary : theme.border}`,
+                  borderRadius: 8, color: theme.text, outline: "none",
+                  transition: "border-color 0.15s",
+                }}
+                onFocus={e => { e.target.style.borderColor = error ? theme.accent : theme.primary; }}
+                onBlur={e  => { e.target.style.borderColor = error ? theme.accent : d ? theme.primary : theme.border; }}
+              />
+            ))}
+          </div>
+        </div>
+
+        <Field
+          label="New Password" type="password" value={newPassword}
+          onChange={e => { setNewPassword(e.target.value); setError(""); }}
+          placeholder="At least 8 characters" autoComplete="new-password"
+          showToggle passwordVisible={showPass} onToggle={() => setShowPass(v => !v)}
+        />
+        <Field
+          label="Confirm Password" type="password" value={confirmPassword}
+          onChange={e => { setConfirmPassword(e.target.value); setError(""); }}
+          placeholder="Repeat your new password" autoComplete="new-password"
+          showToggle passwordVisible={showConfirm} onToggle={() => setShowConfirm(v => !v)}
+        />
+
+        {error && (
+          <div style={{
+            padding: "9px 14px", borderRadius: 6, marginBottom: 14,
+            background: "rgba(176,45,33,0.06)", border: "1px solid rgba(176,45,33,0.18)",
+            fontSize: 13, color: theme.accent, fontFamily: font,
+          }}>
+            {error}
+          </div>
+        )}
+
+        <button type="submit" disabled={loading} style={{
+          width: "100%", padding: "12px",
+          background: loading ? theme.textSubtle
+            : `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryContainer} 100%)`,
+          border: "none", borderRadius: 8, color: "#fff",
+          fontFamily: font, fontSize: 14, fontWeight: 600,
+          cursor: loading ? "not-allowed" : "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+          marginBottom: 10,
+        }}
+        onMouseEnter={e => { if (!loading) e.currentTarget.style.opacity = "0.9"; }}
+        onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
+        >
+          {loading && <Spinner />}
+          {loading ? "Resetting…" : "Reset password"}
+        </button>
+
+        <button type="button" onClick={onBack} style={{
+          width: "100%", padding: "10px", borderRadius: 8,
+          border: `1px solid ${theme.border}`, background: "none",
+          color: theme.textSubtle, fontFamily: font, fontSize: 13, cursor: "pointer",
+        }}>
+          Back to Sign In
+        </button>
+      </form>
+    </div>
+  );
+}
+
 // ── Main AuthScreen ───────────────────────────────────────────────────────────
 export default function AuthScreen({ onAuth }) {
   const [mode, setMode]               = useState("login");
@@ -331,11 +641,30 @@ export default function AuthScreen({ onAuth }) {
   const [loading, setLoading]         = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // OTP step
+  // OTP step (login/signup verification)
   const [otpEmail, setOtpEmail]       = useState("");
 
+  // Screen routing: "main" | "forgot" | "reset"
+  const [screen, setScreen]           = useState("main");
+  const [resetToken, setResetToken]   = useState("");
+  const [helpOpen, setHelpOpen]       = useState(false);
+
   const getCaptchaToken = useRecaptcha();
-  const clearErrors = () => setFieldErrors({ name: "", email: "", password: "", form: "" });
+
+  // Detect password-reset link (?token=... on /reset-password path)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token  = params.get("token");
+    if (token && window.location.pathname.includes("reset")) {
+      setResetToken(token);
+      setScreen("reset");
+    }
+  }, []);
+
+  const clearErrors = () => {
+    setFieldErrors({ name: "", email: "", password: "", form: "" });
+    setHelpOpen(false);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -352,7 +681,6 @@ export default function AuthScreen({ onAuth }) {
     }
 
     setLoading(true);
-    // reCAPTCHA token only sent for signup
     const captchaToken = mode === "signup" ? await getCaptchaToken("signup") : undefined;
 
     const endpoint = mode === "login" ? "/api/auth/login" : "/api/auth/signup";
@@ -383,7 +711,31 @@ export default function AuthScreen({ onAuth }) {
     }
   };
 
-  // ── OTP step ───────────────────────────────────────────────────────────────
+  const goBack = () => {
+    setScreen("main");
+    setResetToken("");
+    clearErrors();
+  };
+
+  // ── Screen: Forgot Password ────────────────────────────────────────────────
+  if (screen === "forgot") {
+    return (
+      <AuthShell>
+        <ForgotPasswordScreen onBack={goBack} />
+      </AuthShell>
+    );
+  }
+
+  // ── Screen: Reset Password (from email link) ───────────────────────────────
+  if (screen === "reset") {
+    return (
+      <AuthShell>
+        <ResetPasswordScreen token={resetToken} onBack={goBack} />
+      </AuthShell>
+    );
+  }
+
+  // ── Screen: OTP verification (login / signup) ──────────────────────────────
   if (otpEmail) {
     return (
       <AuthShell>
@@ -396,13 +748,13 @@ export default function AuthScreen({ onAuth }) {
     );
   }
 
-  // ── Credentials form ───────────────────────────────────────────────────────
+  // ── Screen: Credentials form ───────────────────────────────────────────────
   return (
     <AuthShell>
       {/* Tab toggle */}
       <div style={{ display: "flex", background: theme.surfaceContainerLow, borderRadius: 8, padding: 4, marginBottom: 28 }}>
         {["login", "signup"].map(m => (
-          <button key={m} onClick={() => { setMode(m); clearErrors(); setShowPassword(false); }} style={{
+          <button key={m} onClick={() => { setMode(m); clearErrors(); setShowPassword(false); setScreen("main"); }} style={{
             flex: 1, padding: "8px", border: "none", borderRadius: 6,
             background: mode === m ? theme.surface : "transparent",
             color: mode === m ? theme.primary : theme.textSubtle,
@@ -431,6 +783,24 @@ export default function AuthScreen({ onAuth }) {
           error={fieldErrors.password}
           showToggle passwordVisible={showPassword} onToggle={() => setShowPassword(v => !v)} />
 
+        {/* Forgot password link — login only */}
+        {mode === "login" && (
+          <div style={{ textAlign: "right", marginTop: -8, marginBottom: 16 }}>
+            <button
+              type="button"
+              onClick={() => setScreen("forgot")}
+              style={{
+                background: "none", border: "none", color: theme.primary,
+                fontSize: 12, cursor: "pointer", fontFamily: font,
+                fontWeight: 500, padding: 0,
+                textDecoration: "underline", textUnderlineOffset: 2,
+              }}
+            >
+              Forgot password?
+            </button>
+          </div>
+        )}
+
         {fieldErrors.form && (
           <div style={{
             padding: "10px 14px", borderRadius: 6, marginBottom: 14,
@@ -457,6 +827,54 @@ export default function AuthScreen({ onAuth }) {
           {loading && <Spinner />}
           {loading ? "Please wait…" : mode === "login" ? "Sign In" : "Create Account"}
         </button>
+
+        {/* Need help signing in */}
+        {mode === "login" && (
+          <div style={{ marginTop: 18, textAlign: "center" }}>
+            <button
+              type="button"
+              onClick={() => setHelpOpen(v => !v)}
+              style={{
+                background: "none", border: "none", color: theme.textSubtle,
+                fontSize: 12, cursor: "pointer", fontFamily: font,
+                textDecoration: "underline", textUnderlineOffset: 3, padding: 0,
+              }}
+            >
+              Need help signing in?
+            </button>
+
+            {helpOpen && (
+              <div style={{
+                marginTop: 12, padding: "14px 16px", borderRadius: 8,
+                background: theme.surfaceContainerLow, border: `1px solid ${theme.border}`,
+                textAlign: "left",
+              }}>
+                <div style={{
+                  fontSize: 10, fontFamily: fontMono, fontWeight: 600,
+                  textTransform: "uppercase", letterSpacing: "0.08em",
+                  color: theme.textSubtle, marginBottom: 10,
+                }}>
+                  Help options
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setScreen("forgot")}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 6,
+                    background: "none", border: "none", color: theme.primary,
+                    fontFamily: font, fontSize: 13, fontWeight: 500,
+                    cursor: "pointer", padding: 0,
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 16, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>
+                    lock_reset
+                  </span>
+                  Forgot your password? Get a reset link
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </form>
     </AuthShell>
   );

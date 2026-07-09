@@ -236,17 +236,143 @@ export async function sendVerificationEmail(toEmail, token) {
   });
 }
 
-/** Send a password-reset email (future use — stub prepared). */
-export async function sendPasswordResetEmail(toEmail, token) {
+/** Send a password-reset email with a reset button link and a 6-digit OTP code. */
+export async function sendPasswordResetEmail(toEmail, token, otp) {
   const transporter = createTransporter();
-  if (!transporter) return;
+  if (!transporter) {
+    console.warn("[mailer] Email not configured — reset token for", toEmail, "is", token, "otp:", otp);
+    return;
+  }
 
-  const resetUrl = `${getAppUrl()}/reset-password?token=${token}`;
+  const resetUrl   = `${getAppUrl()}/reset-password?token=${token}`;
+  const digitBoxes = otp.split("").map(d =>
+    `<td style="padding:0 4px;">` +
+    `<table cellpadding="0" cellspacing="0"><tr><td style="width:44px;height:52px;background:#f5f3f0;` +
+    `border:1.5px solid #d4e5d8;border-radius:8px;text-align:center;vertical-align:middle;">` +
+    `<span style="font-size:22px;font-weight:700;color:#005235;font-family:'Courier New',Courier,monospace;">${d}</span>` +
+    `</td></tr></table></td>`
+  ).join("");
+
   await transporter.sendMail({
     from: `"CashCanvas" <${process.env.GMAIL_USER}>`,
-    to: toEmail,
+    to:   toEmail,
     subject: "Reset your CashCanvas password",
-    html: `<p>Click <a href="${resetUrl}">here</a> to reset your password. Link expires in 1 hour.</p>`,
-    text: `Reset your CashCanvas password: ${resetUrl}\nExpires in 1 hour.`,
+    html: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Reset your CashCanvas password</title>
+</head>
+<body style="margin:0;padding:0;background:#fbf9f6;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+  <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
+         style="background:#fbf9f6;padding:48px 20px;">
+    <tr><td align="center">
+
+      <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
+             style="max-width:480px;background:#ffffff;border-radius:16px;
+                    border:1px solid #efeeeb;
+                    box-shadow:0 4px 24px rgba(27,28,26,0.07);">
+
+        <!-- Header -->
+        <tr>
+          <td style="background:#005235;padding:22px 36px;border-radius:16px 16px 0 0;">
+            <span style="font-family:Georgia,'Times New Roman',serif;font-style:italic;
+                         font-size:24px;font-weight:400;color:#ffffff;letter-spacing:-0.3px;">
+              Cash<span style="color:#86efbe;">Canvas</span>
+            </span>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="padding:36px 36px 28px;">
+            <p style="margin:0 0 6px;font-size:11px;font-weight:600;color:#6f7a72;
+                      letter-spacing:0.09em;text-transform:uppercase;">
+              Password Reset
+            </p>
+            <h1 style="margin:0 0 16px;font-family:Georgia,'Times New Roman',serif;
+                       font-weight:400;font-style:italic;font-size:24px;color:#1b1c1a;">
+              Reset your password
+            </h1>
+            <p style="margin:0 0 28px;font-size:14px;color:#3f4943;line-height:1.7;">
+              Click the button below to set a new password, or enter the 6-digit code on the reset page.
+            </p>
+
+            <!-- Reset button -->
+            <table cellpadding="0" cellspacing="0" role="presentation" style="margin:0 0 28px;">
+              <tr>
+                <td style="border-radius:8px;background:#005235;">
+                  <a href="${resetUrl}"
+                     style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:600;
+                            color:#ffffff;text-decoration:none;border-radius:8px;
+                            font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+                    Reset Password
+                  </a>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Divider -->
+            <table cellpadding="0" cellspacing="0" role="presentation" style="width:100%;margin:0 0 20px;">
+              <tr>
+                <td style="height:1px;background:#efeeeb;"></td>
+                <td style="padding:0 14px;white-space:nowrap;font-size:12px;color:#a0a89e;">or enter this code</td>
+                <td style="height:1px;background:#efeeeb;"></td>
+              </tr>
+            </table>
+
+            <!-- OTP digit boxes -->
+            <table cellpadding="0" cellspacing="0" role="presentation"
+                   style="margin:0 auto 28px;">
+              <tr>${digitBoxes}</tr>
+            </table>
+
+            <!-- Expiry note -->
+            <table cellpadding="0" cellspacing="0" role="presentation"
+                   style="background:#f5f3f0;border-radius:8px;margin:0 auto 8px;width:100%;">
+              <tr>
+                <td style="padding:12px 16px;text-align:center;">
+                  <span style="font-size:13px;color:#6f7a72;">
+                    Link and code expire in&nbsp;
+                    <strong style="color:#1b1c1a;">1 hour</strong>
+                    &nbsp;· Single use only
+                  </span>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Divider -->
+        <tr>
+          <td style="padding:0 36px;">
+            <div style="height:1px;background:#efeeeb;"></div>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="padding:20px 36px;border-radius:0 0 16px 16px;">
+            <p style="margin:0;font-size:12px;color:#6f7a72;line-height:1.6;">
+              If you didn't request a password reset, you can safely ignore this email —
+              your account won't be affected.
+            </p>
+            <p style="margin:8px 0 0;font-size:12px;color:#6f7a72;">
+              If the button doesn't work, paste this URL into your browser:<br>
+              <a href="${resetUrl}" style="color:#005235;word-break:break-all;font-size:11px;">${resetUrl}</a>
+            </p>
+            <p style="margin:12px 0 0;font-size:11px;color:#a0a89e;">
+              © 2026 CashCanvas · Your personal finance dashboard
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
+    text: `Reset your CashCanvas password\n\nClick this link to reset your password:\n${resetUrl}\n\nOr enter this code on the reset page: ${otp}\n\nLink and code expire in 1 hour. Single use only.\n\nIf you didn't request this, ignore this email.`,
   });
 }
