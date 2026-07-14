@@ -4,13 +4,21 @@ Session handoff doc — read this first, then `ROADMAP.md` for full phase histor
 debt. Update this file at the end of every session so the next one can start here instead of
 re-deriving context from the repo.
 
+## Release status
+
+**Phase 7 (CI/CD) committed and pushed to `origin/main`.**
+
+- **Commit hash**: `64a12801af464e3cb57d3a298a0af951df0a1603`
+- **Push date**: 2026-07-13 19:19 PDT
+- **Repository state**: working tree clean, local `main` == `origin/main`, no divergence
+
 ## Current status
 
 **6 of 9 phases complete (67%).** Phases 1–5 (Backend architecture, Authentication, Database
 optimization, Security hardening, Dependency maintenance) verified live in production; Phase 7
-(CI/CD) just landed. Full writeup: `docs/security/threat-model.md` (security),
-`docs/engineering-lessons/phase-7-ci-cd.md` (CI/CD, written for onboarding). Full phase/ADR
-history: `ROADMAP.md`.
+(CI/CD) just landed — **Phase 7 completed**. Full writeup: `docs/security/threat-model.md`
+(security), `docs/engineering-lessons/phase-7-ci-cd.md` (CI/CD, written for onboarding). Full
+phase/ADR history: `ROADMAP.md`.
 
 ### Completed phases
 1. Backend architecture cleanup
@@ -77,7 +85,16 @@ history: `ROADMAP.md`.
     CI/CD concepts, written using this repo's own real incidents as examples (the function-count
     bug, the `vite` version drift, the duplicate `AMZN` key, the ADR-014 flaky-test bug) rather
     than generic advice.
-11. Added `engines.node: ">=24"` to `package.json` and 4 new ADRs (015–018) to `ROADMAP.md`.
+11. Added `engines.node: ">=22"` to `package.json` (a permissive floor matching what this
+    machine actually runs — not `>=24`, which produced an immediate `EBADENGINE` warning on
+    this same Node 22.20.0 machine during this phase's own final verification pass; CI/production
+    still pin an exact `24.x` for real parity, see ADR-015) and 4 new ADRs (015–018) to
+    `ROADMAP.md`.
+12. Ran the full release-checklist before committing: `git status`/`diff` review (no secrets,
+    temp files, or accidentally-staged `coverage`/`node_modules`/`.env`), `npm ci` → `lint` →
+    `test` → `build`, all green, then a single atomic commit
+    (`64a1280`, "ci: implement production CI/CD pipeline and engineering workflow") pushed to
+    `origin/main`.
 
 ## Test suite
 
@@ -94,10 +111,14 @@ a number for). `npm run lint` — 0 errors, 45 pre-existing warnings. `npm run b
 no new deployment happened this session, only CI/CD tooling was added).
 
 - **Production URL**: https://cash-canvas-sigma.vercel.app
-- **Commit deployed**: `08ece44` (the CI/CD work in this session has not yet been deployed —
-  it's tooling/workflow files, Vercel will pick up the next push to `main` automatically as
-  usual)
-- **Serverless Functions verified**: exactly 3 (`api/ai`, `api/auth`, `api/data`)
+- **Commit deployed (last verified)**: `08ece44` — commit `64a1280` (this session's CI/CD
+  tooling) has been pushed to `main` and will be picked up by Vercel's auto-deploy as usual, but
+  that resulting deployment has not been separately re-verified in this session (the changes
+  are workflow/tooling/doc files with no runtime application code touched, so no behavior
+  change is expected — still worth a quick `deploy-verify.yml` run or manual check next time
+  it's convenient)
+- **Serverless Functions verified**: exactly 3 (`api/ai`, `api/auth`, `api/data`) as of the last
+  verified deployment
 
 <details>
 <summary>Full Deployment Verification detail from the prior session</summary>
