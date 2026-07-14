@@ -1,12 +1,12 @@
 /**
  * Runs before the test file's own imports are evaluated. Spins up an
  * in-memory MongoDB instance (never the real Atlas cluster) and points
- * MONGODB_URI at it before anything imports api/lib/db.js.
+ * MONGODB_URI at it before anything imports api/_lib/db.js.
  */
 import { afterAll } from "vitest";
 import { MongoMemoryServer } from "mongodb-memory-server";
 
-// api/lib/db.js caches its MongoClient on global._mongoClientPromise when
+// api/_lib/db.js caches its MongoClient on global._mongoClientPromise when
 // NODE_ENV !== "production" (a dev-hot-reload optimization) — and the real
 // Node `global` object is a process-level singleton that outlives any one
 // test file's isolated module registry. When Vitest reuses a worker process

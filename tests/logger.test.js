@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { logger } from "../api/lib/logger.js";
+import { logger } from "../api/_lib/logger.js";
 
 describe("logger — development format", () => {
   let errorSpy;

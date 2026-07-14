@@ -18,17 +18,17 @@ decodes a token.
 
 | Module | Responsibility |
 |---|---|
-| `api/lib/jwt.js` | `generateAccessToken()`, `verifyAccessToken()`, `getUser(req)` — signs/verifies the short-lived access token, read from its cookie |
-| `api/lib/session.js` | `generateRefreshToken()`, `createSession()`, `findActiveSessionByToken()`, `rotateSession()`, `revokeSessionByToken()`, `revokeAllSessionsForUser()` — the `sessions` collection is the only place refresh-token state lives |
-| `api/lib/cookies.js` | `parseCookies()`, `getCookie()`, `setAuthCookies()`, `clearAuthCookies()` — the only place any route reads `req.headers.cookie` or builds a `Set-Cookie` header |
-| `api/lib/csrf.js` | `generateCsrfToken()`, `verifyCsrfToken()`, `requireCsrf()` — double-submit-cookie CSRF check |
-| `api/lib/security-headers.js` | Helmet + CSP config for the Express dev server (Vercel mirrors this in `vercel.json`, which can't import JS) |
-| `api/lib/otp.js` | `generateOtp()`, `otpExpiry()`, `isOtpExpired()`, `MAX_OTP_ATTEMPTS` — the only place OTPs are generated |
-| `api/lib/password.js` | `hashPassword()`, `comparePassword()` — the only place bcrypt is called |
-| `api/lib/validation.js` | `isValidEmail()`, `isValidPassword()`, `isValidOtpFormat()` — shared input checks |
-| `api/lib/mailer.js` | `sendOtpEmail()`, `sendVerificationEmail()`, `sendPasswordResetEmail()`, `generateVerificationToken()`, `isEmailVerificationEnabled()` — the only place Nodemailer is configured |
-| `api/lib/recaptcha.js` | `verifyRecaptcha(token)` — the only place reCAPTCHA is verified |
-| `api/lib/db.js` | `getDb()` — the only Mongo connection, shared by every route |
+| `api/_lib/jwt.js` | `generateAccessToken()`, `verifyAccessToken()`, `getUser(req)` — signs/verifies the short-lived access token, read from its cookie |
+| `api/_lib/session.js` | `generateRefreshToken()`, `createSession()`, `findActiveSessionByToken()`, `rotateSession()`, `revokeSessionByToken()`, `revokeAllSessionsForUser()` — the `sessions` collection is the only place refresh-token state lives |
+| `api/_lib/cookies.js` | `parseCookies()`, `getCookie()`, `setAuthCookies()`, `clearAuthCookies()` — the only place any route reads `req.headers.cookie` or builds a `Set-Cookie` header |
+| `api/_lib/csrf.js` | `generateCsrfToken()`, `verifyCsrfToken()`, `requireCsrf()` — double-submit-cookie CSRF check |
+| `api/_lib/security-headers.js` | Helmet + CSP config for the Express dev server (Vercel mirrors this in `vercel.json`, which can't import JS) |
+| `api/_lib/otp.js` | `generateOtp()`, `otpExpiry()`, `isOtpExpired()`, `MAX_OTP_ATTEMPTS` — the only place OTPs are generated |
+| `api/_lib/password.js` | `hashPassword()`, `comparePassword()` — the only place bcrypt is called |
+| `api/_lib/validation.js` | `isValidEmail()`, `isValidPassword()`, `isValidOtpFormat()` — shared input checks |
+| `api/_lib/mailer.js` | `sendOtpEmail()`, `sendVerificationEmail()`, `sendPasswordResetEmail()`, `generateVerificationToken()`, `isEmailVerificationEnabled()` — the only place Nodemailer is configured |
+| `api/_lib/recaptcha.js` | `verifyRecaptcha(token)` — the only place reCAPTCHA is verified |
+| `api/_lib/db.js` | `getDb()` — the only Mongo connection, shared by every route |
 | `api/auth.js` | Route handlers: signup, login, OTP verify/resend, **refresh, logout, logout-all**, profile, legacy email-link verify, delete-account, forgot/reset password |
 | `src/api.js` | The frontend's only fetch wrapper — `credentials: "include"` on every request, CSRF header attached automatically, one silent refresh-and-retry on a 401 |
 
@@ -221,7 +221,7 @@ background refresh and an in-flight form submission using the old value.
 
 ## Security headers
 
-`api/lib/security-headers.js` configures Helmet for the Express dev server; `vercel.json` has
+`api/_lib/security-headers.js` configures Helmet for the Express dev server; `vercel.json` has
 the equivalent static header config for production (Vercel can't import a JS module for its
 header config, so the two are kept in sync by hand). Includes a `Content-Security-Policy`:
 
@@ -234,7 +234,7 @@ header config, so the two are kept in sync by hand). Includes a `Content-Securit
 
 ## OTP lifecycle
 
-Two flows share the same OTP mechanics (`api/lib/otp.js`) but different storage:
+Two flows share the same OTP mechanics (`api/_lib/otp.js`) but different storage:
 
 - **Signup**: an OTP is generated and stored on a `pending_signups` document (upserted by
   email). The `users` document is only created once the OTP is verified — there's no
@@ -258,7 +258,7 @@ automated test suite runs in (see Testing, below).
 
 ## Email flow
 
-`api/lib/mailer.js` owns the Nodemailer transporter (Gmail SMTP, created lazily and only if
+`api/_lib/mailer.js` owns the Nodemailer transporter (Gmail SMTP, created lazily and only if
 credentials are present) and three send functions: OTP codes, the legacy email-verification
 link, and password-reset (link + OTP). All email sends from `api/auth.js` are wrapped in
 try/catch — a failed send returns a `502` to the client rather than silently succeeding with
@@ -266,7 +266,7 @@ no code ever delivered.
 
 ## reCAPTCHA flow
 
-`verifyRecaptcha(token)` in `api/lib/recaptcha.js` calls Google's `siteverify` endpoint,
+`verifyRecaptcha(token)` in `api/_lib/recaptcha.js` calls Google's `siteverify` endpoint,
 checks the v3 score against `RECAPTCHA_MIN_SCORE` (default `0.5`), and fails open (`{ok:
 true, skipped: true}`) if `RECAPTCHA_SECRET_KEY` isn't configured or Google is unreachable —
 so a misconfigured or down reCAPTCHA never blocks real signups. Called once, from signup only.
@@ -285,9 +285,9 @@ so a misconfigured or down reCAPTCHA never blocks real signups. Called once, fro
 
 ## Security considerations
 
-- Passwords: bcrypt, cost factor 12 (`api/lib/password.js`).
+- Passwords: bcrypt, cost factor 12 (`api/_lib/password.js`).
 - Account lockout: 5 failed logins → 15-minute lock (`api/auth.js`, `MAX_FAILED`/`LOCKOUT_MS`).
-- Rate limiting: every auth route calls `checkRateLimit()` (`api/lib/ratelimit.js`) — an
+- Rate limiting: every auth route calls `checkRateLimit()` (`api/_lib/ratelimit.js`) — an
   in-memory, per-process store. On Vercel this is per-instance, not global; see Remaining
   Limitations.
 - All Mongo queries use parameterized filters (no string concatenation into queries).
@@ -311,12 +311,12 @@ tests exercise the direct login/signup → session path deterministically.
 
 ## Remaining limitations / future improvements
 
-1. **Rate limiting is per-instance, not global** (`api/lib/ratelimit.js`'s own doc comment
+1. **Rate limiting is per-instance, not global** (`api/_lib/ratelimit.js`'s own doc comment
    flags this) — on Vercel, concurrent serverless instances don't share the in-memory store,
    so the "5 signups per 15 min" limit is really "5 per instance." Would need Upstash Redis
    (or similar) to be a real global limiter.
 2. **`/api/categorize` and `POST /api/files` have no rate limit** in production — noted in
-   Phase 1, still true. Worth adding in `api/lib/`, so it applies to both environments.
+   Phase 1, still true. Worth adding in `api/_lib/`, so it applies to both environments.
 3. **No indexes** on `users.email` or the `userId` fields in `uploaded_files`,
    `custom_categories`, `merchant_category_rules` — every query is a full collection scan.
    (The new `sessions` collection *does* have proper indexes — see above.) Next roadmap item.

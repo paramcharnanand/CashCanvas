@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import request from "supertest";
 import { buildTestApp } from "./testApp.js";
-import { getDb } from "../api/lib/db.js";
-import { findActiveSessionByToken } from "../api/lib/session.js";
-import { _resetForTests as resetRateLimits } from "../api/lib/ratelimit.js";
+import { getDb } from "../api/_lib/db.js";
+import { findActiveSessionByToken } from "../api/_lib/session.js";
+import { _resetForTests as resetRateLimits } from "../api/_lib/ratelimit.js";
 import { extractCookie, isCookieCleared, uniqueEmail, signupUser as signupUserWithApp } from "./helpers.js";
 
 let app;

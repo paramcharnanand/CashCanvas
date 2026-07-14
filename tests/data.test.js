@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import request from "supertest";
 import { buildTestApp } from "./testApp.js";
-import { getDb } from "../api/lib/db.js";
-import { cleanTransaction } from "../api/lib/transaction-cleaner.js";
-import { _resetForTests as resetRateLimits } from "../api/lib/ratelimit.js";
+import { getDb } from "../api/_lib/db.js";
+import { cleanTransaction } from "../api/_lib/transaction-cleaner.js";
+import { _resetForTests as resetRateLimits } from "../api/_lib/ratelimit.js";
 import { uniqueEmail, signupUser as signupUserWithApp } from "./helpers.js";
 
 let app;

@@ -2,14 +2,14 @@
  * /api/ai — consolidated AI handler
  * Routes: POST /api/categorize, POST /api/parse-pdf
  */
-import { getUser }            from "./lib/jwt.js";
-import { getDb }              from "./lib/db.js";
-import { checkRateLimit, getClientIp } from "./lib/ratelimit.js";
-import { preprocessForAI, cleanTransaction, fuzzyMatchMerchant } from "./lib/transaction-cleaner.js";
-import { requireCsrf }        from "./lib/csrf.js";
-import { withErrorHandling }  from "./lib/http.js";
-import { isValidTransactionDesc, isValidTransactionAmount } from "./lib/validation.js";
-import { logger }             from "./lib/logger.js";
+import { getUser }            from "./_lib/jwt.js";
+import { getDb }              from "./_lib/db.js";
+import { checkRateLimit, getClientIp } from "./_lib/ratelimit.js";
+import { preprocessForAI, cleanTransaction, fuzzyMatchMerchant } from "./_lib/transaction-cleaner.js";
+import { requireCsrf }        from "./_lib/csrf.js";
+import { withErrorHandling }  from "./_lib/http.js";
+import { isValidTransactionDesc, isValidTransactionAmount } from "./_lib/validation.js";
+import { logger }             from "./_lib/logger.js";
 
 // Allow up to 10 MB request bodies (base64-encoded PDFs)
 export const config = {

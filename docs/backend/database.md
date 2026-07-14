@@ -1,7 +1,7 @@
 # Database
 
 MongoDB Atlas, one database (`cashcanvas`), accessed through a single shared connection
-(`api/lib/db.js`) — see `docs/backend/authentication.md` for how that connection is reused
+(`api/_lib/db.js`) — see `docs/backend/authentication.md` for how that connection is reused
 across serverless invocations and the local Express dev server.
 
 **This document only describes collections that actually exist and are queried somewhere in
@@ -76,7 +76,7 @@ simply weren't enough indexes yet for any of those problems to exist.
 
 ## Indexes added this phase
 
-All defined in `api/lib/db.js`'s `ensureIndexes()`, created idempotently on every `getDb()` call.
+All defined in `api/_lib/db.js`'s `ensureIndexes()`, created idempotently on every `getDb()` call.
 
 | Collection | Index | Type | Query it supports | Why |
 |---|---|---|---|---|
@@ -171,7 +171,7 @@ as ready-to-implement future work rather than built speculatively.
 ## Data integrity (Step 9)
 
 Required fields, string trimming, enum-like category validation, and duplicate prevention are
-all already enforced at the application layer (see `api/lib/validation.js` and the route
+all already enforced at the application layer (see `api/_lib/validation.js` and the route
 handlers). This phase adds real *database-level* backing for the two invariants that
 previously relied on app logic alone: unique emails (`users`) and unique
 (user, category-name)/(user, merchant-name) pairs. Full MongoDB `$jsonSchema` validators
@@ -235,7 +235,7 @@ above handles this comfortably; don't add operational complexity ahead of an act
 **~100K users** — two real considerations, both already flagged in `authentication.md`:
 (1) the in-memory rate limiter is per-instance on Vercel, not global — worth moving to
 Upstash Redis once abuse patterns actually show up; (2) each warm serverless instance holds
-its own MongoDB connection pool (`api/lib/db.js` reuses one client per instance, which is
+its own MongoDB connection pool (`api/_lib/db.js` reuses one client per instance, which is
 correct, but doesn't coordinate across *many* concurrent instances) — at enough concurrent
 traffic this can approach an Atlas tier's max-connections ceiling, at which point either a
 larger Atlas tier or a serverless-aware pooling layer (e.g. Atlas's Data API, or a proxy like

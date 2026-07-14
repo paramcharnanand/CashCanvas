@@ -4,26 +4,26 @@
  *         profile, verify (legacy link), resend-verification (legacy),
  *         delete-account, forgot-password, reset-password
  *
- * Auth state lives entirely in HttpOnly cookies (see api/lib/cookies.js) —
+ * Auth state lives entirely in HttpOnly cookies (see api/_lib/cookies.js) —
  * no route in this file ever puts a JWT or refresh token in a JSON response.
  */
-import { getDb }                                               from "./lib/db.js";
-import { generateAccessToken, getUser }                        from "./lib/jwt.js";
-import { hashPassword, comparePassword }                       from "./lib/password.js";
-import { isValidEmail, isValidPassword, isValidOtpFormat }      from "./lib/validation.js";
-import { generateOtp, otpExpiry, isOtpExpired, MAX_OTP_ATTEMPTS } from "./lib/otp.js";
+import { getDb }                                               from "./_lib/db.js";
+import { generateAccessToken, getUser }                        from "./_lib/jwt.js";
+import { hashPassword, comparePassword }                       from "./_lib/password.js";
+import { isValidEmail, isValidPassword, isValidOtpFormat }      from "./_lib/validation.js";
+import { generateOtp, otpExpiry, isOtpExpired, MAX_OTP_ATTEMPTS } from "./_lib/otp.js";
 import { sendOtpEmail, isEmailVerificationEnabled,
          generateVerificationToken, sendVerificationEmail,
-         sendPasswordResetEmail }                              from "./lib/mailer.js";
-import { verifyRecaptcha }                                     from "./lib/recaptcha.js";
-import { checkRateLimit, getClientIp }                        from "./lib/ratelimit.js";
+         sendPasswordResetEmail }                              from "./_lib/mailer.js";
+import { verifyRecaptcha }                                     from "./_lib/recaptcha.js";
+import { checkRateLimit, getClientIp }                        from "./_lib/ratelimit.js";
 import { getCookie, setAuthCookies, clearAuthCookies,
-         REFRESH_COOKIE }                                      from "./lib/cookies.js";
+         REFRESH_COOKIE }                                      from "./_lib/cookies.js";
 import { generateRefreshToken, createSession, findActiveSessionByToken,
-         rotateSession, revokeSessionByToken, revokeAllSessionsForUser } from "./lib/session.js";
-import { generateCsrfToken, requireCsrf }                      from "./lib/csrf.js";
-import { withErrorHandling }                                   from "./lib/http.js";
-import { logger }                                              from "./lib/logger.js";
+         rotateSession, revokeSessionByToken, revokeAllSessionsForUser } from "./_lib/session.js";
+import { generateCsrfToken, requireCsrf }                      from "./_lib/csrf.js";
+import { withErrorHandling }                                   from "./_lib/http.js";
+import { logger }                                              from "./_lib/logger.js";
 import { ObjectId }                                            from "mongodb";
 
 const MAX_FAILED = 5;

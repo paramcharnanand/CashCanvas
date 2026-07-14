@@ -7,11 +7,11 @@
  *   PUT/DELETE      /api/categories/:id
  *   GET/POST        /api/merchant-rules
  */
-import { getDb }             from "./lib/db.js";
-import { getUser }           from "./lib/jwt.js";
-import { requireCsrf }       from "./lib/csrf.js";
-import { withErrorHandling } from "./lib/http.js";
-import { checkRateLimit }    from "./lib/ratelimit.js";
+import { getDb }             from "./_lib/db.js";
+import { getUser }           from "./_lib/jwt.js";
+import { requireCsrf }       from "./_lib/csrf.js";
+import { withErrorHandling } from "./_lib/http.js";
+import { checkRateLimit }    from "./_lib/ratelimit.js";
 import {
   validateTransactionsArray,
   isValidFileName,
@@ -19,7 +19,7 @@ import {
   isValidCategoryName,
   isValidMerchantName,
   sanitizeCsvField,
-} from "./lib/validation.js";
+} from "./_lib/validation.js";
 import { ObjectId }          from "mongodb";
 import crypto                from "crypto";
 

@@ -14,7 +14,7 @@ import {
   isValidMerchantName,
   sanitizeCsvField,
   MAX_TRANSACTIONS_PER_UPLOAD,
-} from "../api/lib/validation.js";
+} from "../api/_lib/validation.js";
 
 describe("isValidTransactionDate", () => {
   it("accepts a real calendar date in YYYY-MM-DD", () => {

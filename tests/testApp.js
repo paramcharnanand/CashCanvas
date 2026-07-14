@@ -7,7 +7,7 @@ import express from "express";
 import authHandler from "../api/auth.js";
 import dataHandler from "../api/data.js";
 import aiHandler from "../api/ai.js";
-import { securityHeaders } from "../api/lib/security-headers.js";
+import { securityHeaders } from "../api/_lib/security-headers.js";
 
 export function buildTestApp() {
   const app = express();

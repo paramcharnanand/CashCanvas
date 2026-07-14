@@ -51,7 +51,7 @@ Before this phase, `api/data.js` accepted `fileName`, `statementType`, and the e
 `transactions[]` array with almost no server-side validation beyond "is it an array" and
 "under 10,000 entries" — everything else (date format, amount type/bounds, string lengths)
 relied entirely on the client-side CSV/PDF parser in `App.jsx` never sending anything bad. That
-assumption doesn't hold against a client that talks to the API directly. `api/lib/validation.js`
+assumption doesn't hold against a client that talks to the API directly. `api/_lib/validation.js`
 now centralizes every check, used by both `api/data.js` and `api/ai.js`:
 
 | Threat | Mitigation |
@@ -74,7 +74,7 @@ work above, which is the application-layer half of that same data-integrity stor
 
 ### Logging (Phase 4, new this phase)
 
-Audited every `console.*` call site in `api/` and `server.js`. Finding: `api/lib/mailer.js`'s
+Audited every `console.*` call site in `api/` and `server.js`. Finding: `api/_lib/mailer.js`'s
 "email not configured" fallback branches logged the raw OTP code and password-reset token to
 stdout. In practice this branch is unreachable in normal operation — every call site
 (`api/auth.js`) already checks `isEmailVerificationEnabled()` before calling into the mailer,
@@ -82,7 +82,7 @@ so `createTransporter()` never returns `null` when these functions are actually 
 an unreachable secret-logging landmine is still a landmine for the next call site that forgets
 the guard. Fixed: those branches now log only the recipient email, never the secret.
 
-Also introduced `api/lib/logger.js` (structured logging, used by every route/lib module that
+Also introduced `api/_lib/logger.js` (structured logging, used by every route/lib module that
 previously called `console.error`/`console.warn` directly): development emits the same
 human-readable `[tag] message` lines routes always had; production emits single-line JSON
 (`{level, tag, message, ...meta, time}`), parseable by any log aggregator, with `Error`
@@ -93,7 +93,7 @@ process that never runs in production and carries no sensitive data.
 | Threat | Mitigation |
 |---|---|
 | Secret (OTP, reset token, password, session token) written to logs | Every mailer fallback branch fixed to log only non-secret context (recipient email). `sanitizeCsvField`/validation errors logged via `logger.error` never include raw request bodies. No route logs `req.body`, `req.headers.cookie`, or `req.headers['x-csrf-token']` anywhere in the codebase (verified by the same audit) |
-| Inconsistent/unparseable logs across dev and prod | `api/lib/logger.js` — JSON in production, readable text in development, checked at call time so `NODE_ENV` set by the runtime (Vercel) is always respected |
+| Inconsistent/unparseable logs across dev and prod | `api/_lib/logger.js` — JSON in production, readable text in development, checked at call time so `NODE_ENV` set by the runtime (Vercel) is always respected |
 
 ### Dependency posture (Phase 4, new this phase)
 
@@ -138,7 +138,7 @@ docs for full rationale on each:
 3. **Device-management UI** — surface the `sessions` collection's existing
    `userAgent`/`ip`/`createdAt`/`lastUsedAt` fields so users can review/revoke individual
    sessions, not just "log out everywhere."
-4. **Structured-log shipping** — `api/lib/logger.js`'s production JSON output is ready to ship
+4. **Structured-log shipping** — `api/_lib/logger.js`'s production JSON output is ready to ship
    to a real aggregator (Vercel's own log drains, Datadog, etc.); nothing currently consumes it
    beyond stdout.
 5. **Refresh-token family reuse detection** — revisit if real abuse patterns ever show a reused

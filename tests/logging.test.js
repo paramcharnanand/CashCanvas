@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { sendOtpEmail, sendPasswordResetEmail } from "../api/lib/mailer.js";
+import { sendOtpEmail, sendPasswordResetEmail } from "../api/_lib/mailer.js";
 
 // GMAIL_USER/GMAIL_APP_PASSWORD are unset in the test env (tests/vitest.setup.js
 // disables email), so createTransporter() returns null and these functions hit

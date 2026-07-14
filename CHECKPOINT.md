@@ -37,7 +37,7 @@ optimization, Security hardening, Dependency maintenance) done. Full writeup:
 This session was a verification/release pass on top of the prior session's Phase 4/5 work, not
 new feature work:
 
-1. **Found and fixed a pre-existing test-infrastructure bug** (ADR-014): `api/lib/db.js`
+1. **Found and fixed a pre-existing test-infrastructure bug** (ADR-014): `api/_lib/db.js`
    caches its MongoClient on `global._mongoClientPromise` in non-production mode; since
    `tests/vitest.setup.js` sets `NODE_ENV="test"`, test files could silently reuse an *earlier*
    file's already-stopped in-memory MongoDB connection when Vitest reused a worker process

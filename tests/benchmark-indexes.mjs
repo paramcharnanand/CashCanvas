@@ -2,7 +2,7 @@
  * One-off benchmark: seeds synthetic data into an isolated in-memory MongoDB
  * instance (never the real Atlas cluster) and runs explain("executionStats")
  * on the app's real query shapes before and after the indexes in
- * api/lib/db.js exist, to get real COLLSCAN-vs-IXSCAN numbers rather than
+ * api/_lib/db.js exist, to get real COLLSCAN-vs-IXSCAN numbers rather than
  * hand-wavy estimates.
  *
  * Not part of the Vitest suite (this is a diagnostic report generator, not a

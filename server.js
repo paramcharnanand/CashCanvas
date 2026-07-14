@@ -4,7 +4,7 @@
  * This is a thin Express bootstrap — it owns no business logic. All auth,
  * OTP, data, and AI routes are handled by the exact same modules Vercel
  * invokes in production (api/auth.js, api/data.js, api/ai.js), which in turn
- * share their OTP/JWT/mailer/reCAPTCHA/password logic from api/lib/*. This
+ * share their OTP/JWT/mailer/reCAPTCHA/password logic from api/_lib/*. This
  * guarantees dev and prod can never drift apart the way they used to.
  *
  * Run alongside Vite: `npm run dev:full`
@@ -14,7 +14,7 @@ import cors from "cors";
 import authHandler from "./api/auth.js";
 import dataHandler from "./api/data.js";
 import aiHandler from "./api/ai.js";
-import { securityHeaders } from "./api/lib/security-headers.js";
+import { securityHeaders } from "./api/_lib/security-headers.js";
 
 const app = express();
 
@@ -35,7 +35,7 @@ app.use(cors({
 }));
 
 // ── Security headers ─────────────────────────────────────────────────────────
-// Helmet + CSP. See api/lib/security-headers.js — vercel.json mirrors this
+// Helmet + CSP. See api/_lib/security-headers.js — vercel.json mirrors this
 // in production with a static (non-Helmet) header config of its own.
 app.use(securityHeaders);
 

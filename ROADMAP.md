@@ -52,7 +52,7 @@ Newest first.
 
 ### ADR-014 — Reset `global._mongoClientPromise` per test file; run test files sequentially
 **Context**: discovered during the Phase 4 release checkpoint, not something this phase's
-feature work introduced. `api/lib/db.js` caches its `MongoClient` on `global._mongoClientPromise`
+feature work introduced. `api/_lib/db.js` caches its `MongoClient` on `global._mongoClientPromise`
 when `NODE_ENV !== "production"` — a dev-hot-reload optimization. `tests/vitest.setup.js` sets
 `NODE_ENV="test"`, which takes that same branch. The real Node `global` object is a
 process-level singleton that outlives any one test file's isolated module registry; when
@@ -102,7 +102,7 @@ Sparse so pre-migration documents without the field aren't treated as a duplicat
 **Context**: transaction descriptions, category names, and merchant names are all persisted
 strings that later get written verbatim into the app's own CSV export (`downloadCsv` in
 `App.jsx`) — a classic formula-injection vector if a description like `=cmd|'/c calc'!A1` ever
-reaches a spreadsheet. **Decision**: sanitize (`sanitizeCsvField()` in `api/lib/validation.js`)
+reaches a spreadsheet. **Decision**: sanitize (`sanitizeCsvField()` in `api/_lib/validation.js`)
 at the point of ingestion (`POST /api/files`, `POST /api/categories`, `POST /api/merchant-rules`),
 not at export time. **Rationale**: sanitizing once at the single entry point every mutating
 route already funnels through is simpler and more robust than remembering to sanitize at every
@@ -136,7 +136,7 @@ becomes a real requirement.
 
 ### ADR-008 — No MongoDB `$jsonSchema` validation
 **Context**: Phase 3 data-integrity review. **Decision**: rely on application-level validation
-(`api/lib/validation.js` + route handlers) plus the new unique indexes, not database-level
+(`api/_lib/validation.js` + route handlers) plus the new unique indexes, not database-level
 schema validators. **Rationale**: exactly one trusted writer (the Node API) touches this
 database; schema validators add real ongoing maintenance cost (every field change needs the
 validator updated too) for a benefit that only matters with an untrusted or second writer.
@@ -227,7 +227,7 @@ From `docs/security/threat-model.md` (Phase 4):
   (`GET /api/files` uses a fixed `.limit(20)`, no search endpoint exists at all) — adding
   validators with no caller would be dead code. Build them when a real paginated/searchable
   endpoint is built, not speculatively ahead of it.
-- `api/lib/logger.js`'s structured production JSON output isn't shipped anywhere yet — it
+- `api/_lib/logger.js`'s structured production JSON output isn't shipped anywhere yet — it
   writes to stdout, same as before, just now parseable. Wiring a real log drain/aggregator is
   future work, not blocking.
 
