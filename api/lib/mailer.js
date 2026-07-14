@@ -12,6 +12,7 @@
 
 import nodemailer from "nodemailer";
 import crypto from "crypto";
+import { logger } from "./logger.js";
 
 /**
  * Checked at call time (not import time) so env vars loaded via --env-file
@@ -42,16 +43,15 @@ export function generateVerificationToken() {
   return crypto.randomBytes(32).toString("hex");
 }
 
-/** Generate a cryptographically secure 6-digit OTP. */
-export function generateOtp() {
-  return crypto.randomInt(100000, 999999).toString();
-}
-
 /** Send a 6-digit OTP to a user's email for login or signup verification. */
 export async function sendOtpEmail(toEmail, otp, purpose = "login") {
   const transporter = createTransporter();
   if (!transporter) {
-    console.warn("[mailer] Email not configured — OTP for", toEmail, "is", otp);
+    // Never log the OTP itself, even here: every caller already checks
+    // isEmailVerificationEnabled() before calling this function, so this
+    // branch shouldn't be reachable in practice — this is a defensive
+    // fallback, not a dev-mode "print the code" convenience.
+    logger.warn("mailer", "Email not configured — OTP not sent", { toEmail });
     return;
   }
 
@@ -175,7 +175,7 @@ export async function sendOtpEmail(toEmail, otp, purpose = "login") {
 export async function sendVerificationEmail(toEmail, token) {
   const transporter = createTransporter();
   if (!transporter) {
-    console.warn("[mailer] Email verification not configured — skipping verification email for", toEmail);
+    logger.warn("mailer", "Email verification not configured — skipping verification email", { toEmail });
     return;
   }
 
@@ -240,7 +240,9 @@ export async function sendVerificationEmail(toEmail, token) {
 export async function sendPasswordResetEmail(toEmail, token, otp) {
   const transporter = createTransporter();
   if (!transporter) {
-    console.warn("[mailer] Email not configured — reset token for", toEmail, "is", token, "otp:", otp);
+    // Never log the reset token or OTP — see sendOtpEmail for why this
+    // branch is a defensive fallback, not expected to run in practice.
+    logger.warn("mailer", "Email not configured — password reset email not sent", { toEmail });
     return;
   }
 

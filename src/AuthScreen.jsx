@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { apiFetch } from "./api.js";
 
 const font         = `'Manrope', sans-serif`;
 const fontMono     = `'Inter', monospace`;
@@ -168,15 +169,14 @@ function OtpScreen({ email, onVerified, onBack }) {
     setLoading(true);
     setError("");
     try {
-      const res  = await fetch("/api/auth/verify-otp", {
+      const res  = await apiFetch("/api/auth/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, otp: code }),
       });
       const data = await res.json();
-      if (data.token) {
-        localStorage.setItem("cc_auth", JSON.stringify({ token: data.token, user: data.user }));
-        onVerified({ token: data.token, user: data.user });
+      if (res.ok && data.user) {
+        onVerified(data.user);
       } else {
         setError(data.error || "Incorrect code. Please try again.");
         setDigits(["", "", "", "", "", ""]);
@@ -193,7 +193,7 @@ function OtpScreen({ email, onVerified, onBack }) {
     setResendMsg("");
     setError("");
     try {
-      const res  = await fetch("/api/auth/resend-otp", {
+      const res  = await apiFetch("/api/auth/resend-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
@@ -330,7 +330,7 @@ function ForgotPasswordScreen({ onBack }) {
     setLoading(true);
     setError("");
     try {
-      await fetch("/api/auth/forgot-password", {
+      await apiFetch("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.toLowerCase() }),
@@ -485,7 +485,7 @@ function ResetPasswordScreen({ token, onBack }) {
     setLoading(true);
     setError("");
     try {
-      const res  = await fetch("/api/auth/reset-password", {
+      const res  = await apiFetch("/api/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, otp, newPassword }),
@@ -689,7 +689,7 @@ export default function AuthScreen({ onAuth }) {
       : { name, email, password, captchaToken };
 
     try {
-      const res  = await fetch(endpoint, {
+      const res  = await apiFetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -700,9 +700,8 @@ export default function AuthScreen({ onAuth }) {
         setFieldErrors(routeError(data.error || "Something went wrong."));
       } else if (data.otpRequired) {
         setOtpEmail(data.email || email);
-      } else if (data.token) {
-        localStorage.setItem("cc_auth", JSON.stringify({ token: data.token, user: data.user }));
-        onAuth({ token: data.token, user: data.user });
+      } else if (data.user) {
+        onAuth(data.user);
       }
     } catch {
       setFieldErrors({ name: "", email: "", password: "", form: "Cannot connect to the server. Make sure the API is running." });

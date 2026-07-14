@@ -3,6 +3,7 @@ import * as Papa from "papaparse";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend, LabelList, ReferenceLine } from "recharts";
 import _ from "lodash";
 import AuthScreen from "./AuthScreen.jsx";
+import { apiFetch, fetchCurrentUser, logout as apiLogout } from "./api.js";
 
 // ─── CATEGORY ENGINE ───
 const DEFAULT_CATEGORIES = {
@@ -766,7 +767,7 @@ function strategyMultiLine(lines, inferredYear = null) {
 
 // Strategy 3: AI-powered extraction via secure backend proxy (/api/parse-pdf).
 // The Anthropic API key lives only on the server — never in the browser bundle.
-async function strategyAI(file, statementType = "unknown", authToken = null) {
+async function strategyAI(file, statementType = "unknown") {
   try {
     const base64 = await new Promise((res, rej) => {
       const reader = new FileReader();
@@ -775,12 +776,9 @@ async function strategyAI(file, statementType = "unknown", authToken = null) {
       reader.readAsDataURL(file);
     });
 
-    const response = await fetch("/api/parse-pdf", {
+    const response = await apiFetch("/api/parse-pdf", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ pdfBase64: base64, statementType }),
     });
 
@@ -803,7 +801,7 @@ async function strategyAI(file, statementType = "unknown", authToken = null) {
   }
 }
 
-async function parsePDF(file, onProgress = () => {}, authToken = null) {
+async function parsePDF(file, onProgress = () => {}) {
   let pages;
   let extractionError = null;
   try {
@@ -859,7 +857,7 @@ async function parsePDF(file, onProgress = () => {}, authToken = null) {
 
   // Fallback: use Claude AI to read the PDF directly
   onProgress("Using AI to read the statement...");
-  const aiTxns = await strategyAI(file, statementType, authToken);
+  const aiTxns = await strategyAI(file, statementType);
   if (aiTxns.length > bestTxns.length) {
     aiTxns.sort((a, b) => b.date - a.date);
     return { txns: aiTxns, statementType };
@@ -870,7 +868,7 @@ async function parsePDF(file, onProgress = () => {}, authToken = null) {
 }
 
 // ─── DELETE ACCOUNT MODAL ───
-function DeleteAccountModal({ auth, onLogout, onClose }) {
+function DeleteAccountModal({ onLogout, onClose }) {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState("");
 
@@ -878,10 +876,7 @@ function DeleteAccountModal({ auth, onLogout, onClose }) {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/auth/delete-account", {
-        method:  "DELETE",
-        headers: { Authorization: `Bearer ${auth.token}` },
-      });
+      const res = await apiFetch("/api/auth/delete-account", { method: "DELETE" });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         setError(d.error || "Something went wrong. Please try again.");
@@ -948,12 +943,12 @@ function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
   const inputRef = useRef();
 
   useEffect(() => {
-    if (!auth?.token) return;
-    fetch("/api/files", { headers: { Authorization: `Bearer ${auth.token}` } })
+    if (!auth?.user) return;
+    apiFetch("/api/files")
       .then(r => r.json())
       .then(data => { if (Array.isArray(data)) setFileHistory(data); })
       .catch(() => {});
-  }, [auth?.token]);
+  }, [auth?.user]);
 
   const handleFile = useCallback((file) => {
     if (!file) return;
@@ -1005,7 +1000,7 @@ function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
       });
     } else if (ext === "pdf") {
       setLoadingMsg("Reading PDF...");
-      parsePDF(file, (msg) => setLoadingMsg(msg), auth?.token).then(({ txns, statementType }) => {
+      parsePDF(file, (msg) => setLoadingMsg(msg)).then(({ txns, statementType }) => {
         if (txns.length === 0) {
           setError("No transactions found in PDF. This can happen with scanned/image-based PDFs. Try exporting a CSV from your bank's website instead.");
           setLoading(false);
@@ -1060,7 +1055,7 @@ function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
           </div>
         )}
         {showDeleteModal && (
-          <DeleteAccountModal auth={auth} onLogout={onLogout} onClose={() => setShowDeleteModal(false)} />
+          <DeleteAccountModal onLogout={onLogout} onClose={() => setShowDeleteModal(false)} />
         )}
       </header>
 
@@ -1255,7 +1250,7 @@ function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
                     <button onClick={e => {
                       e.stopPropagation();
                       if (!confirm("Remove this upload from history?")) return;
-                      fetch(`/api/files/${f._id}`, { method: "DELETE", headers: { Authorization: `Bearer ${auth.token}` } }).catch(() => {});
+                      apiFetch(`/api/files/${f._id}`, { method: "DELETE" }).catch(() => {});
                       setFileHistory(prev => prev.filter(x => x._id !== f._id));
                     }} style={{
                       background: "none", border: "none", color: theme.textSubtle, cursor: "pointer",
@@ -1451,21 +1446,17 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
 
   // ── API helper ──
   const authFetch = useCallback(async (url, options = {}) => {
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       ...options,
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${auth?.token}`,
-        ...(options.headers || {}),
-      },
+      headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     });
     if (res.status === 401) { onLogout(); return {}; }
     return res.json();
-  }, [auth?.token, onLogout]);
+  }, [onLogout]);
 
   // ── Load merchant rules + custom categories on mount ──
   useEffect(() => {
-    if (!auth?.token) return;
+    if (!auth?.user) return;
     let done = 0;
     const markDone = () => { done++; if (done === 2) setRulesLoaded(true); };
 
@@ -1483,11 +1474,11 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
         setCustomCats(catMap);
       }
     }).catch(() => {}).finally(markDone);
-  }, [auth?.token]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [auth?.user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── AI categorization — fires once after merchant rules + custom cats are loaded ──
   useEffect(() => {
-    if (!rulesLoaded || aiDone || !auth?.token) return;
+    if (!rulesLoaded || aiDone || !auth?.user) return;
     const otherTxns = rawTxns
       .map((t, i) => ({ ...t, id: i }))
       .filter(t => t.amount < 0 && !txnOverrides[t.id] && categorize(t.desc, customCats, merchantRules) === "Other");
@@ -1671,7 +1662,6 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
             {/* Delete account modal */}
             {showDeleteModal && (
               <DeleteAccountModal
-                auth={auth}
                 onLogout={onLogout}
                 onClose={() => setShowDeleteModal(false)}
               />
@@ -2938,25 +2928,39 @@ export default function App() {
   const [fileName, setFileName] = useState("");
   const [statementType, setStatementType] = useState("unknown");
   const [autoRestoring, setAutoRestoring] = useState(false);
-  const [auth, setAuth] = useState(() => {
-    try {
-      const stored = localStorage.getItem("cc_auth");
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [auth, setAuth] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
+
+  // Auth state comes from the server, never from client-side storage — the
+  // access/refresh tokens live in HttpOnly cookies this code never touches.
+  useEffect(() => {
+    fetchCurrentUser()
+      .then(user => setAuth(user ? { user } : null))
+      .finally(() => setAuthChecked(true));
+  }, []);
+
+  const handleAuth = useCallback((user) => {
+    setAuth(user ? { user } : null);
+  }, []);
+
+  const handleLogout = useCallback(async () => {
+    await apiLogout();
+    setAuth(null);
+    setTransactions(null);
+    setFileName("");
+    setStatementType("unknown");
+  }, []);
 
   // Auto-restore the most recent statement on login
   useEffect(() => {
-    if (!auth?.token || transactions !== null || autoRestoring) return;
+    if (!auth?.user || transactions !== null || autoRestoring) return;
     setAutoRestoring(true);
-    fetch("/api/files", { headers: { Authorization: `Bearer ${auth.token}` } })
+    apiFetch("/api/files")
       .then(r => r.json())
       .then(files => {
         if (!Array.isArray(files) || files.length === 0) return;
         const latest = files[0]; // already sorted by uploadedAt desc
-        return fetch(`/api/files/${latest._id}`, { headers: { Authorization: `Bearer ${auth.token}` } })
+        return apiFetch(`/api/files/${latest._id}`)
           .then(r => r.json())
           .then(data => {
             if (!data.transactions) return;
@@ -2971,26 +2975,17 @@ export default function App() {
       })
       .catch(() => {})
       .finally(() => setAutoRestoring(false));
-  }, [auth?.token]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleAuth = useCallback((authData) => {
-    setAuth(authData);
-    if (authData) {
-      localStorage.setItem("cc_auth", JSON.stringify(authData));
-    } else {
-      localStorage.removeItem("cc_auth");
-    }
-  }, []);
+  }, [auth?.user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleData = useCallback((txns, name, type = "unknown") => {
     setTransactions(txns);
     setFileName(name);
     setStatementType(type);
     // Save to file history (non-blocking)
-    if (auth?.token && name !== "sample_data.csv") {
-      fetch("/api/files", {
+    if (auth?.user && name !== "sample_data.csv") {
+      apiFetch("/api/files", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${auth.token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fileName: name,
           statementType: type,
@@ -2998,13 +2993,11 @@ export default function App() {
         }),
       }).catch(() => {});
     }
-  }, [auth?.token]);
+  }, [auth?.user]);
 
   const handleLoadFile = useCallback(async (fileId, fileName, statementType) => {
     try {
-      const res = await fetch(`/api/files/${fileId}`, {
-        headers: { Authorization: `Bearer ${auth?.token}` },
-      });
+      const res = await apiFetch(`/api/files/${fileId}`);
       const data = await res.json();
       if (!data.transactions) return;
       // Deserialize date strings back to Date objects
@@ -3018,7 +3011,19 @@ export default function App() {
     } catch {
       // handled gracefully — user stays on upload screen
     }
-  }, [auth?.token]);
+  }, []);
+
+  if (!authChecked) {
+    return (
+      <div style={{
+        minHeight: "100vh", background: theme.bg, display: "flex",
+        alignItems: "center", justifyContent: "center", fontFamily: font,
+        color: theme.textSubtle, fontSize: 14,
+      }}>
+        Loading…
+      </div>
+    );
+  }
 
   if (!auth) {
     return <AuthScreen onAuth={handleAuth} />;
@@ -3030,7 +3035,7 @@ export default function App() {
         onData={handleData}
         auth={auth}
         onLoadFile={handleLoadFile}
-        onLogout={() => handleAuth(null)}
+        onLogout={handleLogout}
       />
     );
   }
@@ -3038,7 +3043,7 @@ export default function App() {
   return (
     <Dashboard
       auth={auth}
-      onLogout={() => { handleAuth(null); setTransactions(null); setFileName(""); setStatementType("unknown"); }}
+      onLogout={handleLogout}
       transactions={transactions}
       fileName={fileName}
       statementType={statementType}

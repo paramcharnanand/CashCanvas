@@ -1,12 +1,12 @@
 /**
- * Lightweight in-memory rate limiter for Vercel serverless functions.
+ * Lightweight in-memory rate limiter, shared by every route handler in both
+ * the Vercel serverless deployment and the local Express dev server (which
+ * mounts the same handlers — see server.js).
  *
  * NOTE: Each Vercel function instance has its own memory — the store is not
- * shared across instances. For strict global rate limiting in production, use
- * Upstash Redis with @upstash/ratelimit. This implementation provides a best-
- * effort per-instance defence against bursty abuse.
- *
- * For the local Express server, server.js implements a shared in-process store.
+ * shared across instances there. For strict global rate limiting in
+ * production, use Upstash Redis with @upstash/ratelimit. This implementation
+ * provides a best-effort per-instance defence against bursty abuse.
  */
 
 const store = new Map();
@@ -58,4 +58,9 @@ export function getClientIp(req) {
     req.socket?.remoteAddress ||
     "unknown"
   );
+}
+
+/** Test-only: clear all rate-limit state. Never called from application code. */
+export function _resetForTests() {
+  store.clear();
 }

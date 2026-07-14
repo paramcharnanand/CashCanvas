@@ -2,9 +2,14 @@
  * /api/ai — consolidated AI handler
  * Routes: POST /api/categorize, POST /api/parse-pdf
  */
-import { getUser }            from "./lib/auth.js";
+import { getUser }            from "./lib/jwt.js";
+import { getDb }              from "./lib/db.js";
 import { checkRateLimit, getClientIp } from "./lib/ratelimit.js";
-import { preprocessForAI }    from "./lib/transaction-cleaner.js";
+import { preprocessForAI, cleanTransaction, fuzzyMatchMerchant } from "./lib/transaction-cleaner.js";
+import { requireCsrf }        from "./lib/csrf.js";
+import { withErrorHandling }  from "./lib/http.js";
+import { isValidTransactionDesc, isValidTransactionAmount } from "./lib/validation.js";
+import { logger }             from "./lib/logger.js";
 
 // Allow up to 10 MB request bodies (base64-encoded PDFs)
 export const config = {
@@ -47,16 +52,69 @@ async function categorize(req, res) {
 
   const user = getUser(req);
   if (!user) return res.status(401).json({ error: "Unauthorized" });
+  if (!requireCsrf(req, res)) return;
+
+  // 150/15min per user+IP: the UI auto-batches uncategorized transactions in
+  // groups of 100 (see App.jsx), so a single 10,000-transaction statement can
+  // legitimately fire ~100 calls in quick succession on first load. 150
+  // covers that worst case plus a reload/retry, while still bounding
+  // per-user spend against the paid Gemini API this endpoint calls.
+  const ip   = getClientIp(req);
+  const rate = checkRateLimit(`categorize:${user.userId}:${ip}`, 15 * 60_000, 150);
+  if (!rate.ok) {
+    res.setHeader("Retry-After", String(rate.retryAfter));
+    return res.status(429).json({ error: "Too many categorization requests. Please wait before trying again." });
+  }
 
   const { transactions } = req.body || {};
   if (!Array.isArray(transactions) || transactions.length === 0)
     return res.json({ results: [] });
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return res.json({ results: [], warning: "GEMINI_API_KEY not configured" });
-
   const batch = transactions.slice(0, 100);
-  const descriptions = batch
+
+  // First pass: fuzzy-match against merchants this user has already taught
+  // the system (via reassigning a transaction's category before). This is a
+  // single indexed DB lookup vs. an external Gemini call per transaction —
+  // skipping it (as this endpoint used to) meant every "Other" transaction
+  // hit Gemini even for merchants the user had already corrected.
+  let merchantRules = new Map();
+  try {
+    const db = await getDb();
+    const rules = await db.collection("merchant_category_rules")
+      .find({ userId: user.userId })
+      .toArray();
+    merchantRules = new Map(rules.map(r => [r.merchantName, r.category]));
+  } catch {
+    // proceed with an empty map — everything just falls through to Gemini
+  }
+
+  const results = [];
+  const toSendToAI = [];
+  batch.forEach((t, i) => {
+    // idx must stay positional (matches the array the client sent) — skip
+    // malformed entries rather than filtering the array, which would shift
+    // every later idx and mis-map results client-side.
+    if (!t || !isValidTransactionDesc(t.desc) || !isValidTransactionAmount(t.amount)) return;
+
+    const cleaned = cleanTransaction(t.desc);
+    const match = fuzzyMatchMerchant(cleaned, merchantRules);
+    if (match) {
+      results.push({ idx: i, category: match.category, confidence: Math.round(match.score * 100) });
+    } else {
+      toSendToAI.push({ idx: i, desc: t.desc, amount: t.amount });
+    }
+  });
+
+  if (toSendToAI.length === 0) {
+    // Every transaction matched a merchant rule the user already taught —
+    // no Gemini call needed at all.
+    return res.json({ results });
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return res.json({ results, warning: "GEMINI_API_KEY not configured" });
+
+  const descriptions = toSendToAI
     .map((t, i) => `${i + 1}. "${preprocessForAI(t.desc)}" ($${Math.abs(t.amount || 0).toFixed(2)})`)
     .join("\n");
 
@@ -78,31 +136,32 @@ async function categorize(req, res) {
       }
     );
 
-    if (!response.ok) return res.json({ results: [] });
+    if (!response.ok) return res.json({ results });
 
     const data = await response.json();
     const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
 
-    const results = text
+    text
       .trim()
       .split("\n")
-      .map((line) => {
+      .forEach((line) => {
         const m = line.match(/^(\d+)\.\s+(.+?)(?::(\d+))?$/);
-        if (!m) return null;
-        const idx        = parseInt(m[1]) - 1;
+        if (!m) return;
+        const aiIdx      = parseInt(m[1]) - 1;
         const category   = m[2].trim();
         const confidence = m[3] ? parseInt(m[3]) : 75;
-        return {
-          idx,
-          category:   VALID_CATEGORIES.has(category) ? category : "Other",
-          confidence,
-        };
-      })
-      .filter(r => r !== null && r.idx >= 0 && r.idx < batch.length);
+        if (aiIdx >= 0 && aiIdx < toSendToAI.length) {
+          results.push({
+            idx:        toSendToAI[aiIdx].idx,
+            category:   VALID_CATEGORIES.has(category) ? category : "Other",
+            confidence,
+          });
+        }
+      });
 
     res.json({ results });
   } catch {
-    res.json({ results: [] });
+    res.json({ results });
   }
 }
 
@@ -113,6 +172,7 @@ async function parsePdf(req, res) {
 
   const user = getUser(req);
   if (!user) return res.status(401).json({ error: "Unauthorized" });
+  if (!requireCsrf(req, res)) return;
 
   const ip   = getClientIp(req);
   const rate = checkRateLimit(`parse-pdf:${user.userId}:${ip}`, 60 * 60_000, 10);
@@ -126,6 +186,14 @@ async function parsePdf(req, res) {
     return res.status(400).json({ error: "pdfBase64 is required" });
   if (pdfBase64.length > 9_500_000)
     return res.status(413).json({ error: "PDF too large for AI extraction. Maximum supported size is approximately 7 MB." });
+
+  // Guard against a non-PDF file (or garbage) reaching Gemini under a
+  // mismatched extension/MIME type — decode just the first few bytes and
+  // check the "%PDF" magic number rather than trusting the client-supplied
+  // file extension or MIME type.
+  const header = Buffer.from(pdfBase64.slice(0, 12), "base64");
+  if (!header.subarray(0, 4).equals(Buffer.from("%PDF")))
+    return res.status(400).json({ error: "File does not appear to be a valid PDF." });
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return res.json({ transactions: [], warning: "GEMINI_API_KEY not configured" });
@@ -175,7 +243,7 @@ Return ONLY the JSON array.`;
 
     if (!geminiRes.ok) {
       const errText = await geminiRes.text().catch(() => "");
-      console.error("[parse-pdf] Gemini error:", geminiRes.status, errText.slice(0, 300));
+      logger.error("parse-pdf", "Gemini error", { status: geminiRes.status, body: errText.slice(0, 300) });
       return res.json({ transactions: [] });
     }
 
@@ -187,7 +255,7 @@ Return ONLY the JSON array.`;
     try {
       parsed = JSON.parse(clean);
     } catch {
-      console.error("[parse-pdf] JSON parse failed:", clean.slice(0, 200));
+      logger.error("parse-pdf", "JSON parse failed", { body: clean.slice(0, 200) });
       return res.json({ transactions: [] });
     }
 
@@ -201,21 +269,21 @@ Return ONLY the JSON array.`;
     res.json({ transactions });
   } catch (err) {
     if (err.name === "AbortError") {
-      console.error("[parse-pdf] Gemini request timed out");
+      logger.error("parse-pdf", "Gemini request timed out");
       return res.status(504).json({ transactions: [], error: "AI parsing timed out. Please try again." });
     }
-    console.error("[parse-pdf] Unexpected error:", err.message);
+    logger.error("parse-pdf", err);
     res.json({ transactions: [] });
   }
 }
 
 // ── router ────────────────────────────────────────────────────────────────────
 
-export default async function handler(req, res) {
+export default withErrorHandling(async function handler(req, res) {
   const path = req.url.split("?")[0];
 
   if (req.method === "POST" && path === "/api/categorize") return categorize(req, res);
   if (req.method === "POST" && path === "/api/parse-pdf")  return parsePdf(req, res);
 
   res.status(404).json({ error: "Not found" });
-}
+});
