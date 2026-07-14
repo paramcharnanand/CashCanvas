@@ -1,0 +1,50 @@
+version: 2
+updates:
+  # ── App dependencies (package.json) ─────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+    groups:
+      # Minor/patch bumps are low-risk by semver convention — group them
+      # into one PR per week instead of one PR per package, so review
+      # effort scales with actual risk, not with dependency count.
+      production-dependencies:
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
+      development-dependencies:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
+    ignore:
+      # Major-version bumps always require a manual evaluation, never an
+      # automatic PR — see ROADMAP.md ADR-013 (the nodemailer 6→9 bump) for
+      # the precedent: a major version can change defaults or remove
+      # features even when the specific API surface this app uses stays
+      # stable, and that's a judgment call, not something safe to
+      # rubber-stamp merge. This applies to every dependency, not a
+      # hand-picked list — `mongodb` (tightly coupled to Atlas cluster
+      # compatibility), `express`, and the Vite/Vitest toolchain are the
+      # ones most likely to actually hit this rule, but the rule itself is
+      # general on purpose so nothing new slips through unreviewed.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # ── This repo's own CI workflows (action versions pinned in .github/workflows/*.yml) ──
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    groups:
+      github-actions:
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

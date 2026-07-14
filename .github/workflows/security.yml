@@ -1,0 +1,76 @@
+name: Security
+
+# Separate from CI on purpose: dependency/secret findings are a different
+# kind of signal than "did the build break" and shouldn't be conflated with
+# it. Runs on push/PR (so a newly-introduced risk is caught immediately) and
+# weekly (so an advisory published against an *existing*, unchanged
+# dependency is still caught — nothing about the code has to change for a
+# new CVE to apply to it).
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1" # every Monday 06:00 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  npm-audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.x"
+          cache: "npm"
+      - run: npm ci
+      # --audit-level=high: fails only on high/critical, actionable
+      # vulnerabilities. Low/moderate findings are often theoretical for
+      # this app's actual usage (e.g. a ReDoS in a devDependency's
+      # transitive build tooling that never touches user input) — informing,
+      # not gating. As of Phase 4/5 (see docs/security/threat-model.md,
+      # "Dependency posture"), `npm audit` is clean at every severity; this
+      # threshold is what keeps it that way going forward without being
+      # noisy about accepted-risk-tier findings. Any future accepted risk at
+      # high/critical severity that genuinely can't be fixed gets documented
+      # as an ADR in ROADMAP.md (see ADR-013 for the precedent — the
+      # nodemailer major-version evaluation) rather than silently
+      # suppressed here.
+      - name: Audit dependencies (fail on high/critical only)
+        run: npm audit --audit-level=high
+
+  dependency-review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' # needs a base/head diff to compare
+    steps:
+      - uses: actions/checkout@v4
+      # GitHub's own action: flags newly-introduced vulnerable or
+      # license-incompatible dependencies in a PR's diff specifically —
+      # complements npm-audit above (which checks the whole tree on every
+      # run) by calling out exactly what a given PR is adding.
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: always
+
+  secret-scan:
+    name: Secret scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # gitleaks scans history, not just the working tree
+      # This repo isn't necessarily on a GitHub plan with native secret
+      # scanning (that's a repo/organization *setting*, and Phase 7.8
+      # explicitly scopes this project to recommending settings changes,
+      # not making them). gitleaks is a free, self-contained action that
+      # scans the diff/history for common secret patterns (API keys,
+      # private keys, tokens) without requiring any account, paid service,
+      # or GitHub plan tier — the practical option available from within a
+      # workflow file alone.
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

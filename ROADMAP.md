@@ -6,7 +6,7 @@ require re-deriving context that already existed once.
 
 ## Progress
 
-**5 of 9 phases complete (56%).**
+**6 of 9 phases complete (67%).**
 
 | # | Phase | Status | Docs |
 |---|---|---|---|
@@ -16,9 +16,24 @@ require re-deriving context that already existed once.
 | 4 | Security hardening | ✅ Done | `docs/security/threat-model.md` |
 | 5 | Dependency maintenance (`npm audit`, upgrades) | ✅ Done | `docs/security/threat-model.md` (Dependency posture) |
 | 6 | Testing infrastructure | 🔄 Partially done already — see note below | — |
-| 7 | CI/CD (GitHub Actions) | ⬜ Not started | — |
+| 7 | CI/CD (GitHub Actions) | ✅ Done | `docs/engineering-lessons/phase-7-ci-cd.md` |
 | 8 | Frontend redesign (design system, shadcn/ui, Tailwind, Framer Motion, a11y) | ⬜ Not started | — |
 | 9 | Advanced AI features & product enhancements | ⬜ Not started | — |
+
+### Phase 7 completion note
+
+Delivered: ESLint (flat config, scoped rules — see ADR-016), Vitest coverage reporting,
+`.github/workflows/ci.yml` (lint + test + build on every push/PR), `.github/workflows/security.yml`
+(npm audit, dependency review, secret scanning), `.github/workflows/deploy-verify.yml`
+(post-deploy smoke test + the 3-function-count guard — see ADR-018), `.github/dependabot.yml`
+(ADR-017), `CONTRIBUTING.md`, `docs/release-process.md`, `docs/github-branch-protection.md`
+(recommendations only — no GitHub settings were changed), and
+`docs/engineering-lessons/phase-7-ci-cd.md`. One real bug found and fixed along the way: a
+duplicate `AMZN` key in `api/_lib/transaction-cleaner.js`'s abbreviation dictionary, caught by
+ESLint's `no-dupe-keys` the moment linting was introduced (harmless — both values were
+identical — but genuinely dead code; see the regression test in
+`tests/transaction-cleaner.test.js`). No Playwright/e2e suite was added — that's explicitly
+Phase 6 scope, not built speculatively ahead of it.
 
 ### Phase 4 completion note
 
@@ -40,15 +55,90 @@ finished alongside it since the threat model needed the resulting dependency pos
   CI-safety pattern (never touch the real Atlas cluster) are already established and should be
   reused, not rebuilt.
 
-Recommended order for what's left, driven by dependency: **7 (CI/CD, so Phases 4/5's work is
-enforced automatically going forward) → 6 (finish testing) → 8 (frontend) → 9 (AI features)**.
-Frontend redesign is deliberately last — no value in polishing UI on top of a backend whose
-test/CI story isn't finished, and CI/CD should exist *before* the biggest, highest-risk diff
-(the frontend rewrite) lands.
+Recommended order for what's left: **6 (finish testing — Playwright/e2e, visual regression,
+coverage target) → 8 (frontend) → 9 (AI features)**. Frontend redesign is deliberately last —
+no value in polishing UI on top of a backend whose e2e-test story isn't finished, and now that
+CI/CD (Phase 7) exists, it'll automatically catch regressions the frontend rewrite might
+introduce, which is exactly the safety net that rewrite needs before it lands.
 
 ## Architecture Decision Records
 
 Newest first.
+
+### ADR-018 — Deployment verification triggers on Vercel's `deployment_status` event, not a custom deploy step
+**Context**: Phase 7.9 required a workflow that verifies a deployment after it succeeds,
+including the exact-3-functions check that would have caught the Hobby-plan function-count
+regression before it reached real users. **Decision**: `.github/workflows/deploy-verify.yml`
+listens for GitHub's `deployment_status` event (which Vercel's native GitHub integration
+already posts on every deploy) rather than adding a custom deploy step that calls Vercel from
+within a workflow. **Rationale**: Vercel's GitHub App already deploys on every push to `main` —
+duplicating that in a workflow would mean two deployment paths that could drift, and there's no
+reason to rebuild something that already works. Reacting to the *result* of that existing
+deployment is strictly additive: four HTTP-level checks (homepage, `/api/auth`, `/api/data`,
+`/api/ai`) need no secret and always run; the function-count check needs a `VERCEL_TOKEN`
+repository secret (documented in `docs/release-process.md`, not something this project can set
+itself) and fails loudly with an explanation if that secret is missing, rather than silently
+skipping. **Status**: verified against the live production deployment during Phase 7 (the exact
+`curl`/`vercel inspect`/`grep` logic in the workflow was run manually against
+`cash-canvas-sigma.vercel.app` and confirmed to detect all three functions correctly) — not yet
+exercised by an actual GitHub Actions run, since that requires the `VERCEL_TOKEN` secret to be
+added by the repository owner first.
+
+### ADR-017 — Dependabot ignores major-version bumps globally, not via a hand-picked package list
+**Context**: Phase 7.7 required Dependabot configured with "packages that should not
+auto-upgrade" excluded. **Decision**: `.github/dependabot.yml` ignores
+`version-update:semver-major` for every dependency (`dependency-name: "*"`), rather than naming
+specific packages like `mongodb` or `express`. **Rationale**: this project already has a real
+precedent for why major bumps need a human, not a bot — ADR-013's `nodemailer` 6→9 upgrade
+required checking exactly which APIs this app uses and verifying none of the breaking changes
+touched them, a judgment call no automated tool can make safely. That reasoning applies to
+*any* direct dependency's major bump, not a pre-guessable subset — a hand-picked ignore list
+would work today and silently stop protecting the project the day a dependency not on the list
+ships a breaking major version. Minor/patch bumps (semver-safe by convention) are still
+auto-grouped weekly. **Status**: stable.
+
+### ADR-016 — ESLint adopts only `rules-of-hooks` + `exhaustive-deps` from eslint-plugin-react-hooks, not its full "recommended" set
+**Context**: Phase 7.1/7.2 required introducing ESLint into a codebase that had never been
+linted. `eslint-plugin-react-hooks` v7's `recommended` config turned out to be a new,
+much stricter rule family oriented around the React Compiler (`set-state-in-effect`,
+`immutability`, `purity`, `set-state-in-render`, etc.) — adopting it wholesale produced 46
+errors, nearly all in `App.jsx`, flagging long-standing, working, already-shipped patterns
+(e.g. calling `setState` inside a `useEffect` that parses a URL param) that this codebase was
+never written against. **Decision**: keep only the two classic, universally-accepted rules —
+`rules-of-hooks` (a real correctness rule: catches hooks called conditionally or out of order,
+which causes actual runtime bugs) as `error`, and `exhaustive-deps` (a best-practice hint) as
+`warn`. Also downgraded `react/no-unescaped-entities` and `no-useless-escape` to `warn` (real,
+but purely cosmetic findings — ~40 occurrences across `App.jsx`, unrelated to standing up CI).
+**Rationale**: per this phase's explicit instruction not to modify completed frontend/backend
+work without a critical issue discovered, retroactively rewriting a large, working file to
+satisfy a linter's *opinion* (not a correctness bug) is out of scope — the same reasoning that
+kept `no-dupe-keys` (a genuine correctness rule already in ESLint's base `recommended` config)
+as a hard error, since that one *did* catch a real, if harmless, bug (see the `AMZN` duplicate
+key fix this phase). **Status**: `npm run lint` is genuinely green (0 errors) against the
+current codebase — see `eslint.config.js` for the specific rule-by-rule reasoning. Revisit the
+full React Compiler rule set if this project ever adopts the compiler itself.
+
+### ADR-015 — CI installs with `npm ci` and pins Node to the version production actually runs
+**Context**: during the Phase 4/5 release checkpoint (before Phase 7 started), a real
+local/committed drift was found: the local dev machine had `vite@6.4.1` installed while
+`package-lock.json` — what Vercel installs fresh on every deploy — locked `vite@6.4.3`. Local
+and deployed builds produced slightly different bundle hashes because of it. **Decision**:
+`.github/workflows/ci.yml` uses `npm ci` (never `npm install`) and pins Node to `24.x` via
+`actions/setup-node`, matching the Vercel project's actual configured Node version (confirmed
+via `vercel project ls` during the prior deployment session), not whatever a CI runner's
+default happens to be. `package.json` also gained an `engines.node: ">=22"` field — deliberately
+a permissive *floor*, not a `24.x` exact-match: this local dev machine runs Node 22.20.0 and had
+run every command in this project successfully all session, so pinning `engines` to `>=24` would
+immediately produce an `EBADENGINE` warning on a machine that has nothing actually wrong with
+it (caught during this same phase's own final verification pass — `npm ci` surfaced the
+warning immediately after `>=24` was first tried). **Rationale**: `npm ci` fails outright on any
+lockfile/`package.json` disagreement instead of silently re-resolving, which is exactly the
+property that would have caught the `vite` drift in CI before it ever caused a confusing "why
+don't my local and deployed builds match" investigation. CI/production stay pinned to an exact
+`24.x` for true parity (that's the comparison that actually matters — CI vs. Vercel, not one
+contributor's laptop vs. another's); `engines` only needs to rule out genuinely incompatible old
+versions, not enforce lockstep with production. **Status**: stable
+— see `docs/engineering-lessons/phase-7-ci-cd.md` for the full story, written up for onboarding.
 
 ### ADR-014 — Reset `global._mongoClientPromise` per test file; run test files sequentially
 **Context**: discovered during the Phase 4 release checkpoint, not something this phase's
@@ -220,6 +310,23 @@ From `database.md`:
   TTL-cleaned (would delete whole accounts) — inert-but-harmless field bloat if unused.
 - No MongoDB-level schema validation — see ADR-008.
 - Budgets / Savings Goals have no persistence layer — see ADR-007.
+
+From Phase 7 (CI/CD):
+- `.github/workflows/deploy-verify.yml`'s Serverless Function count check needs a `VERCEL_TOKEN`
+  repository secret this project cannot add itself — documented in `docs/release-process.md`,
+  not yet exercised by an actual GitHub Actions run (see ADR-018).
+- `docs/github-branch-protection.md`'s recommendations are unapplied — branch protection is a
+  GitHub repository *setting*, deliberately out of scope for this project's own files (Phase
+  7.8 explicitly says not to modify GitHub settings). CI checks exist and pass; nothing yet
+  requires them to pass before a merge is possible.
+- ~45 pre-existing ESLint warnings (unescaped JSX apostrophes, unnecessary regex escapes,
+  mostly in `App.jsx`) are visible but not blocking — see ADR-016 for why they weren't
+  retroactively fixed as part of introducing linting. Clean up incrementally.
+- No Codecov (or similar) integration — coverage reports are generated and uploaded as CI
+  artifacts (lcov/html/json-summary), ready for that the day it's wired up, per Phase 7.4's
+  explicit "don't add unnecessary external services" instruction.
+- No Playwright/e2e workflow step — there's no Playwright suite in this repo yet to run (Phase
+  6 scope, not built speculatively ahead of it).
 
 From `docs/security/threat-model.md` (Phase 4):
 - Pagination and search validators were explicitly requested by the Phase 4 spec but not

@@ -13,7 +13,7 @@
 // ─── ABBREVIATION DICTIONARY ─────────────────────────────────────────────────
 const ABBREVIATIONS = {
   // Grocery
-  AMZN: "Amazon", "AMZN MKTP": "Amazon Marketplace", "AMZN MKTPLACE": "Amazon Marketplace",
+  "AMZN MKTP": "Amazon Marketplace", "AMZN MKTPLACE": "Amazon Marketplace",
   "AMAZON MKTP": "Amazon Marketplace", "AMAZON MKTPLACE": "Amazon Marketplace",
   WFM: "Whole Foods", WHOLEFDS: "Whole Foods", WHOLEFOOD: "Whole Foods",
   "COSTCO WHSE": "Costco Wholesale", TJ: "Trader Joes",

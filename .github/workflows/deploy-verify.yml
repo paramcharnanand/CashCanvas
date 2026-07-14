@@ -1,0 +1,96 @@
+name: Deployment Verification
+
+# Reacts to Vercel's native GitHub integration reporting a deployment as
+# successful (it posts a `deployment_status` event to this repo), plus a
+# manual trigger for on-demand checks against any URL. This is a *post*-
+# deployment smoke test — it never deploys anything itself.
+on:
+  deployment_status:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Deployment URL to verify"
+        required: false
+        default: "https://cash-canvas-sigma.vercel.app"
+
+permissions:
+  contents: read
+  deployments: read
+
+jobs:
+  verify:
+    name: Verify deployment
+    runs-on: ubuntu-latest
+    # A pending/failure/error deployment_status means there's nothing live
+    # yet to check — only react to a reported success. workflow_dispatch has
+    # no deployment_status payload, so it always runs.
+    if: github.event_name == 'workflow_dispatch' || github.event.deployment_status.state == 'success'
+    steps:
+      - name: Resolve target URL
+        id: target
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "url=${{ inputs.url }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "url=${{ github.event.deployment_status.target_url }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Homepage returns 200
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" "${{ steps.target.outputs.url }}")
+          echo "Homepage: $status"
+          [ "$status" = "200" ] || { echo "::error::Homepage did not return 200 (got $status)"; exit 1; }
+
+      # A 401 here proves the function is alive, deployed, and correctly
+      # reached through vercel.json's rewrites — these routes require auth,
+      # so 401 (not 404/5xx/timeout) is the actual "healthy" response, not
+      # 200. See docs/backend/authentication.md for the routing this depends on.
+      - name: /api/auth responds
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" "${{ steps.target.outputs.url }}/api/auth/profile")
+          echo "/api/auth/profile: $status"
+          [ "$status" = "401" ] || { echo "::error::/api/auth/profile returned $status, expected 401 — function unreachable or routing broken"; exit 1; }
+
+      - name: /api/data responds
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" "${{ steps.target.outputs.url }}/api/files")
+          echo "/api/files: $status"
+          [ "$status" = "401" ] || { echo "::error::/api/files returned $status, expected 401 — function unreachable or routing broken"; exit 1; }
+
+      - name: /api/ai responds
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${{ steps.target.outputs.url }}/api/categorize" -H "Content-Type: application/json" -d '{}')
+          echo "/api/categorize: $status"
+          [ "$status" = "401" ] || { echo "::error::/api/categorize returned $status, expected 401 — function unreachable or routing broken"; exit 1; }
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.x"
+
+      # Requires a VERCEL_TOKEN repository secret (Settings → Secrets and
+      # variables → Actions). This workflow can't add that secret itself —
+      # see docs/release-process.md for how to generate and add one. Without
+      # it, this step fails loudly with an actionable message rather than a
+      # confusing CLI error, and the four checks above still ran.
+      - name: Verify exactly 3 Serverless Functions
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::error::VERCEL_TOKEN secret is not set — cannot verify the deployed Serverless Function count. See docs/release-process.md, 'Required secrets'."
+            exit 1
+          fi
+
+          output=$(npx --yes vercel@latest inspect "${{ steps.target.outputs.url }}" --token "$VERCEL_TOKEN" 2>&1)
+          echo "$output"
+
+          count=$(echo "$output" | grep -cE '^[[:space:]]*[├└]── λ ')
+          echo "Detected $count serverless function(s)."
+
+          if [ "$count" -ne 3 ]; then
+            echo "::error::Expected exactly 3 Serverless Functions (api/auth, api/data, api/ai) but found $count. This almost always means a new file was added directly under api/ instead of api/_lib/ (breaking the underscore-prefix exclusion Vercel uses to skip helper modules — see ROADMAP.md's ADR on this), or api/_lib itself was renamed/restructured. Vercel's Hobby plan caps at 12 functions; left unchecked, this is exactly the class of regression that broke production deployment before (see docs/security/threat-model.md)."
+            exit 1
+          fi
+
+          echo "Confirmed: exactly 3 Serverless Functions deployed."

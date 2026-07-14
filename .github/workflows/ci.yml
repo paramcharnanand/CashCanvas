@@ -1,0 +1,77 @@
+name: CI
+
+# Runs on every push and every pull request, so a broken commit is caught
+# before it lands on main, not after. See docs/engineering-lessons/phase-7-ci-cd.md
+# for why each step below exists and in this order.
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Lint, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 24.x matches this project's actual production runtime (Vercel's
+      # cash-canvas project is configured for Node 24.x) — CI should test
+      # against the same Node version the app actually runs on, not
+      # whatever happens to be the CI runner's default.
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.x"
+          cache: "npm" # caches ~/.npm keyed on package-lock.json — see docs/engineering-lessons/phase-7-ci-cd.md
+
+      # npm ci (not `npm install`): installs exactly what package-lock.json
+      # locks, fails instead of silently re-resolving if package.json and
+      # the lockfile disagree, and always starts from a clean node_modules.
+      # This is the same class of drift that caused a real local/CI mismatch
+      # earlier in this project (see ADR-015 / CHECKPOINT.md) — `npm ci` is
+      # what prevents it from ever reaching CI in the first place.
+      - name: Install dependencies
+        run: npm ci
+
+      # Lint before tests: a syntax/correctness problem ESLint can catch in
+      # seconds shouldn't wait behind a 10+ second test suite to be reported.
+      # Fails the job on real errors (0 today); the ~45 pre-existing style
+      # warnings from onboarding ESLint into an existing codebase (see
+      # eslint.config.js for the specific, documented rule-scoping
+      # decisions) are visible in the log but don't fail the build.
+      - name: Lint
+        run: npm run lint
+
+      # No TypeScript in this project (plain JS throughout) — there is
+      # nothing for a type-check step to run. Left out rather than adding a
+      # no-op step that pretends to check something that isn't there.
+
+      - name: Run tests with coverage
+        run: npm run test:coverage
+
+      # No Playwright/e2e suite exists yet in this repo (tracked as a
+      # Phase 6 gap in ROADMAP.md) — nothing to run. When it's added, this
+      # step slots in here, after unit/integration tests and before the
+      # production build.
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Upload test coverage
+        if: always() # coverage/ exists even if a test failed — still useful to inspect
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14
+
+      - name: Upload production build
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-build
+          path: dist/
+          retention-days: 7
