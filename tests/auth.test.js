@@ -51,6 +51,52 @@ describe("login / signup", () => {
     expect(res.status).toBe(401);
     expect(extractCookie(res, "cc_at")).toBeNull();
   });
+
+  it("rejects a login with no email or password with 400, not a DB lookup", async () => {
+    const res = await request(app).post("/api/auth/login").send({ email: "", password: "" });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a nonexistent email with 401 and a distinct message", async () => {
+    const res = await request(app)
+      .post("/api/auth/login")
+      .send({ email: uniqueEmail(), password: "password123" });
+    expect(res.status).toBe(401);
+    expect(res.body.error).toMatch(/no account found/i);
+  });
+
+  it("locks the account after MAX_FAILED wrong passwords, then rejects even the correct one", async () => {
+    const email = uniqueEmail();
+    await signupUser(email);
+
+    // MAX_FAILED (5) wrong attempts — the 5th also crosses the lockout threshold.
+    for (let i = 0; i < 5; i++) {
+      const res = await request(app).post("/api/auth/login").send({ email, password: "wrong-password" });
+      expect(res.status).toBe(401);
+    }
+
+    const lockedOut = await request(app).post("/api/auth/login").send({ email, password: "password123" });
+    expect(lockedOut.status).toBe(429);
+    expect(lockedOut.body.error).toMatch(/account locked/i);
+
+    const user = await db.collection("users").findOne({ email });
+    expect(user.lockedUntil).toBeTruthy();
+    expect(user.failedLogins).toBe(5);
+  });
+
+  it("rate-limits login attempts from the same IP independent of account lockout", async () => {
+    const email = uniqueEmail();
+    await signupUser(email);
+
+    // The login:<ip> limiter (10/15min) is keyed on IP, not email — distinct
+    // nonexistent emails from the same agent/IP still exhaust it.
+    for (let i = 0; i < 10; i++) {
+      await request(app).post("/api/auth/login").send({ email: uniqueEmail(), password: "x" });
+    }
+    const res = await request(app).post("/api/auth/login").send({ email, password: "password123" });
+    expect(res.status).toBe(429);
+    expect(res.headers["retry-after"]).toBeTruthy();
+  });
 });
 
 describe("authenticated requests / invalid & missing cookies", () => {
