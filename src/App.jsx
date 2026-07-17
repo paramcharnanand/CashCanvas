@@ -2936,6 +2936,12 @@ export default function App() {
   useEffect(() => {
     fetchCurrentUser()
       .then(user => setAuth(user ? { user } : null))
+      // A network failure here (offline, DNS hiccup, etc.) must not become
+      // an unhandled promise rejection — every other apiFetch call site in
+      // this file catches its own errors; this was the one that didn't.
+      // Fail safe: leave `auth` at its default (null/logged-out) rather
+      // than throw, same outcome a "no session" response already produces.
+      .catch(() => {})
       .finally(() => setAuthChecked(true));
   }, []);
 

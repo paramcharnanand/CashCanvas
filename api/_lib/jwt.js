@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import jwt from "jsonwebtoken";
 import { getCookie, ACCESS_COOKIE, ACCESS_TOKEN_TTL_MS } from "./cookies.js";
 
@@ -13,9 +14,21 @@ if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
 
 const SECRET = process.env.JWT_SECRET || "cashcanvas-dev-secret-change-in-prod";
 
-/** Sign a short-lived (15 min) access token carrying { userId, email, name }. */
+/**
+ * Sign a short-lived (15 min) access token carrying { userId, email, name }.
+ *
+ * Includes a random `jti`: `jsonwebtoken`'s `iat` only has one-second
+ * resolution, and this payload otherwise carries nothing that changes
+ * between calls. A refresh completing within the same wall-clock second as
+ * the token it's replacing would otherwise mint a byte-identical JWT — a
+ * real (if narrow) rotation gap, not just a test artifact: found via a
+ * Playwright refresh-rotation test that failed deterministically on
+ * WebKit's faster round-trip, see tests/e2e/auth-resilience.spec.js.
+ */
 export function generateAccessToken(payload) {
-  return jwt.sign(payload, SECRET, { expiresIn: Math.floor(ACCESS_TOKEN_TTL_MS / 1000) });
+  return jwt.sign({ ...payload, jti: crypto.randomUUID() }, SECRET, {
+    expiresIn: Math.floor(ACCESS_TOKEN_TTL_MS / 1000),
+  });
 }
 
 /** Verify and decode an access token. Throws if invalid or expired. */

@@ -37,9 +37,22 @@ export const CONTENT_SECURITY_POLICY = Object.entries(CSP_DIRECTIVES)
   .join("; ");
 
 const helmetMiddleware = helmet({
-  contentSecurityPolicy: { directives: CSP_DIRECTIVES },
+  contentSecurityPolicy: {
+    // Helmet merges `directives` with its own default directive set unless
+    // told otherwise, which was silently adding `upgrade-insecure-requests`
+    // — a directive vercel.json's CSP has never included and that this dev
+    // server has no business sending either (see the `hsts` note below for
+    // why sending it over plain HTTP actively broke WebKit). Explicitly
+    // unsetting it here keeps this CSP an exact match for CONTENT_SECURITY_POLICY /
+    // vercel.json instead of silently drifting from it.
+    directives: { ...CSP_DIRECTIVES, upgradeInsecureRequests: null },
+  },
   referrerPolicy: { policy: "strict-origin-when-cross-origin" },
   frameguard: { action: "deny" }, // Helmet defaults to SAMEORIGIN — we need DENY to match vercel.json
+  // Helmet sends this unconditionally by default, regardless of whether the
+  // connection is actually HTTPS. Set manually below, gated on req.secure,
+  // instead.
+  hsts: false,
 });
 
 /** Express middleware: Helmet's modern defaults plus our CSP, plus the one legacy header Helmet no longer sets. */
@@ -47,6 +60,20 @@ export function securityHeaders(req, res, next) {
   helmetMiddleware(req, res, () => {
     // Obsolete in modern browsers but kept for parity with vercel.json / older clients.
     res.setHeader("X-XSS-Protection", "1; mode=block");
+    // Strict-Transport-Security tells a browser "only ever use HTTPS for
+    // this origin from now on" — sending it over a plain HTTP connection is
+    // nonsensical, and per RFC 6797 §8.1 browsers are supposed to ignore it
+    // in that case. WebKit doesn't reliably: it was observed upgrading a
+    // subresource request to HTTPS anyway on a plain-HTTP page, which then
+    // failed outright since nothing here speaks TLS — blanking the app for
+    // any WebKit-based session (Safari, Playwright's webkit/mobile-safari
+    // projects). `server.js` and the Playwright e2e server both run this
+    // middleware over plain HTTP; production (Vercel, genuinely HTTPS) sets
+    // its own copy of this header declaratively in vercel.json, unaffected
+    // by this. Only send it here when the connection is genuinely secure.
+    if (req.secure || req.headers["x-forwarded-proto"] === "https") {
+      res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    }
     next();
   });
 }

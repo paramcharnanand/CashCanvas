@@ -330,12 +330,22 @@ function ForgotPasswordScreen({ onBack }) {
     setLoading(true);
     setError("");
     try {
-      await apiFetch("/api/auth/forgot-password", {
+      const res = await apiFetch("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.toLowerCase() }),
       });
-      setSent(true);
+      if (res.ok) {
+        setSent(true);
+      } else {
+        // A non-ok response here is a real failure (rate-limited, or the
+        // service isn't configured) — not the "does this email exist"
+        // question, which the backend already answers the same way (200,
+        // {ok:true}) for both existing and non-existing accounts. Surfacing
+        // this is not an enumeration leak.
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Failed to send reset email. Please try again.");
+      }
     } catch {
       setError("Cannot connect to server. Please try again.");
     } finally {
