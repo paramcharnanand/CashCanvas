@@ -6,7 +6,7 @@ require re-deriving context that already existed once.
 
 ## Progress
 
-**6 of 9 phases complete (67%).**
+**7 of 9 phases complete (78%).**
 
 | # | Phase | Status | Docs |
 |---|---|---|---|
@@ -15,10 +15,49 @@ require re-deriving context that already existed once.
 | 3 | Database optimization & indexing | ✅ Done | `docs/backend/database.md` |
 | 4 | Security hardening | ✅ Done | `docs/security/threat-model.md` |
 | 5 | Dependency maintenance (`npm audit`, upgrades) | ✅ Done | `docs/security/threat-model.md` (Dependency posture) |
-| 6 | Testing infrastructure | 🔄 Partially done already — see note below | — |
+| 6 | Testing infrastructure | ✅ Done | `docs/engineering-lessons/phase-6-testing.md` |
 | 7 | CI/CD (GitHub Actions) | ✅ Done | `docs/engineering-lessons/phase-7-ci-cd.md` |
 | 8 | Frontend redesign (design system, shadcn/ui, Tailwind, Framer Motion, a11y) | ⬜ Not started | — |
 | 9 | Advanced AI features & product enhancements | ⬜ Not started | — |
+
+### Phase 6 completion note
+
+Delivered: Playwright (`playwright.config.js` — chromium, firefox, webkit, mobile-chrome,
+mobile-safari, running against a same-origin production-build server, see
+`tests/e2e/e2e-server.mjs`), five e2e spec files (`homepage`, `auth`, `auth-resilience`, `a11y`,
+`performance`, plus `visual` — 6 total) covering signup/login/logout, CSRF, session
+persistence/refresh rotation, multi-tab logout, offline resilience, account deletion, and the
+forgot-password error path; `axe-playwright` accessibility scans on four page states with a
+critical-impact hard gate plus a tracked per-page violation allowlist (ADR-019); chromium-only
+visual regression snapshots of the three structurally-stable screens (ADR-020); performance
+smoke tests; a Vitest coverage floor (`vitest.config.js` thresholds — ADR-021); and a Playwright
+step in `.github/workflows/ci.yml` (minus the visual-regression tests, which need a Linux-native
+baseline CI doesn't have yet — see ADR-020). `npm test`: **88/88** (84 carried forward + 4 new
+login-lockout/rate-limit tests, closing a real coverage gap in `api/auth.js`). Playwright:
+**165/165** functional/a11y/performance tests across all 5 browser projects, plus **3/3** visual
+snapshots (chromium only, by design).
+
+Four real, deterministic bugs were found and fixed along the way, none hypothetical — see
+`docs/engineering-lessons/phase-6-testing.md`'s "Why testing saves money" for the summary and
+ADR-019/020/021 below plus the CHECKPOINT.md session log for full detail:
+1. `ForgotPasswordScreen` (`src/AuthScreen.jsx`) never checked the response status, so a real
+   failure (rate-limited, or the email service not being configured) was silently shown as a fake
+   "check your email" success screen. Fixed to match `ResetPasswordScreen`'s existing pattern.
+2. Helmet was sending `Strict-Transport-Security` and CSP's `upgrade-insecure-requests`
+   unconditionally, even over the plain-HTTP local dev/e2e server — WebKit honored the upgrade
+   for a subresource fetch and broke outright (blank page, real Safari users on local dev would
+   see the same thing). Fixed in `api/_lib/security-headers.js` to gate HSTS on `req.secure` and
+   drop `upgrade-insecure-requests` entirely (restores CSP parity with `vercel.json`, which never
+   had it).
+3. `api/_lib/jwt.js` signed access tokens with only `{userId, email, name}` and
+   `jsonwebtoken`'s one-second-resolution `iat` — a refresh completing within the same
+   wall-clock second as the token it replaced produced a byte-identical "new" token. Fixed with a
+   random `jti` claim.
+4. The `authenticatedPage` Playwright fixture (`tests/e2e/fixtures/index.mjs`) returned control
+   right after `page.goto("/")`, before `App.jsx`'s own mount-time session check had resolved —
+   racy on a slower device profile, and the app's own offline fail-safe (already fixed earlier
+   this session) then correctly-but-unluckily rendered a valid session as logged out. Fixed by
+   waiting for a definitively-authenticated element before the fixture hands back control.
 
 ### Phase 7 completion note
 
@@ -48,22 +87,88 @@ finished alongside it since the threat model needed the resulting dependency pos
 
 ### Re-prioritization note
 
-- **Phase 6 (Testing infrastructure)**: Vitest + supertest + `mongodb-memory-server` are
-  already wired up and running 82 passing tests (Phase 2's auth suite, Phase 3's data suite,
-  and Phase 4's validation/security/logging/logger suites). What's actually left: Playwright
-  for true end-to-end/browser tests, visual regression, and a coverage target — the harness and
-  CI-safety pattern (never touch the real Atlas cluster) are already established and should be
-  reused, not rebuilt.
+- **Phase 6 (Testing infrastructure)**: done — see the completion note above. Vitest + supertest
+  + `mongodb-memory-server` (unit/integration) and Playwright (e2e, a11y, visual, performance)
+  now cover both the API and the real browser-rendered app, with a coverage floor enforced in CI.
 
-Recommended order for what's left: **6 (finish testing — Playwright/e2e, visual regression,
-coverage target) → 8 (frontend) → 9 (AI features)**. Frontend redesign is deliberately last —
-no value in polishing UI on top of a backend whose e2e-test story isn't finished, and now that
-CI/CD (Phase 7) exists, it'll automatically catch regressions the frontend rewrite might
-introduce, which is exactly the safety net that rewrite needs before it lands.
+Recommended order for what's left: **8 (frontend) → 9 (AI features)**. Frontend redesign is
+deliberately next, now that Phase 6's e2e/a11y/visual suite exists to catch regressions the
+rewrite might introduce — that's exactly the safety net a frontend rewrite needs under it before
+it lands. Two of Phase 8's own prerequisites are now measurably tracked rather than just written
+down: the current a11y baseline (`tests/e2e/a11y.spec.js`'s allowlist) becomes the thing Phase 8
+should shrink, not just "zero accessibility attributes" as a general note; and CSP's
+`style-src: 'unsafe-inline'` dependency on inline `style={{}}` (see `authentication.md`'s known
+technical debt) is still open and still Phase 8's to close.
 
 ## Architecture Decision Records
 
 Newest first.
+
+### ADR-021 — Vitest coverage thresholds set as a floor under today's real numbers, not an aspirational target
+**Context**: Phase 6 (and ROADMAP's own re-prioritization note, previously) called out "a
+coverage target" as one of the explicitly open items testing infrastructure still needed.
+**Decision**: `vitest.config.js`'s `coverage.thresholds` is set to statements 50 / branches 42 /
+functions 70 / lines 52 — a few points under this session's actual measured numbers
+(52.2/46/75/54.9), not a round or aspirational number. **Rationale**: a threshold above real
+coverage just fails the very next build; a threshold with no teeth (e.g. 0%) isn't a target at
+all. Setting it just under today's real number makes it a genuine regression gate — a future PR
+that deletes tests or adds untested code fails CI — without demanding contributors chase 100% on
+code this project has repeatedly, deliberately left untested on purpose (see `mailer.js`,
+`otp.js`, and `auth.js`'s OTP branches below, ADR-019's sibling reasoning). Coverage on
+`api/auth.js` specifically improved from 29.65%/29.92% (statements/branches) to
+31.75%/33.46% this phase by adding real tests for the login rate-limiter, lockout-after-5-failed-
+attempts logic, and the nonexistent-account path — all real, previously-untested security logic
+that needed no email/SMTP to test. The much larger remaining gap (`verifyOtp`, `resendOtp`,
+`forgotPassword`'s real branch, `verifyLink`, `resendVerification`) is structurally unreachable
+in this test suite by design: `tests/vitest.setup.js` deletes `GMAIL_USER`/`GMAIL_APP_PASSWORD`
+so `isEmailVerificationEnabled()` is always `false`, the same "disable, don't mock" pattern
+`phase-6-testing.md`'s "Mocking" section already documents — closing it for real needs actual
+Gmail SMTP test credentials, not more test-writing effort. **Status**: stable; raise the
+thresholds deliberately as real coverage grows, not to make this number look bigger.
+
+### ADR-020 — Visual regression runs on the chromium Playwright project only, and is excluded from CI
+**Context**: Phase 6.5 needed snapshot tests for CashCanvas's structurally stable screens
+(sign-in, create-account, the authenticated app shell before data loads).
+**Decision**: `tests/e2e/visual.spec.js` skips itself (via a `beforeEach` checking
+`testInfo.project.name`) on every Playwright project except `chromium`, and
+`.github/workflows/ci.yml`'s Playwright step explicitly excludes this file
+(`--grep-invert "visual regression"`). **Rationale**: two separate problems, one fix each.
+First, running the same pixel snapshot across all 5 configured browser projects would multiply
+baseline images 5x for a check whose entire value is "did *our* markup/CSS change" — different
+rendering engines (chromium/firefox/webkit) anti-alias fonts and subpixels differently by design,
+which would fail the comparison on every single run regardless of any real change. Second, the
+baseline PNGs committed here were generated on this project's macOS development machine —
+Playwright names them by platform (`auth-sign-in-chromium-darwin.png`) — and
+`.github/workflows/ci.yml` runs on `ubuntu-latest`; a Linux runner's font rendering would fail
+every comparison the same way, for the same non-reason. The first problem is permanently fixed
+by scoping to one project; the second is a real, currently-open gap, not silently worked around —
+CI simply doesn't run these tests yet, same as ADR-018 documented `deploy-verify.yml`'s
+unexercised-by-a-real-run status rather than pretending it was covered. **Status**: visual
+regression is real and passing locally (3/3, chromium, verified stable across repeated runs);
+follow-up (not blocking): generate a Linux-native baseline from an actual CI run and re-enable
+the step there.
+
+### ADR-019 — Accessibility gate fails only on `critical`-impact violations, checks everything else against a tracked per-page allowlist
+**Context**: Phase 6.4 needed `axe-playwright` scans of the app's key screens.
+`ROADMAP.md`'s tech debt has said since the original Phase 1 audit: "zero accessibility
+attributes (`aria-*`, `alt=`) across the frontend" — scoped to Phase 8's frontend redesign, not
+this phase. Running `axe-playwright` for real, as expected, found exactly that: `color-contrast`,
+`landmark-one-main`, `page-has-heading-one`, `region` on the auth screens, plus `svg-img-alt` and
+`scrollable-region-focusable` (from Recharts' default pie-chart markup) on the dashboard. None
+`critical`-impact. **Decision**: `tests/e2e/a11y.spec.js`'s `checkA11yAgainstBaseline()` helper
+hard-fails on any `critical`-impact violation (there are none today, but a real one would be
+worth blocking on), and separately fails on any violation whose rule ID isn't in that page's
+fixed allowlist — so a *new* violation beyond today's known set still fails the test; the
+existing, known set doesn't. **Rationale**: this is the same reasoning ADR-016 already used for
+ESLint's stricter React-Compiler rule set — retroactively rewriting a large, working,
+already-shipped frontend (`App.jsx`, `AuthScreen.jsx`) to satisfy a scanner's full opinion is
+Phase 8's job, not a one-line-fix-along-the-way inside Phase 6, and failing the whole CI/CD
+pipeline on Phase 8's own backlog would just get the check disabled or ignored — the actual
+failure mode ADR-016 was written to avoid. A pure `skipFailures: true` (log-only) alternative was
+considered and rejected: it would never fail on anything, including a genuine new regression,
+which defeats the point of adding the scan at all. **Status**: stable; this baseline is exactly
+what Phase 8 should be shrinking, not a permanent allowance — see the Phase 6 re-prioritization
+note above.
 
 ### ADR-018 — Deployment verification triggers on Vercel's `deployment_status` event, not a custom deploy step
 **Context**: Phase 7.9 required a workflow that verifies a deployment after it succeeds,
@@ -325,8 +430,28 @@ From Phase 7 (CI/CD):
 - No Codecov (or similar) integration — coverage reports are generated and uploaded as CI
   artifacts (lcov/html/json-summary), ready for that the day it's wired up, per Phase 7.4's
   explicit "don't add unnecessary external services" instruction.
-- No Playwright/e2e workflow step — there's no Playwright suite in this repo yet to run (Phase
-  6 scope, not built speculatively ahead of it).
+
+From Phase 6 (Testing infrastructure):
+- Visual regression (`tests/e2e/visual.spec.js`) doesn't run in CI yet — its baselines were
+  generated on macOS and would fail every comparison on font-rendering differences against
+  `ci.yml`'s `ubuntu-latest` runner, not a real UI regression. See ADR-020. Follow-up: generate a
+  Linux-native baseline from an actual CI run, then remove the `--grep-invert` exclusion.
+- `tests/e2e/a11y.spec.js`'s per-page violation allowlist (`color-contrast`,
+  `landmark-one-main`, `page-has-heading-one`, `region`, `svg-img-alt`,
+  `scrollable-region-focusable`) is real, current debt, not a permanent allowance — see ADR-019.
+  This is the same "zero accessibility attributes" gap the original Phase 1 audit already
+  tracked below, now measurable and regression-guarded instead of just written down.
+- `api/auth.js`'s OTP-based signup/login, `forgotPassword`'s real branch, `resetPassword`,
+  `verifyLink`, and `resendVerification` have no automated test coverage anywhere (Vitest or
+  Playwright) — both suites deliberately run with `GMAIL_USER`/`GMAIL_APP_PASSWORD` unset (see
+  ADR-021), so `isEmailVerificationEnabled()` is always `false` and these branches are never
+  reached. Closing this needs real Gmail SMTP test credentials, the same open item ADR-013
+  already flagged for verifying `nodemailer`'s live send — not more test-writing effort against
+  the same disabled path.
+- `logoutAllDevices()` (`src/api.js`) has no UI caller anywhere in `App.jsx`/`AuthScreen.jsx` —
+  confirmed while scoping Phase 6's auth e2e coverage. Same underlying gap
+  `authentication.md`'s "No device-management UI" bullet already tracks; noted here as the
+  specific function it applies to.
 
 From `docs/security/threat-model.md` (Phase 4):
 - Pagination and search validators were explicitly requested by the Phase 4 spec but not
@@ -340,7 +465,8 @@ From `docs/security/threat-model.md` (Phase 4):
 
 From the original Phase 1 audit:
 - Zero accessibility attributes (`aria-*`, `alt=`) across the frontend, no dark mode — scoped
-  to Phase 8.
+  to Phase 8. As of Phase 6, this is measured and regression-guarded rather than just written
+  down — see `tests/e2e/a11y.spec.js` and ADR-019's tracked allowlist above.
 - ~~`npm audit`: 2 high-severity runtime deps (`lodash`, `nodemailer`) plus several
   devDependency-only vulnerabilities in the Vite toolchain~~ — **resolved in Phase 4**:
   `npm audit` is now clean (0 vulnerabilities). See ADR-013 for the `nodemailer` major-bump
