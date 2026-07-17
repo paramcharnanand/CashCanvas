@@ -53,13 +53,37 @@ jobs:
       - name: Run tests with coverage
         run: npm run test:coverage
 
-      # No Playwright/e2e suite exists yet in this repo (tracked as a
-      # Phase 6 gap in ROADMAP.md) — nothing to run. When it's added, this
-      # step slots in here, after unit/integration tests and before the
-      # production build.
+      # System libs (Ubuntu) + the actual browser binaries. Pinned to the
+      # same three engines plus two mobile-emulation projects configured in
+      # playwright.config.js.
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
+      # --grep-invert excludes tests/e2e/visual.spec.js's "visual regression"
+      # describe block specifically. Its baseline PNGs were generated on this
+      # project's macOS dev machine (Playwright names them
+      # *-chromium-darwin.png); a Linux CI runner renders fonts/anti-aliasing
+      # differently, so every pixel comparison would fail on rendering-engine
+      # noise, not a real regression — this is a platform-baseline problem,
+      # not a flaky test to retry around. Functional/a11y/performance
+      # coverage of every page the visual suite screenshots already runs
+      # here via auth.spec.js/a11y.spec.js/performance.spec.js. See
+      # ROADMAP.md ADR-020 and tests/e2e/visual.spec.js's own header comment.
+      # Follow-up (tracked in ROADMAP.md, not blocking): generate a
+      # Linux-native baseline from a real CI run and re-enable this here.
+      - name: Run Playwright e2e suite
+        run: npx playwright test --grep-invert "visual regression"
 
       - name: Build production bundle
         run: npm run build
+
+      - name: Upload Playwright report
+        if: always() # useful on both pass (trace-on-first-retry artifacts) and fail
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
 
       - name: Upload test coverage
         if: always() # coverage/ exists even if a test failed — still useful to inspect
