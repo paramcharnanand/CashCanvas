@@ -80,6 +80,12 @@ export default [
     },
     rules: {
       "no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+      // Playwright fixtures and hooks are called with a positional fixtures
+      // object even when a given fixture/hook needs none of them — `({},
+      // use) => {...}` is the standard Playwright idiom for "no fixtures
+      // needed here", not a mistake. This is exactly what
+      // allowObjectPatternsAsParameters exists for.
+      "no-empty-pattern": ["error", { allowObjectPatternsAsParameters: true }],
     },
   },
 

@@ -1,0 +1,71 @@
+import { injectAxe, getViolations } from "axe-playwright";
+import { test, expect } from "./fixtures/index.mjs";
+import { UploadPage } from "./pages/UploadPage.mjs";
+
+/**
+ * Accessibility scans via axe-core (Deque's engine, driven through
+ * axe-playwright). See docs/engineering-lessons/phase-6-testing.md's
+ * "Accessibility tests" section for what this is and isn't testing.
+ *
+ * Gate: only "critical"-impact violations fail the suite. ROADMAP.md has
+ * tracked "zero accessibility attributes across the frontend" as known,
+ * scoped-to-Phase-8 debt since the original Phase 1 audit — retroactively
+ * rewriting App.jsx/AuthScreen.jsx markup to satisfy axe wholesale here
+ * would be exactly the out-of-scope retrofit ADR-016 already declined to do
+ * for ESLint's stricter rule set, for the same reason (a large, working,
+ * already-shipped frontend that was never written against these rules).
+ * "serious"/"moderate"/"minor" violations are still asserted on with a
+ * fixed per-page allowlist below — not skipped — so this scan does its
+ * actual job (make the known gap measurable, and catch *new* violations
+ * beyond today's baseline) without failing CI on Phase 8's own backlog.
+ * See ADR-019 in ROADMAP.md.
+ */
+
+/** Runs the scan and asserts against a known-violations allowlist by rule id. */
+async function checkA11yAgainstBaseline(page, allowedRuleIds) {
+  await injectAxe(page);
+  const violations = await getViolations(page);
+
+  const critical = violations.filter((v) => v.impact === "critical");
+  expect(critical, `critical-impact a11y violations: ${critical.map((v) => v.id).join(", ")}`).toEqual([]);
+
+  const unexpected = violations.filter((v) => !allowedRuleIds.includes(v.id));
+  expect(
+    unexpected,
+    `a11y violations beyond the tracked baseline: ${unexpected.map((v) => `${v.id} (${v.impact})`).join(", ")}`
+  ).toEqual([]);
+}
+
+test.describe("accessibility", () => {
+  test("sign-in screen has no unexpected a11y violations", async ({ page }) => {
+    await page.goto("/");
+    await checkA11yAgainstBaseline(page, ["color-contrast", "landmark-one-main", "page-has-heading-one", "region"]);
+  });
+
+  test("create-account screen has no unexpected a11y violations", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Create Account" }).first().click();
+    await checkA11yAgainstBaseline(page, ["color-contrast", "landmark-one-main", "page-has-heading-one", "region"]);
+  });
+
+  test("authenticated upload screen has no unexpected a11y violations", async ({ authenticatedPage: page }) => {
+    await checkA11yAgainstBaseline(page, ["color-contrast"]);
+  });
+
+  test("dashboard (with data loaded) has no unexpected a11y violations", async ({ authenticatedPage: page }) => {
+    await new UploadPage(page).loadSampleData();
+    await expect(page.getByRole("button", { name: "Overview" })).toBeVisible();
+    // Two additions over the other screens' baseline, both from the Recharts
+    // pie chart: its <svg> has no accessible name (svg-img-alt), and its
+    // scroll container isn't keyboard-focusable in Safari
+    // (scrollable-region-focusable) — both real, both Recharts' default
+    // markup, both Phase 8 (frontend redesign) scope, not new regressions.
+    await checkA11yAgainstBaseline(page, [
+      "color-contrast",
+      "landmark-one-main",
+      "region",
+      "svg-img-alt",
+      "scrollable-region-focusable",
+    ]);
+  });
+});

@@ -1,0 +1,7 @@
+This is a plain text file with a .pdf extension, not real PDF bytes.
+It exists specifically to test that the client-side PDF parser (pdf.js,
+invoked via App.jsx's parsePDF()) fails gracefully instead of crashing when
+handed a file that merely has a .pdf extension but isn't actually a PDF —
+distinct from the server-side %PDF magic-number check already covered by
+tests/security.test.js's "upload hardening — POST /api/parse-pdf" test,
+which guards the API boundary rather than the client-side parse step.
