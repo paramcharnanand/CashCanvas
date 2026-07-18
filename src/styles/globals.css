@@ -78,6 +78,12 @@ input[type="range"] {
   color: var(--on-primary);
 }
 
+/* Shared by components/ui/Spinner.jsx — "1s linear infinite", the one
+   correct-as-is motion value per design-system.md § Motion System. */
+@keyframes cc-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* Respected globally, per-component effects still defined individually —
    see docs/frontend/phase-8-design-system.md § Motion System. */
 @media (prefers-reduced-motion: reduce) {

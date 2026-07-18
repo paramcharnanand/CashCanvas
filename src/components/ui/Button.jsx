@@ -1,4 +1,5 @@
 import { forwardRef } from "react";
+import { Spinner } from "./Spinner.jsx";
 
 const VARIANT_STYLES = {
   primary: {
@@ -63,6 +64,7 @@ export const Button = forwardRef(function Button(
       }}
       {...rest}
     >
+      {loading && <Spinner size={14} />}
       {children}
     </button>
   );

@@ -232,14 +232,19 @@ test.describe("forgot password", () => {
   // ever checking res.ok, so a real failure (rate-limited, or — as here —
   // the email service not being configured, which this e2e environment
   // deliberately runs without, see docs/engineering-lessons/phase-6-testing.md's
-  // "Mocking" section) was silently reported as success. Fixed in
-  // src/AuthScreen.jsx to match ResetPasswordScreen's existing res.ok check.
+  // "Mocking" section) was silently reported as success. Fixed to match
+  // ResetPasswordForm's existing res.ok check (both now in
+  // src/features/auth/components/, restyled as of Phase 8.3).
   // The actual send-a-real-email happy path isn't exercised here for the
   // same reason — no SMTP credentials in this environment — carried forward
   // in ROADMAP.md alongside the live-nodemailer-send item.
   test("a real failure response (email service not configured) is shown as an error, not a fake success screen", async ({ page }) => {
     await page.goto("/login");
-    await page.getByRole("button", { name: "Forgot password?" }).click();
+    // As of Phase 8.3, "Forgot password?" is a real Link to /forgot-password
+    // (a bookmarkable/refreshable route), not a button that toggled
+    // internal screen state — role changes from "button" to "link"
+    // accordingly, a deliberate improvement, not a regression.
+    await page.getByRole("link", { name: "Forgot password?" }).click();
 
     await page.getByPlaceholder("you@example.com").fill("someone@example.test");
     await page.locator('button[type="submit"]').click();

@@ -6,18 +6,26 @@ re-deriving context from the repo.
 
 ## Release status
 
-**Phase 8.1 and 8.2 verified and committed this session**, plus two CI hotfixes along the way
-(see `git log` — `5d42cf8` Phase 8.1, `bd9241c` router hotfix, `bebb653` CI stability hotfix, and
-the Phase 8.2 commit). GitHub Actions CI is green on `main` as of the CI stability hotfix — it was
-red (webkit-only, deterministic) since before this session started; see "CI stability" below.
-Phase 6 (Testing infrastructure, six logical commits) and Phase 7 (CI/CD, `64a1280`) were the last
-things pushed before this session.
+**Phase 8.1, 8.2, and 8.3 verified and committed this session**, plus two CI hotfixes along the
+way (see `git log` — `5d42cf8` Phase 8.1, `bd9241c` router hotfix, `bebb653` CI stability hotfix,
+the Phase 8.2 commit, and the Phase 8.3 commit). GitHub Actions CI is green on `main` as of the CI
+stability hotfix — it was red (webkit-only, deterministic) since before this session started; see
+"CI stability" below. Phase 6 (Testing infrastructure, six logical commits) and Phase 7 (CI/CD,
+`64a1280`) were the last things pushed before this session.
+
+Phase 8.3 itself picked up mid-flight: a prior pass in this same session had already written the
+full restyle (`src/features/auth/*`, `components/ui/{Field,OtpInput,Spinner}.jsx`, the four
+`pages/*Page.jsx` wrappers, `AuthScreen.jsx`/`PublicHomePage.jsx` deleted) but left it uncommitted
+and `CHECKPOINT.md`/`ROADMAP.md` un-updated. This continuation's job was exactly the verification
+checkpoint the engineering rules require — read every changed/new file for correctness and
+design-system consistency before trusting it, then run the full gate for real — not re-deriving
+the implementation from scratch. Both passed clean: no bugs found, nothing to fix.
 
 ## Current status
 
-**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.2 of ~8.9 sub-steps done).** Phases 1–5
+**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.3 of ~8.9 sub-steps done).** Phases 1–5
 and 7 verified/landed in prior sessions; Phase 6 (testing infrastructure) completed two sessions
-ago; Phase 8.1 and 8.2 completed this session. Full writeup: `docs/engineering-lessons/
+ago; Phase 8.1, 8.2, and 8.3 completed this session. Full writeup: `docs/engineering-lessons/
 phase-6-testing.md` (testing concepts), `docs/frontend/phase-8-*.md` (design system, component
 architecture, migration plan), `ROADMAP.md` ADR-019 through ADR-024. Full phase/ADR history:
 `ROADMAP.md`.
@@ -67,12 +75,37 @@ GitHub Actions run for `bebb653` completed successfully in 10m56s.
   a11y-scan/render race, an app-wide `color-contrast` token bug (ADR-024), and a heading-order
   bug in `FeatureGrid.jsx` — see ROADMAP.md's "Phase 8.2 completion note" for full detail. Landing
   is the only page in the app whose a11y test runs with a genuinely empty violation allowlist.
-- **8.3–8.9 not started**: `AuthScreen.jsx`'s actual visual restyle onto design-system primitives
-  is next (Phase 8.1/8.2 only added routing/plumbing around it, never touched its inline styles),
-  then Dashboard → Upload → Transactions → Analytics → Settings → Profile → mobile layouts, per
-  `docs/frontend/phase-8-migration-plan.md` and the user's requested order. One page per phase,
-  full verification gate (lint/test/e2e/build) green before moving to the next — see that file's
-  "keep the existing suite passing" section for the exact discipline.
+- **8.3 done** (this session): `AuthScreen.jsx`'s actual visual restyle onto design-system
+  primitives — the migration plan's own "Phase 2 — Authentication". Built
+  `src/features/auth/components/{AuthShell,LoginForm,SignupForm,OtpScreen,ForgotPasswordForm,
+  ResetPasswordForm}.jsx` plus `hooks/{useCredentialsForm,useRecaptcha}.js` (the shared
+  login/signup submit logic and reCAPTCHA-v3 loader, factored out since the two forms are ~80%
+  identical field/error/otp-branch logic); three new `components/ui/*` primitives (`Field`,
+  `OtpInput` — the six-box auto-advance/paste/backspace pattern `AuthScreen.jsx` had implemented
+  twice, now one component — and `Spinner`, wired into `Button`'s own `loading` state).
+  `pages/{Login,Signup,ForgotPassword,ResetPassword}Page.jsx` are now thin compositions over
+  these instead of one shared `AuthScreen` with an `initialMode` prop; `/reset-password` reads
+  `?token=` via `useSearchParams()` at the page level instead of `AuthScreen.jsx`'s old manual
+  `window.location.search` sniff. `AuthScreen.jsx` (931 lines) and `PublicHomePage.jsx` (the
+  forgot/reset reuse shim from ADR-023) are both deleted — nothing imports either anymore
+  (verified by grep). Every field/button kept its existing accessible name, so `auth.spec.js`'s
+  role/placeholder-based selectors needed no structural changes; the one real selector update was
+  "Forgot password?" moving from a `button` role (toggled internal `AuthScreen` state) to a real
+  `link` role (`/forgot-password`, bookmarkable/refreshable) — a deliberate improvement per the
+  migration plan, not a regression, and `auth.spec.js` was updated to match. Visual baselines
+  (`auth-sign-in`/`auth-create-account`, chromium-only per ADR-020) regenerated for the new
+  markup.
+
+  Verification gate, run in full: `npm run lint` (0 errors, 44 pre-existing warnings — same count
+  as 8.1/8.2, nothing new), `npm test` (88/88, unchanged — this phase touched no `api/**` code),
+  `npx playwright test` (199 passed / 16 skipped [visual regression except chromium, by design] /
+  0 failed across all 5 browser projects), `npm run build` (succeeds). No bugs found this phase —
+  the restyle preserved behavior exactly as designed, verified rather than assumed.
+
+- **8.4–8.9 not started**: Dashboard → Upload → Transactions → Analytics → Settings → Profile →
+  mobile layouts, per `docs/frontend/phase-8-migration-plan.md` and the user's requested order.
+  One page per phase, full verification gate (lint/test/e2e/build) green before moving to the
+  next — see that file's "keep the existing suite passing" section for the exact discipline.
 
 ### Remaining phases
 9. Advanced AI features & product enhancements — not started
@@ -181,17 +214,21 @@ That surfaced a real, blocking problem immediately — see below — before any 
 
 `npm test` — **88/88 passing** (unchanged this session — Phase 8 touched no `api/**` code).
 `npx playwright test` (all 5 browser projects) — **199 passed, 0 failed, 16 skipped** (visual
-regression except chromium, by design — see ADR-020; 4 baselines now, including a new
-`landing.png`). `npm run lint` — 0 errors, 46 pre-existing warnings, unchanged. `npm run build` —
-succeeds. GitHub Actions CI on `main` — green (`bebb653`, 10m56s; confirmed via `gh run view`,
-not assumed).
+regression except chromium, by design — see ADR-020). `npm run lint` — 0 errors, **44**
+pre-existing warnings (down from 46: deleting `AuthScreen.jsx` removed its own 2 unescaped-entity
+warnings along with the file, nothing newly suppressed). `npm run build` — succeeds. GitHub
+Actions CI on `main` — green as of `07d918d` (confirmed via `gh run view`, not assumed); the
+separate "Deployment Verification" check has been failing since 2026-07-14 on a per-deployment
+preview URL requiring Vercel SSO (pre-existing, unrelated to any frontend work, tracked below).
 
-Real regressions found and fixed this session, all before commit, none left for a future session
-to discover: Phase 8.1's nav shell introduced 2 accessibility violations (ADR-022); a router gap
-broke password-reset links (ADR-023); Phase 8.2's Landing page introduced a color-contrast token
-bug (ADR-024) and a heading-order bug; and CI itself had a pre-existing (not Phase-8-caused)
-webkit test bug plus resource-contention flakiness, both fixed in `bebb653`. Full detail in
-ROADMAP.md's "Phase 8.1/8.2 completion note"s and the CI stability section above.
+Real regressions found and fixed in prior phases this session, all before commit, none left for a
+future session to discover: Phase 8.1's nav shell introduced 2 accessibility violations
+(ADR-022); a router gap broke password-reset links (ADR-023); Phase 8.2's Landing page introduced
+a color-contrast token bug (ADR-024) and a heading-order bug; CI itself had a pre-existing (not
+Phase-8-caused) webkit test bug plus resource-contention flakiness, both fixed in `bebb653`. Phase
+8.3 itself introduced no new bugs — full gate green on first run after this continuation's review
+pass. Full detail in ROADMAP.md's "Phase 8.1/8.2/8.3 completion note"s and the CI stability
+section above.
 
 ## Deployment status (carried forward, unchanged this session)
 
@@ -228,28 +265,32 @@ Full list with rationale lives in `ROADMAP.md`'s "Known technical debt" section 
 here to avoid drift. New this session: `Header.jsx`'s topbar is `role="region"`, not a real
 `<header>`, until the last old-header page (`UploadScreen`/`Dashboard`) is migrated away in Phase
 8.4/8.5 (ADR-022); Material Symbols Outlined icon font stays CDN-hosted, not self-hosted like the
-new typefaces, until every old screen using it migrates off (tracked to close alongside Phase 8.8);
-`AuthScreen.jsx` itself is still pre-Phase-8 inline-styled markup — 8.1/8.2 only gave it real
-routes and an `initialMode` prop, never restyled it (that's Phase 8.3, next). Carried forward,
+new typefaces, until every old screen using it migrates off (tracked to close alongside Phase 8.8).
+`AuthScreen.jsx` is fully retired as of Phase 8.3 — no remaining debt there. Carried forward,
 unchanged: visual regression doesn't run in CI yet (ADR-020); the a11y allowlist in
 `tests/e2e/a11y.spec.js` is real, current, Phase-8-scoped debt for every page except Landing now
 (ADR-019); `api/auth.js`'s OTP/email-verification branches remain untestable without real Gmail
 SMTP credentials (ADR-021); `logoutAllDevices()` has no UI caller; `deploy-verify.yml` needs its
 `VERCEL_TOKEN` secret; branch protection recommendations are unapplied; ~45 pre-existing ESLint
-warnings remain (unchanged count this session).
+warnings remain (44, down from 46 — see "Test suite" above).
 
 ## Next recommended step
 
-**Phase 8.3: restyle `AuthScreen.jsx` onto design-system primitives** — the actual visual rewrite
-(`components/ui/*`, design tokens, replacing its inline styles), per
-`docs/frontend/phase-8-migration-plan.md`'s Phase 2. 8.1/8.2 only gave login/signup/forgot/reset
-real routes; none of their markup has been touched yet. Same discipline as 8.1/8.2: full
-verification gate green before moving to 8.4 (Dashboard), any bug found gets root-caused and fixed
-(with a regression test) before continuing, not deferred.
+**Phase 8.4: Dashboard as the new authenticated landing** — `pages/DashboardPage.jsx` +
+`features/dashboard/`, the lightweight summary view (stat cards, recent activity, recurring
+payments), deliberately not the full chart set (that's Analytics, Phase 8.7). `/dashboard`
+becomes the real authenticated landing; a no-data account sees an `EmptyState` with an upload CTA,
+replacing today's separate `UploadScreen`-as-gate pattern. Per
+`docs/frontend/phase-8-migration-plan.md`'s Phase 4, this is the largest mechanical test-update
+phase in the whole plan — every `auth.spec.js`/`auth-resilience.spec.js` test currently asserting
+on "try with sample data" as the post-login signal needs updating to a `/dashboard`-specific
+signal instead, flagged up front in the migration plan, not a surprise mid-phase. Same discipline
+as 8.1–8.3: full verification gate green before moving to 8.5 (Upload), any bug found gets
+root-caused and fixed (with a regression test) before continuing, not deferred.
 
 ## Blockers / assumptions
 
-- None blocking Phase 6 itself — the verification gate is green (see "Test suite" above).
+- None blocking Phase 8 itself — the verification gate is green (see "Test suite" above).
 - `deploy-verify.yml`'s function-count check is still unverified by an actual GitHub Actions run
   — needs `VERCEL_TOKEN` added as a repo secret first. Carried forward, unchanged.
 - `nodemailer` major-version upgrade (Phase 4/5, ADR-013) still hasn't been verified via a live

@@ -6,7 +6,7 @@ require re-deriving context that already existed once.
 
 ## Progress
 
-**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.2 of ~8.9 sub-steps done).**
+**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.3 of ~8.9 sub-steps done).**
 
 | # | Phase | Status | Docs |
 |---|---|---|---|
@@ -17,7 +17,7 @@ require re-deriving context that already existed once.
 | 5 | Dependency maintenance (`npm audit`, upgrades) | ✅ Done | `docs/security/threat-model.md` (Dependency posture) |
 | 6 | Testing infrastructure | ✅ Done | `docs/engineering-lessons/phase-6-testing.md` |
 | 7 | CI/CD (GitHub Actions) | ✅ Done | `docs/engineering-lessons/phase-7-ci-cd.md` |
-| 8 | Frontend redesign (design system, routing, navigation shell, a11y) | 🟨 In progress (8.1–8.2 done) | `docs/frontend/phase-8-*.md` |
+| 8 | Frontend redesign (design system, routing, navigation shell, a11y) | 🟨 In progress (8.1–8.3 done) | `docs/frontend/phase-8-*.md` |
 | 9 | Advanced AI features & product enhancements | ⬜ Not started | — |
 
 ### Phase 8.1 completion note (routing, navigation shell, design foundation)
@@ -102,6 +102,46 @@ Next: Phase 8.3, restyling `AuthScreen.jsx` onto `components/ui/*` design-system
 `docs/frontend/phase-8-migration-plan.md`'s Phase 2. Then Dashboard → Upload → Transactions →
 Analytics → Settings → Profile → mobile layouts, each phase gated on the same full verification
 run before moving to the next.
+
+### Phase 8.3 completion note (Authentication restyle onto design-system primitives)
+
+Delivered, per `docs/frontend/phase-8-migration-plan.md`'s Phase 2: `AuthScreen.jsx` (931 lines,
+inline-styled, doing double duty for login/signup/OTP/forgot/reset) retired outright, replaced by
+`src/features/auth/components/{AuthShell,LoginForm,SignupForm,OtpScreen,ForgotPasswordForm,
+ResetPasswordForm}.jsx` built on `components/ui/*` primitives and design tokens.
+`hooks/useCredentialsForm.js` factors out the ~80%-identical login/signup submit logic (field
+state, error routing, the otp-required/onAuth branch) now that they're two separate components
+for two separate routes rather than one component with internal mode-toggle state;
+`hooks/useRecaptcha.js` is the reCAPTCHA-v3 loader, ported unchanged (signup only).
+`pages/{Login,Signup,ForgotPassword,ResetPassword}Page.jsx` are now thin compositions over these
+instead of wrapping the shared `AuthScreen` with an `initialMode` prop; `ResetPasswordPage` reads
+`?token=` via `useSearchParams()` at the page level, replacing `AuthScreen.jsx:666–668`'s manual
+`window.location.search` sniff — the exact change the migration plan called for.
+`PublicHomePage.jsx` (the forgot/reset reuse shim from ADR-023) is also deleted, since
+`/forgot-password`/`/reset-password` now have their own real pages.
+
+Three new `components/ui/*` primitives: `Field` (label/error/optional password-visibility toggle,
+a real focus-visible ring instead of a manual `onFocus`/`onBlur` border-color swap), `OtpInput`
+(the six-box auto-advance/backspace/arrow-nav/paste-fills-all pattern `AuthScreen.jsx` had
+implemented twice — in its login/signup OTP screen and its reset-password screen — now one
+component used by both `OtpScreen.jsx` and `ResetPasswordForm.jsx`), and `Spinner` (`currentColor`
+so it matches whatever button/context it's in; wired into `Button.jsx`'s existing `loading` prop,
+which previously only disabled the button and swapped its color, with no spinner at all).
+
+**Verification gate**, run in full: `npm run lint` (0 errors, 44 pre-existing warnings — down from
+46, since deleting `AuthScreen.jsx` removed 2 of its own unescaped-entity warnings along with the
+file, nothing newly suppressed), `npm test` (88/88, unchanged — this phase touched no `api/**`
+code), `npx playwright test` (199 passed / 16 skipped [visual regression except chromium, by
+design, ADR-020] / 0 failed across all 5 browser projects), `npm run build` (succeeds).
+
+**No new bugs found this phase** — unlike 8.1 and 8.2, the restyle preserved every field's/
+button's existing accessible name and every screen's behavior exactly (verified, not assumed):
+`auth.spec.js`'s role/placeholder-based selectors needed no structural updates except one
+deliberate, called-out-in-advance change — "Forgot password?" moved from a `button` role (it used
+to toggle `AuthScreen`'s internal screen state) to a real `link` role pointing at
+`/forgot-password` (now a bookmarkable, refreshable route) — a UX improvement per the migration
+plan, not a regression. Confirmed via `grep` that nothing in `src/` or `tests/` still imports
+either deleted file before removing them.
 
 ### Phase 6 completion note
 
