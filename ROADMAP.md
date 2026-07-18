@@ -139,6 +139,30 @@ technical debt) is still open and still Phase 8's to close.
 
 Newest first.
 
+### ADR-023 — `/forgot-password` and `/reset-password` are real routes, added as a hotfix ahead of Phase 8.2, not folded into a later phase
+
+**Context**: found while scoping Phase 8.2 (Landing page), not during Phase 8.1 itself. Phase
+8.1's `router.jsx` only defined `/` and `/dashboard`, with a wildcard `*` that
+`<Navigate to="/" replace>`-ed for everything else — including `/reset-password?token=...`, the
+exact URL a real password-reset email sends. `AuthScreen.jsx`'s own reset-token detection
+(`window.location.pathname.includes("reset")`) never got a chance to run, because the router
+redirected away before `AuthScreen` ever mounted under that path. This was a live, silent
+regression in already-pushed code (`5d42cf8`): password reset was unreachable for any real user
+who clicked the link in their email, and nothing in the Playwright suite caught it, because the
+full token-consumption path has never had automated coverage (the same pre-existing gap ADR-021
+already tracks for `api/auth.js`'s OTP/reset branches — this is its frontend-routing counterpart).
+**Decision**: added `/forgot-password` and `/reset-password` as real routes rendering the same,
+unchanged `PublicHomePage`/`AuthScreen` (matching the already-designed target route table in
+`docs/frontend/phase-8-component-architecture.md`), extended `AuthScreen`'s existing
+pathname-detection effect to also recognize `/forgot-password` (previously only reachable via an
+in-app link click, never a direct URL), and replaced the wildcard's silent redirect with a real
+`NotFoundPage` (also already in the target route table, and an explicit product requirement:
+unknown routes must show a custom 404, not bounce silently). **Regression tests added**:
+`tests/e2e/auth.spec.js` — visiting `/reset-password?token=...` and `/forgot-password` directly
+(not via in-app navigation) reach the right screen; visiting an unknown path shows the 404 page
+with a working "Go home" link. **Status**: shipped as its own commit, ahead of Phase 8.2's actual
+Landing page work, once the user confirmed hotfix-then-continue as the right sequencing.
+
 ### ADR-022 — App-shell topbar uses `role="region"`, not a real `<header>`, until the legacy pages it wraps are gone
 
 **Context**: Phase 8.1's new `AppShell`/`Header.jsx` needed its topbar (logo + command-palette

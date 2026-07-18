@@ -661,13 +661,17 @@ export default function AuthScreen({ onAuth }) {
 
   const getCaptchaToken = useRecaptcha();
 
-  // Detect password-reset link (?token=... on /reset-password path)
+  // Detect password-reset link (?token=... on /reset-password path), and
+  // bookmarked/directly-visited /forgot-password, from the URL alone —
+  // both routes render this same component unchanged (see router.jsx).
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token  = params.get("token");
     if (token && window.location.pathname.includes("reset")) {
       setResetToken(token);
       setScreen("reset");
+    } else if (window.location.pathname.includes("forgot")) {
+      setScreen("forgot");
     }
   }, []);
 

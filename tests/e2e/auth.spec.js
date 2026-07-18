@@ -237,6 +237,37 @@ test.describe("forgot password", () => {
     await expect(page.getByText("Password reset is not available", { exact: false })).toBeVisible();
     await expect(page.getByText("Check your email", { exact: false })).not.toBeVisible();
   });
+
+  // Regression test for a real routing bug: router.jsx's wildcard route used
+  // to `<Navigate to="/" replace>` for any path other than "/" or
+  // "/dashboard" — including /reset-password?token=... and /forgot-password,
+  // silently swallowing every real password-reset email's link before
+  // AuthScreen's own pathname-based screen detection ever ran. Both paths
+  // are now real routes (see router.jsx) rendering the same, unchanged
+  // AuthScreen — this proves visiting them directly (not via in-app link
+  // clicks, which the tests above already cover) lands on the right screen.
+  test("visiting /reset-password?token=... directly shows the reset form, not the login screen", async ({ page }) => {
+    await page.goto("/reset-password?token=some-test-token");
+    await expect(page.getByRole("heading", { name: "Set new password" })).toBeVisible();
+    await expect(page.getByText("Code from email", { exact: false })).toBeVisible();
+  });
+
+  test("visiting /forgot-password directly shows the forgot-password form, not the login screen", async ({ page }) => {
+    await page.goto("/forgot-password");
+    await expect(page.getByRole("button", { name: "Send reset link" })).toBeVisible();
+  });
+});
+
+test.describe("unknown routes", () => {
+  test("an unrecognized path shows a custom 404 page with a way back home, not a silent redirect", async ({ page }) => {
+    const response = await page.goto("/this-route-does-not-exist");
+    expect(response.status()).toBe(200); // SPA catch-all still serves the app shell
+    await expect(page.getByText("404")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
+
+    await page.getByRole("link", { name: "Go home" }).click();
+    await expect(page).toHaveURL(/\/$/);
+  });
 });
 
 test.describe("account deletion", () => {
