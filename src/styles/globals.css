@@ -1,0 +1,90 @@
+/**
+ * Global resets and font-face declarations. Replaces index.html's old
+ * inline <style> block and the Google Fonts CDN <link> tags — fonts are
+ * self-hosted now (src/assets/fonts/), one fewer external runtime
+ * dependency, matching the same reasoning documented for dropping Material
+ * Symbols in favor of lucide-react (docs/frontend/phase-8-design-system.md
+ * § Iconography).
+ */
+@import "./tokens.css";
+
+@font-face {
+  font-family: 'Newsreader';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../assets/fonts/newsreader-italic.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 300 800;
+  font-display: swap;
+  src: url('../assets/fonts/manrope-variable.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 300 800;
+  font-display: swap;
+  src: url('../assets/fonts/inter-variable.woff2') format('woff2');
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  transition: background var(--duration-base) var(--ease-standard),
+    color var(--duration-base) var(--ease-standard);
+}
+
+/* Real, visible focus rings everywhere — directly reverses the old global
+   `svg:focus / .recharts-surface:focus { outline: none }` rule (audit §12),
+   the single biggest concrete keyboard-accessibility gap found. */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--primary);
+}
+
+.numeral {
+  font-family: var(--font-numeral);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+::selection {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+/* Respected globally, per-component effects still defined individually —
+   see docs/frontend/phase-8-design-system.md § Motion System. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -2,8 +2,8 @@ import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import * as Papa from "papaparse";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend, LabelList, ReferenceLine } from "recharts";
 import _ from "lodash";
-import AuthScreen from "./AuthScreen.jsx";
-import { apiFetch, fetchCurrentUser, logout as apiLogout } from "./api.js";
+import { apiFetch } from "./api.js";
+import { useAuth } from "./contexts/AuthContext.jsx";
 
 // ─── CATEGORY ENGINE ───
 const DEFAULT_CATEGORIES = {
@@ -2922,40 +2922,19 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
   );
 }
 
-// ─── APP ROOT ───
-export default function App() {
+// ─── AUTHENTICATED WORKSPACE ───
+// Mounted at /dashboard, inside AppShell, only once already authenticated
+// (see src/router.jsx's ProtectedRoute) — auth state itself now lives in
+// AuthContext (src/contexts/AuthContext.jsx), not here. Everything below is
+// unchanged pre-Phase-8 behavior: Upload vs. Dashboard is still decided by
+// whether a statement is loaded, not by its own route, until Phase 8.4/8.5
+// give each a real one.
+export function LegacyWorkspace() {
+  const { auth, logout } = useAuth();
   const [transactions, setTransactions] = useState(null);
   const [fileName, setFileName] = useState("");
   const [statementType, setStatementType] = useState("unknown");
   const [autoRestoring, setAutoRestoring] = useState(false);
-  const [auth, setAuth] = useState(null);
-  const [authChecked, setAuthChecked] = useState(false);
-
-  // Auth state comes from the server, never from client-side storage — the
-  // access/refresh tokens live in HttpOnly cookies this code never touches.
-  useEffect(() => {
-    fetchCurrentUser()
-      .then(user => setAuth(user ? { user } : null))
-      // A network failure here (offline, DNS hiccup, etc.) must not become
-      // an unhandled promise rejection — every other apiFetch call site in
-      // this file catches its own errors; this was the one that didn't.
-      // Fail safe: leave `auth` at its default (null/logged-out) rather
-      // than throw, same outcome a "no session" response already produces.
-      .catch(() => {})
-      .finally(() => setAuthChecked(true));
-  }, []);
-
-  const handleAuth = useCallback((user) => {
-    setAuth(user ? { user } : null);
-  }, []);
-
-  const handleLogout = useCallback(async () => {
-    await apiLogout();
-    setAuth(null);
-    setTransactions(null);
-    setFileName("");
-    setStatementType("unknown");
-  }, []);
 
   // Auto-restore the most recent statement on login
   useEffect(() => {
@@ -3019,29 +2998,13 @@ export default function App() {
     }
   }, []);
 
-  if (!authChecked) {
-    return (
-      <div style={{
-        minHeight: "100vh", background: theme.bg, display: "flex",
-        alignItems: "center", justifyContent: "center", fontFamily: font,
-        color: theme.textSubtle, fontSize: 14,
-      }}>
-        Loading…
-      </div>
-    );
-  }
-
-  if (!auth) {
-    return <AuthScreen onAuth={handleAuth} />;
-  }
-
   if (!transactions) {
     return (
       <UploadScreen
         onData={handleData}
         auth={auth}
         onLoadFile={handleLoadFile}
-        onLogout={handleLogout}
+        onLogout={logout}
       />
     );
   }
@@ -3049,7 +3012,7 @@ export default function App() {
   return (
     <Dashboard
       auth={auth}
-      onLogout={handleLogout}
+      onLogout={logout}
       transactions={transactions}
       fileName={fileName}
       statementType={statementType}

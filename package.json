@@ -26,11 +26,13 @@
     "helmet": "^8.2.0",
     "jsonwebtoken": "^9.0.2",
     "lodash": "^4.17.21",
+    "lucide-react": "^1.24.0",
     "mongodb": "^6.3.0",
     "nodemailer": "^9.0.3",
     "papaparse": "^5.4.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-router-dom": "^7.18.1",
     "recharts": "^2.15.0"
   },
   "devDependencies": {

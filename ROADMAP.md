@@ -6,7 +6,7 @@ require re-deriving context that already existed once.
 
 ## Progress
 
-**7 of 9 phases complete (78%).**
+**7 of 9 phases complete (78%); Phase 8 in progress (8.1 of ~8.9 sub-steps done).**
 
 | # | Phase | Status | Docs |
 |---|---|---|---|
@@ -17,8 +17,43 @@ require re-deriving context that already existed once.
 | 5 | Dependency maintenance (`npm audit`, upgrades) | ✅ Done | `docs/security/threat-model.md` (Dependency posture) |
 | 6 | Testing infrastructure | ✅ Done | `docs/engineering-lessons/phase-6-testing.md` |
 | 7 | CI/CD (GitHub Actions) | ✅ Done | `docs/engineering-lessons/phase-7-ci-cd.md` |
-| 8 | Frontend redesign (design system, shadcn/ui, Tailwind, Framer Motion, a11y) | ⬜ Not started | — |
+| 8 | Frontend redesign (design system, routing, navigation shell, a11y) | 🟨 In progress (8.1 done) | `docs/frontend/phase-8-*.md` |
 | 9 | Advanced AI features & product enhancements | ⬜ Not started | — |
+
+### Phase 8.1 completion note (routing, navigation shell, design foundation)
+
+Delivered, per `docs/frontend/phase-8-migration-plan.md`'s Phase 0/1/3 (this codebase's own
+Phase 8.1 = that plan's foundation + routing + nav-shell steps, shipped as one commit rather than
+three): `react-router-dom` (`src/router.jsx`, currently `/` and `/dashboard`, everything else
+still to come per-page); `AppShell.jsx`/`Sidebar.jsx`/`MobileNav.jsx`/`Header.jsx` (responsive
+shell — sidebar ≥`--bp-lg`, bottom nav below it); `ThemeContext`/design tokens
+(`src/styles/tokens.css`, `globals.css`); self-hosted Newsreader/Manrope/Inter (one fewer external
+font-CDN dependency; Material Symbols Outlined stays CDN-hosted until the last old screen using it
+migrates); a command palette (⌘K) and keyboard-shortcuts system
+(`src/features/command-palette/`). The old `AuthScreen`/`Dashboard`/`UploadScreen` are unchanged
+and still render exactly as before — `PublicHomePage.jsx` and `DashboardPage.jsx` just mount them
+at real routes instead of `App.jsx`'s old `useState`-driven conditionals. Visual baselines
+regenerated for the new shell/font rendering.
+
+Verification gate, run in full before commit: `npm run lint` (0 errors, 46 pre-existing warnings),
+`npm test` (88/88), `npx playwright test` (168 passed / 12 skipped [visual regression, excluded
+from this run by design, ADR-020] / 0 failed across all 5 browser projects), `npm run build`
+(succeeds).
+
+One real regression found and fixed by that gate, not present at the start of the session — see
+ADR-022: the new nav shell introduced two accessibility violations
+(`region` from `Header.jsx`'s unlabeled wrapper `<div>`; `landmark-unique` from `Sidebar.jsx`/
+`MobileNav.jsx`'s unlabeled `<nav>` colliding with the legacy Dashboard's own unlabeled `<nav>`).
+Fixed by labeling both new `<nav>` landmarks (`aria-label="Primary navigation"`) and giving
+`Header.jsx`'s wrapper `role="region"` + a label instead of a real `<header>` (a real `<header>`
+was tried first and reverted — it passed `region` but failed
+`landmark-no-duplicate-banner` against the still-unmigrated pages' own `<header>` elements).
+No new test file was added; `tests/e2e/a11y.spec.js`'s existing per-page allowlist already catches
+this class of regression (that's its designed purpose per ADR-019) and wasn't itself changed.
+
+Next: Phase 8.2, migrating pages one at a time (Landing → Auth → Dashboard → Upload →
+Transactions → Analytics → Settings → Profile → mobile layouts, per the user's requested order),
+each phase gated on the same full verification run before moving to the next.
 
 ### Phase 6 completion note
 
@@ -103,6 +138,28 @@ technical debt) is still open and still Phase 8's to close.
 ## Architecture Decision Records
 
 Newest first.
+
+### ADR-022 — App-shell topbar uses `role="region"`, not a real `<header>`, until the legacy pages it wraps are gone
+
+**Context**: Phase 8.1's new `AppShell`/`Header.jsx` needed its topbar (logo + command-palette
+trigger + theme toggle) contained in *some* landmark — axe's `region` rule otherwise flags the
+logo link (visible on mobile, where `Header` renders it) as page content outside any landmark.
+The obvious fix, a real `<header>` element, was tried first and reverted: the not-yet-migrated
+`UploadScreen`/`Dashboard` (still mounted inside `AppShell`'s `<Outlet>` until their own Phase 8.x
+migrations) each already render their own unconditional `<header>`, and axe's
+`landmark-no-duplicate-banner` rule fails on **any** second banner landmark regardless of naming —
+unlike `landmark-unique` (the sibling rule for `<nav>`, satisfied by a distinguishing
+`aria-label`), a second `<header>` is never allowed no matter how it's labeled. **Decision**: the
+new topbar wrapper uses `<div role="region" aria-label="Application header">` instead — a
+landmark type that permits multiple, uniquely-named instances, satisfying `region` without
+colliding with the legacy pages' `<header>`. Same reasoning applied to `Sidebar.jsx`'s and
+`MobileNav.jsx`'s new `<nav>` landmarks, which got `aria-label="Primary navigation"` to stay
+distinguishable from the legacy Dashboard's own unlabeled `<nav>` (`src/App.jsx`, its old TabBar).
+**Status**: revisit once the last old-header page (`UploadScreen`/`Dashboard`, Phase 8.4/8.5) is
+migrated and its own `<header>` is deleted — at that point `AppShell`'s topbar can become a real
+`<header>` with nothing left to collide with. Tracked here rather than left as a comment-only
+decision because it's the kind of "why is this a div and not a header" question that outlives the
+person who wrote it.
 
 ### ADR-021 — Vitest coverage thresholds set as a floor under today's real numbers, not an aspirational target
 **Context**: Phase 6 (and ROADMAP's own re-prioritization note, previously) called out "a
@@ -452,6 +509,14 @@ From Phase 6 (Testing infrastructure):
   confirmed while scoping Phase 6's auth e2e coverage. Same underlying gap
   `authentication.md`'s "No device-management UI" bullet already tracks; noted here as the
   specific function it applies to.
+
+From Phase 8.1 (routing, navigation shell, design foundation):
+- `Header.jsx`'s topbar is `role="region"`, not a real `<header>`, until the last unmigrated page
+  using its own `<header>` (`UploadScreen`/`Dashboard`, Phase 8.4/8.5) is gone — see ADR-022.
+- Material Symbols Outlined icon font stays on Google Fonts' CDN (not self-hosted like
+  Newsreader/Manrope/Inter) until every old screen still calling `<span class="material-symbols-
+  outlined">` (`App.jsx`, `AuthScreen.jsx`) is migrated to `lucide-react` — removing it earlier
+  would blank out every icon those screens render. Tracked to close alongside Phase 8.8.
 
 From `docs/security/threat-model.md` (Phase 4):
 - Pagination and search validators were explicitly requested by the Phase 4 spec but not

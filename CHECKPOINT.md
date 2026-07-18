@@ -6,19 +6,19 @@ re-deriving context from the repo.
 
 ## Release status
 
-**Phase 6 (Testing infrastructure) committed and pushed to `origin/main` as a series of six
-logical commits** (vitest collision fix + coverage thresholds; the four application bug fixes;
-the Playwright/a11y/visual/performance suite; the new Vitest auth coverage; the CI wiring; this
-documentation) — see `git log` for the exact hashes. Phase 7 (CI/CD, `64a1280`) was the last
-thing pushed before this session.
+**Phase 8.1 (routing, navigation shell, design foundation) verified and committed this session**
+(see `git log` for the exact hash — commit message
+"feat(frontend): implement routing, navigation shell and design foundation"). Phase 6 (Testing
+infrastructure, six logical commits) and Phase 7 (CI/CD, `64a1280`) were the last things pushed
+before this session.
 
 ## Current status
 
-**7 of 9 phases complete (78%).** Phases 1–5 and 7 verified/landed in prior sessions; Phase 6
-(testing infrastructure) completed this session. Full writeup:
-`docs/engineering-lessons/phase-6-testing.md` (testing concepts, written for onboarding),
-`ROADMAP.md` ADR-019/020/021 (accessibility gating, visual regression scope, coverage
-thresholds). Full phase/ADR history: `ROADMAP.md`.
+**7 of 9 phases complete (78%); Phase 8 in progress (8.1 of ~8.9 sub-steps done).** Phases 1–5 and
+7 verified/landed in prior sessions; Phase 6 (testing infrastructure) completed two sessions ago;
+Phase 8.1 completed this session. Full writeup: `docs/engineering-lessons/phase-6-testing.md`
+(testing concepts), `docs/frontend/phase-8-*.md` (design system, component architecture,
+migration plan), `ROADMAP.md` ADR-019/020/021/022. Full phase/ADR history: `ROADMAP.md`.
 
 ### Completed phases
 1. Backend architecture cleanup
@@ -30,10 +30,19 @@ thresholds). Full phase/ADR history: `ROADMAP.md`.
    performance, all wired into CI except visual regression — see below)
 7. CI/CD (GitHub Actions)
 
+### Phase 8 — in progress
+- **8.1 done** (this session): `react-router-dom` routing (`/`, `/dashboard` real so far),
+  `AppShell`/`Sidebar`/`MobileNav`/`Header` responsive navigation shell, theme system + design
+  tokens, self-hosted fonts, command palette. Old `AuthScreen`/`Dashboard`/`UploadScreen` unchanged,
+  just mounted at real routes instead of `App.jsx`'s old conditionals — see ROADMAP.md's
+  "Phase 8.1 completion note" for the full list and the one bug found/fixed (ADR-022).
+- **8.2–8.9 not started**: page-by-page migration (Landing → Auth → Dashboard → Upload →
+  Transactions → Analytics → Settings → Profile → mobile layouts), per
+  `docs/frontend/phase-8-migration-plan.md` and the user's requested order. One page per phase,
+  full verification gate (lint/test/e2e/build) green before moving to the next — see that file's
+  "keep the existing suite passing" section for the exact discipline.
+
 ### Remaining phases
-8. Frontend redesign (design system, a11y, dark mode) — not started. `ROADMAP.md` recommends
-   this next; Phase 6's e2e/a11y/visual suite now exists specifically to catch regressions this
-   rewrite might introduce.
 9. Advanced AI features & product enhancements — not started
 
 ## Phase 6 (Testing infrastructure) — what was completed this session
@@ -138,12 +147,16 @@ That surfaced a real, blocking problem immediately — see below — before any 
 
 ## Test suite
 
-`npm test` — **88/88 passing** (84 carried forward + 4 new login rate-limit/lockout tests).
-`npm run test:coverage` — 52.41% statements / 46.14% branches / 75% functions / 55.13% lines on
-`api/**`, above the new enforced floor (50/42/70/52). `npx playwright test` (all 5 browser
-projects) — **165/165** functional/a11y/performance tests, plus **3/3** visual snapshots
-(chromium only, by design — see ADR-020). `npm run lint` — 0 errors, pre-existing warnings only.
-`npm run build` — succeeds, ~1s locally.
+`npm test` — **88/88 passing** (unchanged this session — Phase 8.1 touched no `api/**` code).
+`npx playwright test` (all 5 browser projects) — **168 passed, 0 failed, 12 skipped** (visual
+regression, excluded from this grep by design — see ADR-020; regenerated and reviewed separately
+this session for the new shell/font rendering). `npm run lint` — 0 errors, 46 pre-existing
+warnings, unchanged. `npm run build` — succeeds.
+
+One real regression surfaced by this session's full-suite run and fixed before commit: the new
+nav shell introduced two accessibility violations (`region`, `landmark-unique`) not present at
+session start. Root cause, fix, and the reverted first-attempt fix (a real `<header>`, which
+traded one violation for a worse one) are in ROADMAP.md's ADR-022 and "Phase 8.1 completion note".
 
 ## Deployment status (carried forward, unchanged this session)
 
@@ -177,21 +190,27 @@ regression not yet running in CI (Linux baseline gap, ADR-020), and product-faci
 ## Remaining technical debt
 
 Full list with rationale lives in `ROADMAP.md`'s "Known technical debt" section — not duplicated
-here to avoid drift. Headline items from this session: visual regression doesn't run in CI yet
-(ADR-020); the a11y allowlist in `tests/e2e/a11y.spec.js` is real, current, Phase-8-scoped debt,
-not a permanent allowance (ADR-019); `api/auth.js`'s OTP/email-verification branches remain
-untestable without real Gmail SMTP credentials (ADR-021, same root cause as ADR-013's
-still-open live-nodemailer-send item); `logoutAllDevices()` has no UI caller. Carried forward,
-unchanged: `deploy-verify.yml` needs its `VERCEL_TOKEN` secret; branch protection recommendations
-are unapplied; ~45 pre-existing ESLint warnings remain.
+here to avoid drift. New this session: `Header.jsx`'s topbar is `role="region"`, not a real
+`<header>`, until the last old-header page (`UploadScreen`/`Dashboard`) is migrated away in Phase
+8.4/8.5 (ADR-022); Material Symbols Outlined icon font stays CDN-hosted, not self-hosted like the
+new typefaces, until every old screen using it migrates off (tracked to close alongside Phase 8.8).
+Carried forward, unchanged: visual regression doesn't run in CI yet (ADR-020); the a11y allowlist
+in `tests/e2e/a11y.spec.js` is real, current, Phase-8-scoped debt (ADR-019); `api/auth.js`'s
+OTP/email-verification branches remain untestable without real Gmail SMTP credentials (ADR-021);
+`logoutAllDevices()` has no UI caller; `deploy-verify.yml` needs its `VERCEL_TOKEN` secret; branch
+protection recommendations are unapplied; ~45 pre-existing ESLint warnings remain (unchanged count
+this session).
 
 ## Next recommended step
 
-**Waiting for approval before starting Phase 8**, per this session's explicit instruction. The
-verification gate (`npm ci` → `npm run lint` → `npm test` → Playwright all-browsers →
-`npm run build`) is green, Phase 6 is committed and pushed to `origin/main`. `ROADMAP.md`
-recommends Phase 8 (frontend redesign) next, now that this session's e2e/a11y/visual suite exists
-to catch regressions that rewrite might introduce.
+**Phase 8.2: migrate the Landing page next** (first in the user's requested page-by-page order:
+Landing → Auth → Dashboard → Upload → Transactions → Analytics → Settings → Profile → mobile
+layouts). `PublicHomePage.jsx` currently still renders the old `AuthScreen` unchanged at `/` —
+Phase 8.2 replaces the unauthenticated `/` experience with a real landing page ahead of the login
+form, per `docs/frontend/phase-8-migration-plan.md`'s Phase 1 ("Landing + Routing foundation" in
+that doc's own numbering). Same discipline as 8.1: full verification gate green before moving to
+8.3, any bug found gets root-caused and fixed (with a regression test) before continuing, not
+deferred.
 
 ## Blockers / assumptions
 
