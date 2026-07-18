@@ -6,12 +6,12 @@ re-deriving context from the repo.
 
 ## Release status
 
-**Phase 8.1, 8.2, and 8.3 verified and committed this session**, plus two CI hotfixes along the
+**Phase 8.1 through 8.4 verified and committed this session**, plus two CI hotfixes along the
 way (see `git log` — `5d42cf8` Phase 8.1, `bd9241c` router hotfix, `bebb653` CI stability hotfix,
-the Phase 8.2 commit, and the Phase 8.3 commit). GitHub Actions CI is green on `main` as of the CI
-stability hotfix — it was red (webkit-only, deterministic) since before this session started; see
-"CI stability" below. Phase 6 (Testing infrastructure, six logical commits) and Phase 7 (CI/CD,
-`64a1280`) were the last things pushed before this session.
+the Phase 8.2 commit, the Phase 8.3 commit, and the Phase 8.4 commit). GitHub Actions CI is green
+on `main` as of the CI stability hotfix — it was red (webkit-only, deterministic) since before
+this session started; see "CI stability" below. Phase 6 (Testing infrastructure, six logical
+commits) and Phase 7 (CI/CD, `64a1280`) were the last things pushed before this session.
 
 Phase 8.3 itself picked up mid-flight: a prior pass in this same session had already written the
 full restyle (`src/features/auth/*`, `components/ui/{Field,OtpInput,Spinner}.jsx`, the four
@@ -21,11 +21,20 @@ checkpoint the engineering rules require — read every changed/new file for cor
 design-system consistency before trusting it, then run the full gate for real — not re-deriving
 the implementation from scratch. Both passed clean: no bugs found, nothing to fix.
 
+Phase 8.4 (Dashboard Overview) surfaced a real sequencing gap in the migration plan before any
+code was written: the plan only migrates the Overview tab in this phase, but the legacy
+`Dashboard` component's Categories/Savings/Transactions tabs and the `UploadScreen` gate aren't
+scheduled for their own routes until Phases 8.6–8.9, and naively replacing `DashboardPage`'s
+render would have made them unreachable in the interim — a real product regression, not a
+hypothetical one. Flagged to the user as an architectural decision rather than guessed; resolved
+as "re-host the existing tab bar, migrate only Overview's content, zero regressions" (see the
+Phase 8.4 completion note below for the resulting design).
+
 ## Current status
 
-**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.3 of ~8.9 sub-steps done).** Phases 1–5
+**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.4 of ~8.9 sub-steps done).** Phases 1–5
 and 7 verified/landed in prior sessions; Phase 6 (testing infrastructure) completed two sessions
-ago; Phase 8.1, 8.2, and 8.3 completed this session. Full writeup: `docs/engineering-lessons/
+ago; Phase 8.1 through 8.4 completed this session. Full writeup: `docs/engineering-lessons/
 phase-6-testing.md` (testing concepts), `docs/frontend/phase-8-*.md` (design system, component
 architecture, migration plan), `ROADMAP.md` ADR-019 through ADR-024. Full phase/ADR history:
 `ROADMAP.md`.
@@ -102,10 +111,47 @@ GitHub Actions run for `bebb653` completed successfully in 10m56s.
   0 failed across all 5 browser projects), `npm run build` (succeeds). No bugs found this phase —
   the restyle preserved behavior exactly as designed, verified rather than assumed.
 
-- **8.4–8.9 not started**: Dashboard → Upload → Transactions → Analytics → Settings → Profile →
-  mobile layouts, per `docs/frontend/phase-8-migration-plan.md` and the user's requested order.
-  One page per phase, full verification gate (lint/test/e2e/build) green before moving to the
-  next — see that file's "keep the existing suite passing" section for the exact discipline.
+- **8.4 done** (this session): the Dashboard's Overview tab (hero, stat cards, recurring
+  payments, recent transactions — App.jsx's old 1721–1743/1832–1926 range per
+  `phase-8-component-architecture.md`'s mapping table) restyled onto design-system primitives.
+  Three new `components/ui/*` primitives: `Card` (the single most duplicated pre-Phase-8 pattern,
+  ~20+ hand-typed call sites), `EmptyState` (icon/headline/body/optional action, replacing one-off
+  plain sentences like "No recurring payments detected"), and `StatCard` (same left-accent-bar/
+  label/value/sub shape as the original, but a real `<button>` when `onClick` is passed instead of
+  a `<div onClick>` with no keyboard path at all — a genuine a11y improvement, not just a
+  restyle). Two new `features/dashboard/components/*`: `OverviewHeader.jsx` (hero + stat row) and
+  `RecentActivity.jsx` (recurring payments + recent transactions, two-panel layout).
+
+  **Scope decision, flagged to the user before writing code, not guessed**: the migration plan
+  only migrates Overview in this phase; Categories/Savings/Transactions/Upload don't get their
+  own routes until Phases 8.6–8.9. Naively replacing what `DashboardPage` renders would have made
+  those tabs unreachable in the interim — asked the user how to handle it (`AskUserQuestion`), who
+  chose full feature parity: the legacy `Dashboard` component (`App.jsx`) is untouched except that
+  its Overview tab's JSX now delegates to the two new components above, passing the exact same
+  already-computed props (`totalIncome`, `recurring`, etc.) it always computed. The tab bar,
+  Categories tab, Savings tab, Transactions view, header (download/delete-account/sign-out/new-
+  upload), and the no-data `UploadScreen` gate are all byte-identical to before this phase — zero
+  regression risk by construction, not just by testing. `pages/DashboardPage.jsx` itself is
+  unchanged (still delegates to `LegacyWorkspace`); the "new DashboardPage" work the migration
+  plan describes is the Overview content it now hosts, not a route-level rewrite — that full
+  extraction happens naturally as each of Categories/Savings/Transactions/Upload gets its own real
+  route in 8.6–8.9 and the legacy tab bar shrinks accordingly.
+
+  Verification gate, run in full: `npm run lint` (0 errors, 44 pre-existing warnings, unchanged),
+  `npm test` (88/88, unchanged — no `api/**` code touched), `npx playwright test` (199 passed / 16
+  skipped [visual regression except chromium, by design] / 0 failed across all 5 browser
+  projects, including the "dashboard (with data loaded)" a11y scan and the dashboard-load
+  performance test — both exercise the new components directly and introduced no new violations
+  beyond the existing tracked allowlist), `npm run build` (succeeds). No bugs found. Not
+  independently verified in a live browser this session (no browser-automation tool was available
+  this session) — the Playwright suite's real, headless-browser rendering across 5 engines is the
+  verification basis instead, not just unit/lint/build.
+
+- **8.5–8.9 not started**: Upload → Transactions → Analytics → Categories/Merchant Rules →
+  Settings/Savings → remaining cleanup, per `docs/frontend/phase-8-migration-plan.md` and the
+  user's requested order. One page per phase, full verification gate (lint/test/e2e/build) green
+  before moving to the next — see that file's "keep the existing suite passing" section for the
+  exact discipline.
 
 ### Remaining phases
 9. Advanced AI features & product enhancements — not started
@@ -225,10 +271,10 @@ Real regressions found and fixed in prior phases this session, all before commit
 future session to discover: Phase 8.1's nav shell introduced 2 accessibility violations
 (ADR-022); a router gap broke password-reset links (ADR-023); Phase 8.2's Landing page introduced
 a color-contrast token bug (ADR-024) and a heading-order bug; CI itself had a pre-existing (not
-Phase-8-caused) webkit test bug plus resource-contention flakiness, both fixed in `bebb653`. Phase
-8.3 itself introduced no new bugs — full gate green on first run after this continuation's review
-pass. Full detail in ROADMAP.md's "Phase 8.1/8.2/8.3 completion note"s and the CI stability
-section above.
+Phase-8-caused) webkit test bug plus resource-contention flakiness, both fixed in `bebb653`.
+Phases 8.3 and 8.4 both introduced no new bugs — full gate green on first run in both cases. Full
+detail in ROADMAP.md's "Phase 8.1/8.2/8.3/8.4 completion note"s and the CI stability section
+above.
 
 ## Deployment status (carried forward, unchanged this session)
 
@@ -264,10 +310,16 @@ regression not yet running in CI (Linux baseline gap, ADR-020), and product-faci
 Full list with rationale lives in `ROADMAP.md`'s "Known technical debt" section — not duplicated
 here to avoid drift. New this session: `Header.jsx`'s topbar is `role="region"`, not a real
 `<header>`, until the last old-header page (`UploadScreen`/`Dashboard`) is migrated away in Phase
-8.4/8.5 (ADR-022); Material Symbols Outlined icon font stays CDN-hosted, not self-hosted like the
-new typefaces, until every old screen using it migrates off (tracked to close alongside Phase 8.8).
-`AuthScreen.jsx` is fully retired as of Phase 8.3 — no remaining debt there. Carried forward,
-unchanged: visual regression doesn't run in CI yet (ADR-020); the a11y allowlist in
+8.5+ (ADR-022); Material Symbols Outlined icon font stays CDN-hosted, not self-hosted like the
+new typefaces, until every old screen using it migrates off (tracked to close alongside Phase
+8.8) — the legacy `Dashboard`'s Categories/Savings/Transactions tabs and header still use it;
+only the new Overview components use `lucide-react`. `AuthScreen.jsx` is fully retired as of
+Phase 8.3 — no remaining debt there. The legacy `Dashboard` component (`App.jsx`) still owns
+Categories/Savings/Transactions/the tab bar/the header — Phase 8.4 deliberately left these
+untouched (see the 8.4 completion note above); each shrinks the legacy component further as its
+own phase (8.6–8.9) lands, until `Dashboard`/`App.jsx`'s `LegacyWorkspace` can be deleted entirely
+in Phase 10 per the migration plan. Carried forward, unchanged: visual regression doesn't run in
+CI yet (ADR-020); the a11y allowlist in
 `tests/e2e/a11y.spec.js` is real, current, Phase-8-scoped debt for every page except Landing now
 (ADR-019); `api/auth.js`'s OTP/email-verification branches remain untestable without real Gmail
 SMTP credentials (ADR-021); `logoutAllDevices()` has no UI caller; `deploy-verify.yml` needs its
@@ -276,17 +328,20 @@ warnings remain (44, down from 46 — see "Test suite" above).
 
 ## Next recommended step
 
-**Phase 8.4: Dashboard as the new authenticated landing** — `pages/DashboardPage.jsx` +
-`features/dashboard/`, the lightweight summary view (stat cards, recent activity, recurring
-payments), deliberately not the full chart set (that's Analytics, Phase 8.7). `/dashboard`
-becomes the real authenticated landing; a no-data account sees an `EmptyState` with an upload CTA,
-replacing today's separate `UploadScreen`-as-gate pattern. Per
-`docs/frontend/phase-8-migration-plan.md`'s Phase 4, this is the largest mechanical test-update
-phase in the whole plan — every `auth.spec.js`/`auth-resilience.spec.js` test currently asserting
-on "try with sample data" as the post-login signal needs updating to a `/dashboard`-specific
-signal instead, flagged up front in the migration plan, not a surprise mid-phase. Same discipline
-as 8.1–8.3: full verification gate green before moving to 8.5 (Upload), any bug found gets
-root-caused and fixed (with a regression test) before continuing, not deferred.
+**Phase 8.5: Upload workflow** — `pages/UploadPage.jsx` + `features/upload/` at its own real
+`/upload` route (no longer only a pre-Dashboard gate), per
+`docs/frontend/phase-8-migration-plan.md`'s Phase 5. `DropZone` gets real keyboard/focus support
+(a `<button>`-based drop target — the legacy `UploadScreen`'s drop zone has none today) and the
+hardcoded fake "Recent transactions" preview panel is dropped (it was never real data). Per this
+session's Phase 8.4 scope decision, the legacy `UploadScreen`-as-gate (no-data state) stays
+exactly as it is for now — this phase gives Upload an *additional* real route/entry point
+alongside the existing gate, it doesn't yet replace the gate itself (that full cutover, and the
+associated `auth.spec.js`/`auth-resilience.spec.js` "try with sample data" test updates the
+migration plan originally scoped to Phase 4, are now deferred to whichever later phase actually
+removes the gate — flag this explicitly if/when that happens, don't silently assume it's already
+covered). Same discipline as 8.1–8.4: full verification gate green before moving to 8.6
+(Transactions), any bug found gets root-caused and fixed (with a regression test) before
+continuing, not deferred.
 
 ## Blockers / assumptions
 

@@ -6,7 +6,7 @@ require re-deriving context that already existed once.
 
 ## Progress
 
-**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.3 of ~8.9 sub-steps done).**
+**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.4 of ~8.9 sub-steps done).**
 
 | # | Phase | Status | Docs |
 |---|---|---|---|
@@ -17,7 +17,7 @@ require re-deriving context that already existed once.
 | 5 | Dependency maintenance (`npm audit`, upgrades) | ✅ Done | `docs/security/threat-model.md` (Dependency posture) |
 | 6 | Testing infrastructure | ✅ Done | `docs/engineering-lessons/phase-6-testing.md` |
 | 7 | CI/CD (GitHub Actions) | ✅ Done | `docs/engineering-lessons/phase-7-ci-cd.md` |
-| 8 | Frontend redesign (design system, routing, navigation shell, a11y) | 🟨 In progress (8.1–8.3 done) | `docs/frontend/phase-8-*.md` |
+| 8 | Frontend redesign (design system, routing, navigation shell, a11y) | 🟨 In progress (8.1–8.4 done) | `docs/frontend/phase-8-*.md` |
 | 9 | Advanced AI features & product enhancements | ⬜ Not started | — |
 
 ### Phase 8.1 completion note (routing, navigation shell, design foundation)
@@ -102,6 +102,70 @@ Next: Phase 8.3, restyling `AuthScreen.jsx` onto `components/ui/*` design-system
 `docs/frontend/phase-8-migration-plan.md`'s Phase 2. Then Dashboard → Upload → Transactions →
 Analytics → Settings → Profile → mobile layouts, each phase gated on the same full verification
 run before moving to the next.
+
+### Phase 8.4 completion note (Dashboard Overview restyle onto design-system primitives)
+
+Delivered: the legacy `Dashboard` component's (`App.jsx`) Overview tab — hero, four stat cards,
+recurring payments, recent transactions (the old 1721–1743/1832–1926 line range, per
+`phase-8-component-architecture.md`'s mapping table) — restyled onto three new
+`components/ui/*` primitives (`Card`, `EmptyState`, `StatCard`) and two new
+`features/dashboard/components/*` (`OverviewHeader.jsx`, `RecentActivity.jsx`). The Recharts
+donut/bar/line charts row between them (1744–1831) is untouched — that's Analytics, Phase 8.7,
+not this phase.
+
+**Scope deviation from the original migration plan, decided with the user before writing any
+code (see ADR-025)**: the plan's own Phase 4 describes `/dashboard` becoming the real
+authenticated landing, replacing the `UploadScreen`-as-gate pattern outright, with a matching
+"largest mechanical test-update" pass across `auth.spec.js`/`auth-resilience.spec.js`. Scoping
+this out before implementation surfaced a real gap the plan didn't address: Categories, Savings,
+Transactions, and the upload gate itself aren't scheduled for their own routes until Phases
+8.6–8.9, so a literal reading of Phase 4 would have made all of them unreachable for two-plus
+phases — a real, if temporary, product regression. Presented to the user as an explicit
+architectural choice rather than assumed; resolved in favor of zero regressions over strict
+adherence to the plan's original phase boundary — see ADR-025 for the resulting design and its
+follow-on consequences for Phase 8.5+.
+
+**Verification gate**, run in full: `npm run lint` (0 errors, 44 pre-existing warnings,
+unchanged), `npm test` (88/88, unchanged — no `api/**` code touched), `npx playwright test` (199
+passed / 16 skipped [visual regression except chromium, by design, ADR-020] / 0 failed across all
+5 browser projects — including the "dashboard (with data loaded)" a11y scan, which exercises the
+new components directly and introduced no violation beyond the existing tracked allowlist), `npm
+run build` (succeeds). No new bugs found. Not independently verified in a live browser this
+session (no browser-automation tool was available) — verification rests on the Playwright suite's
+real, headless, 5-engine rendering rather than a manual check, flagged explicitly rather than
+assumed equivalent.
+
+Next: Phase 8.5, the Upload workflow (`pages/UploadPage.jsx` + `features/upload/`, a real
+`/upload` route, keyboard-accessible drop zone) — see CHECKPOINT.md's "Next recommended step" for
+the specific consequence ADR-025 has on this phase (Upload gets an additional real route
+alongside the still-unchanged gate, not a replacement of it yet).
+
+### ADR-025 — Phase 8.4 re-hosts the legacy tab bar instead of cutting `/dashboard` over to the new Overview outright
+
+**Context**: `docs/frontend/phase-8-migration-plan.md`'s Phase 4 describes `/dashboard` becoming
+the real authenticated landing in this phase, with `UploadScreen`'s gate role removed and a
+matching mechanical test-suite update. Scoping the actual implementation surfaced a sequencing
+problem the plan didn't call out: Categories, Savings, Transactions, and Upload itself are each
+scheduled for their *own* real route in a *later* phase (8.6–8.9). A literal Phase 4 cutover would
+have needed to either (a) delete access to all four before their replacements exist, or (b) build
+all four ahead of schedule inside what's meant to be a single-page phase — neither of which the
+plan actually specifies how to do. **Decision**: keep the legacy `Dashboard` component (`App.jsx`)
+exactly as it is — same tab bar, same Categories/Savings/Transactions tabs, same header, same
+`UploadScreen` gate for the no-data case — and change only what its Overview tab renders,
+delegating to the two new `features/dashboard/components/*` (passing the exact figures `Dashboard`
+already computed, nothing recomputed). `pages/DashboardPage.jsx` is unchanged (still delegates to
+`LegacyWorkspace`). **Rationale**: presented to the user as an explicit choice among three options
+(re-host everything unchanged / accept a temporary regression / pull all four later phases forward
+now) rather than silently picked — the user chose full parity, matching this project's standing
+"never hide or ignore defects" and "no half-finished implementations" rules; a mid-migration dead
+link or vanished settings page is exactly the kind of defect those rules are written to prevent.
+**Consequence for later phases**: each of 8.6–8.9 shrinks the legacy `Dashboard` component by one
+tab as it lands (delegating that tab's content to its own new page/route the same way Overview
+now delegates to `OverviewHeader`/`RecentActivity`), until `Dashboard` and `App.jsx`'s
+`LegacyWorkspace` have nothing left to render and are deleted outright in Phase 10, per the
+migration plan's own final-cleanup step — this ADR doesn't change that end state, only the path
+there. **Status**: stable; revisit only if a later phase's own scoping finds this sequencing no
+longer holds.
 
 ### Phase 8.3 completion note (Authentication restyle onto design-system primitives)
 
@@ -647,11 +711,24 @@ From Phase 6 (Testing infrastructure):
 
 From Phase 8.1 (routing, navigation shell, design foundation):
 - `Header.jsx`'s topbar is `role="region"`, not a real `<header>`, until the last unmigrated page
-  using its own `<header>` (`UploadScreen`/`Dashboard`, Phase 8.4/8.5) is gone — see ADR-022.
+  using its own `<header>` (`UploadScreen`/`Dashboard`, Phase 8.5+) is gone — see ADR-022.
 - Material Symbols Outlined icon font stays on Google Fonts' CDN (not self-hosted like
   Newsreader/Manrope/Inter) until every old screen still calling `<span class="material-symbols-
-  outlined">` (`App.jsx`, `AuthScreen.jsx`) is migrated to `lucide-react` — removing it earlier
-  would blank out every icon those screens render. Tracked to close alongside Phase 8.8.
+  outlined">` (`App.jsx`) is migrated to `lucide-react` — removing it earlier would blank out
+  every icon those screens render. Tracked to close alongside Phase 8.8. (`AuthScreen.jsx` no
+  longer applies here — retired in full as of Phase 8.3.)
+
+From Phase 8.4 (Dashboard Overview restyle, ADR-025):
+- The legacy `Dashboard` component (`App.jsx`) still owns Categories, Savings, Transactions, the
+  tab bar, and the header — only its Overview tab's content was migrated this phase, by deliberate
+  choice (ADR-025), not oversight. Each of Phases 8.6–8.9 shrinks it by one more tab; it and
+  `LegacyWorkspace` are deleted outright in Phase 10 once nothing is left inside them.
+- The migration plan's original Phase 4 called for `/dashboard` replacing `UploadScreen`'s gate
+  role outright, with a matching test-suite update across `auth.spec.js`/`auth-resilience.spec.js`
+  ("try with sample data" → a `/dashboard`-specific signal). That cutover didn't happen this
+  phase (ADR-025) — the gate is untouched and those tests are still valid as originally written.
+  Whichever later phase actually removes the gate needs to pick this up explicitly, not assume
+  it was already done in 8.4.
 
 From `docs/security/threat-model.md` (Phase 4):
 - Pagination and search validators were explicitly requested by the Phase 4 spec but not

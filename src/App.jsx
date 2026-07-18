@@ -4,6 +4,8 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 import _ from "lodash";
 import { apiFetch } from "./api.js";
 import { useAuth } from "./contexts/AuthContext.jsx";
+import { OverviewHeader } from "./features/dashboard/components/OverviewHeader.jsx";
+import { RecentActivity } from "./features/dashboard/components/RecentActivity.jsx";
 
 // ─── CATEGORY ENGINE ───
 const DEFAULT_CATEGORIES = {
@@ -1720,25 +1722,20 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
         {/* ─── OVERVIEW TAB ─── */}
         {tab === "Overview" && (
           <div>
-            {/* Hero */}
-            <section style={{ marginBottom: isMobile ? 24 : 36 }}>
-              <h1 style={{ fontSize: isMobile ? 28 : 40, fontFamily: fontHeadline, fontWeight: 400, color: theme.text, margin: "0 0 8px", lineHeight: 1.1 }}>
-                Welcome back, <span style={{ fontStyle: "italic", color: theme.primary }}>{auth?.user?.name?.split(" ")[0] || "there"}</span>
-              </h1>
-              <p style={{ fontSize: 14, color: theme.textSubtle, margin: 0, maxWidth: 520, lineHeight: 1.6 }}>
-                {monthlyData.length > 0
-                  ? `Showing ${monthlyData.length} month${monthlyData.length !== 1 ? "s" : ""} of data · ${transactions.length} transactions`
-                  : "Upload a statement to see your spending breakdown."}
-              </p>
-            </section>
-
-            {/* Stats Row */}
-            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 28 }}>
-              <StatCard label="Total Income" value={fmt(totalIncome)} color={theme.green} sub={`↑ ${income.length} transactions`} onClick={() => setTab("Transactions")} />
-              <StatCard label="Total Expenses" value={fmt(totalExpenses)} color={theme.accent} sub={`↓ ${expenses.length} transactions`} onClick={() => setTab("Transactions")} />
-              <StatCard label="Net Cashflow" value={(netCashflow >= 0 ? "+" : "") + fmt(netCashflow)} color={netCashflow >= 0 ? theme.green : theme.accent} sub={netCashflow >= 0 ? "Surplus" : "Deficit"} />
-              <StatCard label="Transactions" value={transactions.length} color={theme.textSubtle} sub={`${monthlyData.length} months`} onClick={() => setTab("Transactions")} />
-            </div>
+            {/* Hero + Stats — restyled onto design-system primitives, Phase 8.4
+                (see src/features/dashboard/components/OverviewHeader.jsx) */}
+            <OverviewHeader
+              userName={auth?.user?.name?.split(" ")[0]}
+              monthlyCount={monthlyData.length}
+              transactionCount={transactions.length}
+              totalIncome={totalIncome}
+              totalExpenses={totalExpenses}
+              netCashflow={netCashflow}
+              incomeCount={income.length}
+              expenseCount={expenses.length}
+              fmt={fmt}
+              onViewTransactions={() => setTab("Transactions")}
+            />
 
             {/* Charts Row */}
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 3fr", gap: 20, marginBottom: 24 }}>
@@ -1830,98 +1827,15 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
               )}
             </div>
 
-            {/* Recurring + Recent Transactions */}
-            <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-              <div style={{
-                flex: "1 1 400px", background: theme.surface,
-                borderRadius: 8, padding: isMobile ? "20px 16px" : "28px 32px",
-                boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                  <div>
-                    <div style={{ fontSize: 16, fontWeight: 600, color: theme.text, fontFamily: fontHeadline }}>Recurring Payments</div>
-                    <div style={{ fontSize: 12, color: theme.textSubtle, marginTop: 2 }}>Regular charges detected</div>
-                  </div>
-                  <span className="material-symbols-outlined" style={{ color: theme.textSubtle, opacity: 0.4, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>repeat</span>
-                </div>
-                {recurring.length === 0 ? (
-                  <div style={{ color: theme.textSubtle, fontSize: 14 }}>No recurring payments detected</div>
-                ) : (
-                  <div style={{ maxHeight: 300, overflowY: "auto" }}>
-                    {recurring.slice(0, isMobile ? 4 : 8).map(r => (
-                      <div key={r.desc} style={{
-                        display: "flex", alignItems: "center", gap: 12,
-                        padding: "12px 0", borderBottom: `1px solid ${theme.surfaceContainer}`,
-                      }}>
-                        <div style={{
-                          width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-                          background: theme.surfaceContainerLow,
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          fontSize: 12, fontWeight: 700, color: theme.textSubtle, fontFamily: fontMono,
-                        }}>{r.desc[0].toUpperCase()}</div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: theme.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {r.desc.length > 22 ? r.desc.slice(0, 22).trim() + "…" : r.desc}
-                          </div>
-                          <div style={{ fontSize: 11, color: theme.textSubtle, marginTop: 2 }}>
-                            {r.category} · {r.isFixed ? "Fixed" : "Variable"}
-                          </div>
-                        </div>
-                        <div style={{ fontFamily: fontMono, fontWeight: 600, fontSize: 13, color: theme.text, whiteSpace: "nowrap", flexShrink: 0 }}>
-                          {fmt(r.avg)}<span style={{ color: theme.textSubtle, fontSize: 11, fontWeight: 400 }}>/mo</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div style={{
-                flex: "1 1 400px", background: theme.surface,
-                borderRadius: 8, padding: isMobile ? "20px 16px" : "28px 32px",
-                boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                  <div>
-                    <div style={{ fontSize: 16, fontWeight: 600, color: theme.text, fontFamily: fontHeadline }}>Recent Transactions</div>
-                    <div style={{ fontSize: 12, color: theme.textSubtle, marginTop: 2 }}>Last 3 transactions</div>
-                  </div>
-                  <button id="tx3m4s" onClick={() => setTab("Transactions")} style={{
-                    fontSize: 12, color: theme.primary, background: "none", border: "none",
-                    cursor: "pointer", fontFamily: font, fontWeight: 600, padding: 0, whiteSpace: "nowrap",
-                  }}>View All Transactions</button>
-                </div>
-                {recentTransactions.length === 0 ? (
-                  <div style={{ color: theme.textSubtle, fontSize: 14 }}>No transactions yet</div>
-                ) : recentTransactions.map(t => (
-                  <div key={t.id} style={{
-                    display: "flex", alignItems: "center", gap: 12,
-                    padding: "12px 0", borderBottom: `1px solid ${theme.surfaceContainer}`,
-                  }}>
-                    <div style={{
-                      width: 36, height: 36, borderRadius: 8, flexShrink: 0,
-                      background: t.amount >= 0 ? theme.greenSoft : theme.surfaceContainerLow,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>
-                      <span className="material-symbols-outlined" style={{ fontSize: 18, color: t.amount >= 0 ? theme.green : theme.textSubtle, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>
-                        {t.amount >= 0 ? "arrow_downward" : "arrow_upward"}
-                      </span>
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: theme.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {t.desc}
-                      </div>
-                      <div style={{ fontSize: 11, color: theme.textSubtle, marginTop: 2 }}>
-                        {t.date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} · {t.category}
-                      </div>
-                    </div>
-                    <div style={{ fontFamily: fontMono, fontWeight: 700, fontSize: 14, color: t.amount >= 0 ? theme.green : theme.text, whiteSpace: "nowrap", flexShrink: 0 }}>
-                      {t.amount >= 0 ? "+" : ""}{fmt(t.amount)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            {/* Recurring + Recent Transactions — restyled onto design-system
+                primitives, Phase 8.4 (src/features/dashboard/components/
+                RecentActivity.jsx) */}
+            <RecentActivity
+              recurring={recurring}
+              recentTransactions={recentTransactions}
+              fmt={fmt}
+              onViewTransactions={() => setTab("Transactions")}
+            />
           </div>
         )}
 
