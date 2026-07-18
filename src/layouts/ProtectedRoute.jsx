@@ -5,9 +5,9 @@ import { LoadingScreen } from "../components/ui/LoadingScreen.jsx";
 /**
  * Redirects to /login?redirect=<attempted-path> when unauthenticated,
  * preserving the destination — see phase-8-component-architecture.md's
- * "Protected routes" section. (The dedicated /login route lands in Phase
- * 8.3; until then this redirects to "/", which renders the sign-in form
- * directly — see router.jsx.)
+ * "Protected routes" section. LoginPage reads that redirect param and
+ * navigates there after a successful login instead of always landing on
+ * /dashboard (see LandingPage.jsx/LoginPage.jsx's identical pattern).
  */
 export function ProtectedRoute({ children }) {
   const { authChecked, isAuthenticated } = useAuth();
@@ -17,7 +17,7 @@ export function ProtectedRoute({ children }) {
 
   if (!isAuthenticated) {
     const redirect = encodeURIComponent(location.pathname + location.search);
-    return <Navigate to={`/?redirect=${redirect}`} replace />;
+    return <Navigate to={`/login?redirect=${redirect}`} replace />;
   }
 
   return children;

@@ -6,19 +6,41 @@ re-deriving context from the repo.
 
 ## Release status
 
-**Phase 8.1 (routing, navigation shell, design foundation) verified and committed this session**
-(see `git log` for the exact hash — commit message
-"feat(frontend): implement routing, navigation shell and design foundation"). Phase 6 (Testing
-infrastructure, six logical commits) and Phase 7 (CI/CD, `64a1280`) were the last things pushed
-before this session.
+**Phase 8.1 and 8.2 verified and committed this session**, plus two CI hotfixes along the way
+(see `git log` — `5d42cf8` Phase 8.1, `bd9241c` router hotfix, `bebb653` CI stability hotfix, and
+the Phase 8.2 commit). GitHub Actions CI is green on `main` as of the CI stability hotfix — it was
+red (webkit-only, deterministic) since before this session started; see "CI stability" below.
+Phase 6 (Testing infrastructure, six logical commits) and Phase 7 (CI/CD, `64a1280`) were the last
+things pushed before this session.
 
 ## Current status
 
-**7 of 9 phases complete (78%); Phase 8 in progress (8.1 of ~8.9 sub-steps done).** Phases 1–5 and
-7 verified/landed in prior sessions; Phase 6 (testing infrastructure) completed two sessions ago;
-Phase 8.1 completed this session. Full writeup: `docs/engineering-lessons/phase-6-testing.md`
-(testing concepts), `docs/frontend/phase-8-*.md` (design system, component architecture,
-migration plan), `ROADMAP.md` ADR-019/020/021/022. Full phase/ADR history: `ROADMAP.md`.
+**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.2 of ~8.9 sub-steps done).** Phases 1–5
+and 7 verified/landed in prior sessions; Phase 6 (testing infrastructure) completed two sessions
+ago; Phase 8.1 and 8.2 completed this session. Full writeup: `docs/engineering-lessons/
+phase-6-testing.md` (testing concepts), `docs/frontend/phase-8-*.md` (design system, component
+architecture, migration plan), `ROADMAP.md` ADR-019 through ADR-024. Full phase/ADR history:
+`ROADMAP.md`.
+
+## CI stability (fixed this session, unrelated to Phase 8's own code)
+
+Found while investigating why `main`'s GitHub Actions run was red: it had been failing
+**since before this session started** (confirmed on the commit immediately prior,
+`676293a`) — not something Phase 8 introduced. Two distinct problems, both fixed in commit
+`bebb653`:
+1. **Real, deterministic bug** (100% reproducible on webkit + mobile-safari, every run):
+   `auth.spec.js`'s account-deletion test asserted a cleared cookie is *absent* from Playwright's
+   `cookies()` snapshot; on WebKit it can still appear with an empty `value` instead. The sibling
+   `logout` test already had the correct fix (check value emptiness, not presence) — account
+   deletion's test just never got the same treatment. Applied the same pattern to both `cc_at`
+   and `cc_rt`.
+2. **CI-only resource contention** (firefox `page.reload()` timeouts, one mobile-chrome
+   double-click race) — `ubuntu-latest`'s 2-core runner under 2 Playwright workers × 5 browser
+   engines, same category already documented as ADR-014. Reduced CI workers 2→1 and raised the
+   per-test timeout 30s→60s (`playwright.config.js`, CI-only — local is unaffected).
+
+Verified via `gh run view` on the actual failed runs before touching anything (not guessed) —
+GitHub Actions run for `bebb653` completed successfully in 10m56s.
 
 ### Completed phases
 1. Backend architecture cleanup
@@ -31,13 +53,23 @@ migration plan), `ROADMAP.md` ADR-019/020/021/022. Full phase/ADR history: `ROAD
 7. CI/CD (GitHub Actions)
 
 ### Phase 8 — in progress
-- **8.1 done** (this session): `react-router-dom` routing (`/`, `/dashboard` real so far),
-  `AppShell`/`Sidebar`/`MobileNav`/`Header` responsive navigation shell, theme system + design
-  tokens, self-hosted fonts, command palette. Old `AuthScreen`/`Dashboard`/`UploadScreen` unchanged,
-  just mounted at real routes instead of `App.jsx`'s old conditionals — see ROADMAP.md's
-  "Phase 8.1 completion note" for the full list and the one bug found/fixed (ADR-022).
-- **8.2–8.9 not started**: page-by-page migration (Landing → Auth → Dashboard → Upload →
-  Transactions → Analytics → Settings → Profile → mobile layouts), per
+- **8.1 done**: `react-router-dom` routing, `AppShell`/`Sidebar`/`MobileNav`/`Header` responsive
+  navigation shell, theme system + design tokens, self-hosted fonts, command palette. Old
+  `AuthScreen`/`Dashboard`/`UploadScreen` unchanged, just mounted at real routes instead of
+  `App.jsx`'s old conditionals — see ROADMAP.md's "Phase 8.1 completion note" for the full list
+  and the bug found/fixed (ADR-022). A same-session hotfix (`bd9241c`) then added
+  `/forgot-password`/`/reset-password` as real routes plus a custom 404 page — Phase 8.1 had
+  missed them, silently breaking real password-reset email links (ADR-023).
+- **8.2 done** (this session): a real marketing Landing page at `/`
+  (`src/pages/LandingPage.jsx` + `src/features/landing/`), plus `/login`/`/signup` as real routes
+  (thin wrappers around the same, unchanged `AuthScreen`) since Landing claiming "/" required it.
+  Four real bugs found and fixed along the way — stale "/" assumptions across 4 test files, an
+  a11y-scan/render race, an app-wide `color-contrast` token bug (ADR-024), and a heading-order
+  bug in `FeatureGrid.jsx` — see ROADMAP.md's "Phase 8.2 completion note" for full detail. Landing
+  is the only page in the app whose a11y test runs with a genuinely empty violation allowlist.
+- **8.3–8.9 not started**: `AuthScreen.jsx`'s actual visual restyle onto design-system primitives
+  is next (Phase 8.1/8.2 only added routing/plumbing around it, never touched its inline styles),
+  then Dashboard → Upload → Transactions → Analytics → Settings → Profile → mobile layouts, per
   `docs/frontend/phase-8-migration-plan.md` and the user's requested order. One page per phase,
   full verification gate (lint/test/e2e/build) green before moving to the next — see that file's
   "keep the existing suite passing" section for the exact discipline.
@@ -147,16 +179,19 @@ That surfaced a real, blocking problem immediately — see below — before any 
 
 ## Test suite
 
-`npm test` — **88/88 passing** (unchanged this session — Phase 8.1 touched no `api/**` code).
-`npx playwright test` (all 5 browser projects) — **168 passed, 0 failed, 12 skipped** (visual
-regression, excluded from this grep by design — see ADR-020; regenerated and reviewed separately
-this session for the new shell/font rendering). `npm run lint` — 0 errors, 46 pre-existing
-warnings, unchanged. `npm run build` — succeeds.
+`npm test` — **88/88 passing** (unchanged this session — Phase 8 touched no `api/**` code).
+`npx playwright test` (all 5 browser projects) — **199 passed, 0 failed, 16 skipped** (visual
+regression except chromium, by design — see ADR-020; 4 baselines now, including a new
+`landing.png`). `npm run lint` — 0 errors, 46 pre-existing warnings, unchanged. `npm run build` —
+succeeds. GitHub Actions CI on `main` — green (`bebb653`, 10m56s; confirmed via `gh run view`,
+not assumed).
 
-One real regression surfaced by this session's full-suite run and fixed before commit: the new
-nav shell introduced two accessibility violations (`region`, `landmark-unique`) not present at
-session start. Root cause, fix, and the reverted first-attempt fix (a real `<header>`, which
-traded one violation for a worse one) are in ROADMAP.md's ADR-022 and "Phase 8.1 completion note".
+Real regressions found and fixed this session, all before commit, none left for a future session
+to discover: Phase 8.1's nav shell introduced 2 accessibility violations (ADR-022); a router gap
+broke password-reset links (ADR-023); Phase 8.2's Landing page introduced a color-contrast token
+bug (ADR-024) and a heading-order bug; and CI itself had a pre-existing (not Phase-8-caused)
+webkit test bug plus resource-contention flakiness, both fixed in `bebb653`. Full detail in
+ROADMAP.md's "Phase 8.1/8.2 completion note"s and the CI stability section above.
 
 ## Deployment status (carried forward, unchanged this session)
 
@@ -193,24 +228,24 @@ Full list with rationale lives in `ROADMAP.md`'s "Known technical debt" section 
 here to avoid drift. New this session: `Header.jsx`'s topbar is `role="region"`, not a real
 `<header>`, until the last old-header page (`UploadScreen`/`Dashboard`) is migrated away in Phase
 8.4/8.5 (ADR-022); Material Symbols Outlined icon font stays CDN-hosted, not self-hosted like the
-new typefaces, until every old screen using it migrates off (tracked to close alongside Phase 8.8).
-Carried forward, unchanged: visual regression doesn't run in CI yet (ADR-020); the a11y allowlist
-in `tests/e2e/a11y.spec.js` is real, current, Phase-8-scoped debt (ADR-019); `api/auth.js`'s
-OTP/email-verification branches remain untestable without real Gmail SMTP credentials (ADR-021);
-`logoutAllDevices()` has no UI caller; `deploy-verify.yml` needs its `VERCEL_TOKEN` secret; branch
-protection recommendations are unapplied; ~45 pre-existing ESLint warnings remain (unchanged count
-this session).
+new typefaces, until every old screen using it migrates off (tracked to close alongside Phase 8.8);
+`AuthScreen.jsx` itself is still pre-Phase-8 inline-styled markup — 8.1/8.2 only gave it real
+routes and an `initialMode` prop, never restyled it (that's Phase 8.3, next). Carried forward,
+unchanged: visual regression doesn't run in CI yet (ADR-020); the a11y allowlist in
+`tests/e2e/a11y.spec.js` is real, current, Phase-8-scoped debt for every page except Landing now
+(ADR-019); `api/auth.js`'s OTP/email-verification branches remain untestable without real Gmail
+SMTP credentials (ADR-021); `logoutAllDevices()` has no UI caller; `deploy-verify.yml` needs its
+`VERCEL_TOKEN` secret; branch protection recommendations are unapplied; ~45 pre-existing ESLint
+warnings remain (unchanged count this session).
 
 ## Next recommended step
 
-**Phase 8.2: migrate the Landing page next** (first in the user's requested page-by-page order:
-Landing → Auth → Dashboard → Upload → Transactions → Analytics → Settings → Profile → mobile
-layouts). `PublicHomePage.jsx` currently still renders the old `AuthScreen` unchanged at `/` —
-Phase 8.2 replaces the unauthenticated `/` experience with a real landing page ahead of the login
-form, per `docs/frontend/phase-8-migration-plan.md`'s Phase 1 ("Landing + Routing foundation" in
-that doc's own numbering). Same discipline as 8.1: full verification gate green before moving to
-8.3, any bug found gets root-caused and fixed (with a regression test) before continuing, not
-deferred.
+**Phase 8.3: restyle `AuthScreen.jsx` onto design-system primitives** — the actual visual rewrite
+(`components/ui/*`, design tokens, replacing its inline styles), per
+`docs/frontend/phase-8-migration-plan.md`'s Phase 2. 8.1/8.2 only gave login/signup/forgot/reset
+real routes; none of their markup has been touched yet. Same discipline as 8.1/8.2: full
+verification gate green before moving to 8.4 (Dashboard), any bug found gets root-caused and fixed
+(with a regression test) before continuing, not deferred.
 
 ## Blockers / assumptions
 

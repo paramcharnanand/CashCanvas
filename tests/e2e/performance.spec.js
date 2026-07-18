@@ -15,7 +15,7 @@ test.describe("performance smoke tests", () => {
   test("homepage loads within a reasonable time", async ({ page }) => {
     const start = Date.now();
     const response = await page.goto("/");
-    await page.getByRole("button", { name: "Sign In" }).first().waitFor({ state: "visible" });
+    await page.getByRole("heading", { level: 1 }).waitFor({ state: "visible" });
     const elapsedMs = Date.now() - start;
 
     expect(response.status()).toBe(200);

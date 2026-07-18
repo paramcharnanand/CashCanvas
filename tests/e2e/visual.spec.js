@@ -29,15 +29,20 @@ test.describe("visual regression", () => {
     test.skip(testInfo.project.name !== "chromium", "Visual snapshots run on the chromium project only — see file header.");
   });
 
-  test("sign-in screen", async ({ page }) => {
+  test("landing page", async ({ page }) => {
     await page.goto("/");
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(page).toHaveScreenshot("landing.png", { animations: "disabled" });
+  });
+
+  test("sign-in screen", async ({ page }) => {
+    await page.goto("/login");
     await expect(page.getByRole("button", { name: "Sign In" }).first()).toBeVisible();
     await expect(page).toHaveScreenshot("auth-sign-in.png", { animations: "disabled" });
   });
 
   test("create-account screen", async ({ page }) => {
-    await page.goto("/");
-    await page.getByRole("button", { name: "Create Account" }).first().click();
+    await page.goto("/signup");
     await expect(page.getByPlaceholder("Your name")).toBeVisible();
     await expect(page).toHaveScreenshot("auth-create-account.png", { animations: "disabled" });
   });

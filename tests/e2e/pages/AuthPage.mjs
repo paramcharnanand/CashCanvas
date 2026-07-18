@@ -24,13 +24,11 @@ export class AuthPage {
   }
 
   async gotoSignup() {
-    await this.page.goto("/");
-    await this.createAccountTab.click();
+    await this.page.goto("/signup");
   }
 
   async gotoLogin() {
-    await this.page.goto("/");
-    await this.signInTab.click();
+    await this.page.goto("/login");
   }
 
   async fillSignupForm({ name, email, password }) {

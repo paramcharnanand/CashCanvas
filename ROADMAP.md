@@ -6,7 +6,7 @@ require re-deriving context that already existed once.
 
 ## Progress
 
-**7 of 9 phases complete (78%); Phase 8 in progress (8.1 of ~8.9 sub-steps done).**
+**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.2 of ~8.9 sub-steps done).**
 
 | # | Phase | Status | Docs |
 |---|---|---|---|
@@ -17,7 +17,7 @@ require re-deriving context that already existed once.
 | 5 | Dependency maintenance (`npm audit`, upgrades) | ✅ Done | `docs/security/threat-model.md` (Dependency posture) |
 | 6 | Testing infrastructure | ✅ Done | `docs/engineering-lessons/phase-6-testing.md` |
 | 7 | CI/CD (GitHub Actions) | ✅ Done | `docs/engineering-lessons/phase-7-ci-cd.md` |
-| 8 | Frontend redesign (design system, routing, navigation shell, a11y) | 🟨 In progress (8.1 done) | `docs/frontend/phase-8-*.md` |
+| 8 | Frontend redesign (design system, routing, navigation shell, a11y) | 🟨 In progress (8.1–8.2 done) | `docs/frontend/phase-8-*.md` |
 | 9 | Advanced AI features & product enhancements | ⬜ Not started | — |
 
 ### Phase 8.1 completion note (routing, navigation shell, design foundation)
@@ -51,9 +51,57 @@ was tried first and reverted — it passed `region` but failed
 No new test file was added; `tests/e2e/a11y.spec.js`'s existing per-page allowlist already catches
 this class of regression (that's its designed purpose per ADR-019) and wasn't itself changed.
 
-Next: Phase 8.2, migrating pages one at a time (Landing → Auth → Dashboard → Upload →
-Transactions → Analytics → Settings → Profile → mobile layouts, per the user's requested order),
-each phase gated on the same full verification run before moving to the next.
+### Phase 8.2 completion note (Landing page + real /login, /signup routes)
+
+Delivered: a real marketing Landing page (`src/pages/LandingPage.jsx` +
+`src/features/landing/components/{Hero,ProductPreview,FeatureGrid}.jsx`) at `/`, replacing
+`AuthScreen.jsx` shown directly — the first genuinely new unauthenticated screen this project has
+had (`docs/frontend/phase-8-audit.md` §13/14 flagged this exact gap). Landing claiming "/" meant
+`/login` and `/signup` had to become real routes in this same phase, not a later one (per
+`docs/frontend/phase-8-component-architecture.md`'s route table) — `src/pages/{Login,Signup}Page.jsx`
+are thin wrappers around the same, unchanged `AuthScreen` (now accepting an additive `initialMode`
+prop), and `ProtectedRoute.jsx` now redirects unauthenticated visitors to `/login?redirect=...`
+instead of `/`. `/forgot-password`/`/reset-password` are unaffected — they kept reusing
+`PublicHomePage.jsx`, which never rendered Landing content in the first place.
+
+Verification gate, run in full and re-run after each fix below: `npm run lint` (0 errors, 46
+pre-existing warnings), `npm test` (88/88), `npx playwright test` (199 passed / 16 skipped
+[visual regression except chromium, by design] / 0 failed across all 5 browser projects),
+`npm run build` (succeeds).
+
+**Real bugs found and fixed along the way, all in code written this phase, none pre-existing:**
+1. **Stale "/" assumption in four test files**: several tests (`auth.spec.js`'s two "protected
+   routes" tests, `auth-resilience.spec.js`'s invalid-refresh-token test, `performance.spec.js`'s
+   homepage-timing test, plus `homepage.spec.js`/`a11y.spec.js`/`visual.spec.js` directly) still
+   asserted that visiting `/` shows the login form — true before this phase, no longer true now
+   that Landing owns `/`. Fixed each to assert what it actually means to test: the "protected
+   routes" tests now visit `/dashboard` (the real protected route) and assert the redirect to
+   `/login`; the rest visit `/login`/`/signup` directly or assert Landing's own content.
+2. **A11y-scan/render race**: `LandingPage`/`LoginPage`/`SignupPage` all gate on an async
+   `authChecked` fetch before rendering real content, briefly showing `LoadingScreen`'s unlabeled
+   `<div>Loading…</div>` — axe's scan could run while that was still on screen, flagging the
+   transient loading state's own lack of a landmark (a `region` violation no real user ever
+   perceives). Fixed by waiting for real content before scanning, matching the pattern
+   `homepage.spec.js`'s own assertions already used.
+3. **`color-contrast` token bug, app-wide, not Landing-specific** — see ADR-024. `--text-subtle`
+   measured 4.46:1 against white/`--surface`, under WCAG AA's 4.5:1 for normal-size text, first
+   surfaced by Landing's a11y test (which — unlike every other page's allowlist — carries zero
+   tracked violations, so it was the first assertion strict enough to catch it). Fixed at the
+   token source in `tokens.css` (light mode only; dark mode's separate value wasn't evidenced as
+   broken and wasn't touched), computed via the WCAG relative-luminance formula directly rather
+   than trial-and-error: new value measures 5.06:1.
+4. **`heading-order` violation**: `FeatureGrid.jsx` used `<h3>` for its four card titles with no
+   `<h2>` anywhere on the page, skipping a level right after Hero's `<h1>`. Fixed to `<h2>`.
+
+Net result: `tests/e2e/a11y.spec.js`'s new "landing page" test runs with an **empty** allowlist —
+the only page in the app with zero tracked accessibility violations, a genuinely higher bar than
+the "known debt" allowlists every other page still carries (ADR-019).
+
+Next: Phase 8.3, restyling `AuthScreen.jsx` onto `components/ui/*` design-system primitives
+(replacing its inline styles — the actual visual rewrite, not just route plumbing), per
+`docs/frontend/phase-8-migration-plan.md`'s Phase 2. Then Dashboard → Upload → Transactions →
+Analytics → Settings → Profile → mobile layouts, each phase gated on the same full verification
+run before moving to the next.
 
 ### Phase 6 completion note
 
@@ -138,6 +186,29 @@ technical debt) is still open and still Phase 8's to close.
 ## Architecture Decision Records
 
 Newest first.
+
+### ADR-024 — `--text-subtle` darkened app-wide (design token, not a per-component fix)
+
+**Context**: Phase 8.2's Landing page a11y test (`tests/e2e/a11y.spec.js`) is the only page-level
+scan in the app that runs with an empty violation allowlist — every other page's allowlist already
+carries `color-contrast` as tracked, pre-Phase-8 debt (ADR-019), so this exact failure mode was
+already latent everywhere `--text-subtle` renders normal-size text on `--surface`/`--bg`, just
+never asserted against with zero tolerance until Landing's scan existed. axe measured 4.46:1 for
+`--text-subtle` (`#6f7a72`) against white — under WCAG AA's required 4.5:1 for text below the
+"large text" threshold (18pt regular / 14pt bold). **Decision**: darken the *token itself* in
+`tokens.css` (light mode only — `#6f7a72` → `#67716a`, computed via the WCAG relative-luminance
+formula directly, not trial-and-error, landing at 5.06:1) rather than patch the one component that
+happened to surface it (`ProductPreview.jsx`). **Rationale**: this is a shared design-system value
+used pervasively across every already-shipped Phase 8.1 surface (`Header.jsx`, `Sidebar.jsx`,
+`MobileNav.jsx`, etc.) — fixing it at the source closes the gap everywhere at once, consistent with
+the token system's own stated rule ("no new component should hardcode a color value outside this
+file"); patching only the one call site that happened to get caught would have left the identical
+defect live everywhere else, findable again the next time a page gets a strict a11y scan. Dark
+mode's separate `--text-subtle` value (`#8f8873`) wasn't evidenced as broken by any scan and wasn't
+touched. **Status**: the color shift is small enough (Δ ~8/255 per channel) that it stayed within
+Playwright's visual-regression diff tolerance — the three pre-existing chromium baselines
+(`auth-sign-in`, `auth-create-account`, `app-shell-empty`) didn't need regenerating; only the new
+`landing.png` baseline was added.
 
 ### ADR-023 — `/forgot-password` and `/reset-password` are real routes, added as a hotfix ahead of Phase 8.2, not folded into a later phase
 

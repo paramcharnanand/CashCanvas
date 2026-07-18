@@ -15,7 +15,7 @@
   --border-strong: #d3cec2;
   --text: #1b1c1a;
   --text-muted: #3f4943;
-  --text-subtle: #6f7a72;
+  --text-subtle: #67716a; /* darkened from #6f7a72 — that measured 4.46:1 on white/--surface, just under WCAG AA's 4.5:1 for normal-size text (found via Landing's a11y scan, Phase 8.2); this is 5.06:1 */
   --primary: #005235;
   --primary-hover: #003d28;
   --primary-container: #1a6b4a;
@@ -182,7 +182,7 @@
   --border-strong: #d3cec2;
   --text: #1b1c1a;
   --text-muted: #3f4943;
-  --text-subtle: #6f7a72;
+  --text-subtle: #67716a; /* darkened from #6f7a72 — that measured 4.46:1 on white/--surface, just under WCAG AA's 4.5:1 for normal-size text (found via Landing's a11y scan, Phase 8.2); this is 5.06:1 */
   --primary: #005235;
   --primary-hover: #003d28;
   --primary-container: #1a6b4a;

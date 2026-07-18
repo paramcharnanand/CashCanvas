@@ -37,14 +37,31 @@ async function checkA11yAgainstBaseline(page, allowedRuleIds) {
 }
 
 test.describe("accessibility", () => {
-  test("sign-in screen has no unexpected a11y violations", async ({ page }) => {
+  // "/" is a real Landing page as of Phase 8.2 (src/pages/LandingPage.jsx),
+  // built on the Phase 8 design system's semantic <header>/<main>/<footer>
+  // rather than AuthScreen.jsx's pre-Phase-8 markup — checked for real
+  // against today's baseline rather than assumed clean.
+  test("landing page has no unexpected a11y violations", async ({ page }) => {
     await page.goto("/");
+    // LandingPage (like LoginPage/SignupPage) gates on an async authChecked
+    // fetch before rendering, briefly showing LoadingScreen's unlabeled
+    // <div>Loading…</div> — axe can race ahead of that resolving and flag
+    // the transient loading state's own lack of a landmark, a real page
+    // never actually shows to a user for more than an instant. Wait for the
+    // real content first, same as homepage.spec.js's equivalent assertions.
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await checkA11yAgainstBaseline(page, []);
+  });
+
+  test("sign-in screen has no unexpected a11y violations", async ({ page }) => {
+    await page.goto("/login");
+    await expect(page.getByPlaceholder("you@example.com")).toBeVisible();
     await checkA11yAgainstBaseline(page, ["color-contrast", "landmark-one-main", "page-has-heading-one", "region"]);
   });
 
   test("create-account screen has no unexpected a11y violations", async ({ page }) => {
-    await page.goto("/");
-    await page.getByRole("button", { name: "Create Account" }).first().click();
+    await page.goto("/signup");
+    await expect(page.getByPlaceholder("Your name")).toBeVisible();
     await checkA11yAgainstBaseline(page, ["color-contrast", "landmark-one-main", "page-has-heading-one", "region"]);
   });
 

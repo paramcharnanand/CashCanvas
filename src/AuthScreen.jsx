@@ -642,8 +642,8 @@ function ResetPasswordScreen({ token, onBack }) {
 }
 
 // ── Main AuthScreen ───────────────────────────────────────────────────────────
-export default function AuthScreen({ onAuth }) {
-  const [mode, setMode]               = useState("login");
+export default function AuthScreen({ onAuth, initialMode = "login" }) {
+  const [mode, setMode]               = useState(initialMode);
   const [name, setName]               = useState("");
   const [email, setEmail]             = useState("");
   const [password, setPassword]       = useState("");

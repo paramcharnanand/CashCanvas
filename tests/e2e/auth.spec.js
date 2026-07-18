@@ -127,8 +127,12 @@ test.describe("logout", () => {
 
 test.describe("protected routes / direct navigation", () => {
   test("shows the auth screen, never the app, when navigating to the app with no session", async ({ page }) => {
-    const response = await page.goto("/");
+    // "/" is a public Landing page as of Phase 8.2 regardless of session
+    // state — /dashboard is the actual protected route this test means to
+    // exercise (ProtectedRoute redirects to /login, see router.jsx).
+    const response = await page.goto("/dashboard");
     expect(response.status()).toBe(200); // the SPA shell itself always 200s — the *content* it renders is what's gated
+    await expect(page).toHaveURL(/\/login/);
     await expect(page.getByRole("button", { name: "Sign In" }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: /try with sample data/i })).not.toBeVisible();
   });
@@ -137,7 +141,8 @@ test.describe("protected routes / direct navigation", () => {
     await context.addCookies([
       { name: "cc_at", value: "garbage.not-a.jwt", domain: "localhost", path: "/api", httpOnly: true },
     ]);
-    await page.goto("/");
+    await page.goto("/dashboard");
+    await expect(page).toHaveURL(/\/login/);
     await expect(page.getByRole("button", { name: "Sign In" }).first()).toBeVisible();
   });
 });
@@ -227,8 +232,7 @@ test.describe("forgot password", () => {
   // same reason — no SMTP credentials in this environment — carried forward
   // in ROADMAP.md alongside the live-nodemailer-send item.
   test("a real failure response (email service not configured) is shown as an error, not a fake success screen", async ({ page }) => {
-    await page.goto("/");
-    await page.getByRole("button", { name: "Sign In" }).first().click();
+    await page.goto("/login");
     await page.getByRole("button", { name: "Forgot password?" }).click();
 
     await page.getByPlaceholder("you@example.com").fill("someone@example.test");

@@ -81,7 +81,11 @@ test.describe("refresh token expiry / invalidity", () => {
       { name: "cc_csrf", value: "some-csrf-value", domain: "localhost", path: "/", httpOnly: false },
     ]);
 
-    await page.goto("/");
+    // "/" is a public Landing page regardless of session state as of Phase
+    // 8.2 — /dashboard is the actual protected route whose redirect this
+    // test means to exercise (see router.jsx/ProtectedRoute.jsx).
+    await page.goto("/dashboard");
+    await expect(page).toHaveURL(/\/login/);
     await expect(page.getByRole("button", { name: "Sign In" }).first()).toBeVisible();
   });
 });
@@ -185,10 +189,10 @@ test.describe("concurrent login race", () => {
 
 test.describe("back button after logout", () => {
   test("navigating back after logout does not resurrect an authenticated view", async ({ page, context }) => {
-    // The app has no client-side router (a single "/" URL, all screen
-    // transitions are React state — see CONTRIBUTING.md's architecture
-    // overview), so a *meaningful* back-button test needs at least two real
-    // navigation entries to go back between.
+    // A real history entry to go back to — post-logout, ProtectedRoute's
+    // <Navigate replace> means /dashboard's entry itself becomes /login
+    // (replace never pushes a new entry), so going back from there lands
+    // on this about:blank, not a phantom authenticated view either way.
     await page.goto("about:blank");
     const user = { name: "Back Button", email: uniqueEmail(), password: "TestPass123!" };
     await page.request.post("/api/auth/signup", { data: user });
