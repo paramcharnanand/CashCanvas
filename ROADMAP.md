@@ -6,7 +6,7 @@ require re-deriving context that already existed once.
 
 ## Progress
 
-**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.4 of ~8.9 sub-steps done).**
+**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.5 of ~8.9 sub-steps done).**
 
 | # | Phase | Status | Docs |
 |---|---|---|---|
@@ -17,7 +17,7 @@ require re-deriving context that already existed once.
 | 5 | Dependency maintenance (`npm audit`, upgrades) | ✅ Done | `docs/security/threat-model.md` (Dependency posture) |
 | 6 | Testing infrastructure | ✅ Done | `docs/engineering-lessons/phase-6-testing.md` |
 | 7 | CI/CD (GitHub Actions) | ✅ Done | `docs/engineering-lessons/phase-7-ci-cd.md` |
-| 8 | Frontend redesign (design system, routing, navigation shell, a11y) | 🟨 In progress (8.1–8.4 done) | `docs/frontend/phase-8-*.md` |
+| 8 | Frontend redesign (design system, routing, navigation shell, a11y) | 🟨 In progress (8.1–8.5 done) | `docs/frontend/phase-8-*.md` |
 | 9 | Advanced AI features & product enhancements | ⬜ Not started | — |
 
 ### Phase 8.1 completion note (routing, navigation shell, design foundation)
@@ -139,6 +139,125 @@ Next: Phase 8.5, the Upload workflow (`pages/UploadPage.jsx` + `features/upload/
 `/upload` route, keyboard-accessible drop zone) — see CHECKPOINT.md's "Next recommended step" for
 the specific consequence ADR-025 has on this phase (Upload gets an additional real route
 alongside the still-unchanged gate, not a replacement of it yet).
+
+### Phase 8.5 completion note (Upload workflow at a real `/upload` route)
+
+Delivered, per `docs/frontend/phase-8-migration-plan.md`'s Phase 5: `pages/UploadPage.jsx` +
+`features/upload/` at a real, always-reachable `/upload` route (added to `Sidebar`/`MobileNav` via
+`navigation.js`, matching `phase-8-component-architecture.md`'s stated routing end-state —
+`/upload` is "a normal, always-reachable route... not a gate"). `DropZone.jsx` is a real
+`<button>` (Tab-focusable, Enter/Space opens the file picker via native button activation) instead
+of the legacy `UploadScreen`'s `<div onClick>` — the one real behavior fix this phase makes, not
+just a restyle, verified via an actual filechooser-driven keyboard interaction rather than
+`setInputFiles` alone (which would prove nothing about keyboard operability specifically).
+`PreviousUploads.jsx` restyles the real file-history list onto `Card`/`EmptyState`; the fake
+"Recent transactions" preview panel (hardcoded, never real data) is dropped entirely, per the
+migration plan. `useFileUpload.js` reuses the legacy CSV/PDF parsing logic
+(`detectColumns`/`parseAmount`/`parseDate`/`parsePDF`) via named exports added to `App.jsx` —
+the fuller `utils/csv.js`/`utils/pdf/*` extraction the target architecture describes is Phase 10
+(final cleanup) scope, not this one; exporting the existing functions is the lower-risk move a
+phase early.
+
+**Additive, not a replacement, per Phase 8.4's ADR-025**: the legacy `UploadScreen`-as-gate is
+untouched; `/upload` is a second, independent entry point. Two capabilities are deliberately not
+carried over to the new page: "Try with sample data" (sample data is never persisted server-side,
+so the new page — a separate route with no shared state with `LegacyWorkspace` — has no way to
+hand it to `/dashboard` without restructuring state ownership, out of scope) and click-to-
+reactivate an older upload from history (same reasoning — `LegacyWorkspace`'s auto-restore always
+loads the *most recent* file, not a user-picked older one; reactivating an older file would need
+either a new backend field or lifting state out of `LegacyWorkspace`). Both remain fully available
+on the unchanged legacy gate — see `PreviousUploads.jsx`'s docblock for the detailed reasoning.
+
+**A real, pre-existing production bug was found and fixed this phase — see ADR-026.** Summary:
+every real (non-sample) statement upload has silently failed to persist to the database since the
+backend's date validation rule was introduced, for a reason unrelated to anything built this
+session. Found via a new end-to-end regression test (upload → reload → assert the data survived,
+not just that it rendered); root-caused via a harness-independent `curl` reproduction against the
+real API handler (not inferred from the test failure alone) before any code changed, per this
+project's "evidence before conclusions" discipline.
+
+**A genuine test-timing bug was also found and fixed**, in a pre-existing test unrelated to this
+phase's own code (`auth.spec.js`'s forgot-password test): `LoginForm` and `ForgotPasswordForm`
+share the identical `"you@example.com"` placeholder, and the test filled that placeholder
+immediately after clicking a client-side-routed `<Link>`, with no wait for the new route to
+actually mount. `.click()` on a React Router `<Link>` only waits for the click event to dispatch,
+not for the resulting re-render to flush — under CPU contention, the very next `.fill()` call
+could grab the about-to-unmount `LoginForm`'s email field instead of the new page's, which then
+gets replaced by a fresh, empty instance a moment later and submitted empty. Root-caused via
+evidence, not assumption: the test passed 5/5 in isolated repeated runs (`--repeat-each=5`) but
+failed reproducibly across two separate full-suite runs — confirming contention-dependent timing,
+not flawed test logic or an application bug. Fixed with a deterministic wait (for "Reset
+password", content unique to the new page) before filling, not a timeout increase or sleep.
+
+**Verification gate**: `npm run lint` (0 errors, 44 warnings, unchanged), `npm test` (88/88,
+unchanged), `npx playwright test` — **231 passed, 16 skipped, 0 failed** after both fixes above
+(7 new tests in `tests/e2e/upload.spec.js`), `npm run build` (succeeds). One visual baseline
+regenerated (`app-shell-empty`, chromium-only, ADR-020) — expected, since `Sidebar`/`MobileNav`
+now render an additional "Upload" nav item.
+
+**A note on local verification noise this phase, for the next session**: several additional,
+non-reproducible test failures appeared across repeated full-suite runs (a11y timing, reload
+timeouts, assorted mobile-chrome timing failures) that were investigated and traced to two
+unrelated, runaway VS Code helper processes (a Docker/Dockerfile language server) consuming over
+500% combined CPU continuously on this development machine — confirmed via `ps`/`top`/`uptime`
+(load average 13–20 sustained on a 10-core machine), not a code defect. Not fixed here (outside
+this task's scope — a local IDE extension issue, not a CashCanvas one); noted so it isn't mistaken
+for a regression in a future session. GitHub Actions' dedicated runners are unaffected.
+
+Next: Phase 8.6, Transactions (real search/filter/sort, a genuinely new feature per the plan) plus
+Categories/Merchant Rules, per `docs/frontend/phase-8-migration-plan.md`'s Phase 6/8.
+
+### ADR-026 — Real statement uploads never persisted: `Date.toISOString()` vs. the backend's bare-`YYYY-MM-DD` requirement, plus a silently-swallowed save failure
+
+**Context**: found while building Phase 8.5's `/upload` route — a new end-to-end test (upload a
+real file, reload, assert the data is still there) failed, staying on `/upload` instead of
+reaching `/dashboard`. The rendered page showed `Transaction 0: Invalid transaction date`, the
+exact string `api/_lib/validation.js`'s `isValidTransactionDate` returns. Verified this was a real
+application bug, not a test or harness artifact, via a direct `curl` reproduction against the
+actual `api/data.js` handler (the same one production uses) with a healthy server confirmed
+running throughout: the identical request succeeded when the date was sent as bare `"2025-01-03"`
+and failed with the exact same error when sent as `"2025-01-03T00:00:00.000Z"` — the format
+`Date.prototype.toISOString()` produces. `LegacyWorkspace`'s `handleData` (`App.jsx`) — the *only*
+code path that has ever saved a real upload, since before this session — sent exactly that format,
+and its `.catch(() => {})` never checked `res.ok`, so the resulting `400` was silently swallowed.
+The upload still *appeared* to work because `setTransactions(txns)` (client-side, from the
+already-parsed file) happens independently of whether the save succeeds — the bug was invisible
+within the session that triggered it, only surfacing on the next login/reload, when
+`LegacyWorkspace`'s auto-restore effect found nothing saved. No existing test caught this:
+`tests/security.test.js`'s backend validation tests always use correctly-formatted bare dates
+(testing the backend in isolation, correctly); the one existing e2e test that drives a real upload
+(`auth.spec.js`'s CSRF test) asserts only that the request fired with the right header, never that
+it succeeded.
+
+**Decision**: added `toDateOnlyString(date)` (`App.jsx`) — `date`'s *local* calendar date as
+`YYYY-MM-DD`, via `getFullYear()`/`getMonth()`/`getDate()`, not `.toISOString().slice(0, 10)`.
+**Rationale for local, not UTC, getters**: `parseDate` (`App.jsx`) constructs `Date` objects using
+a mix of semantics depending on which branch parses a given string — `new Date(dateString)` for
+most recognizable formats (UTC midnight for bare ISO date strings, per spec; local midnight for
+non-ISO formats like `MM/DD/YYYY`, per every major JS engine's consistent-but-non-spec behavior)
+and `new Date(y, m, d)` for its regex-matched fallback branches (always local midnight,
+unconditionally). Given that mix, `.toISOString()` would silently shift the calendar date backward
+by one day for any user in a positive-UTC-offset timezone whose statement date happened to be
+parsed via a local-midnight branch — trading one silent bug for a different, narrower one. Reading
+local getters instead keeps the date sent to the server the same calendar day the rest of the
+app's own logic (monthly grouping, recurring-payment detection, CSV export) already treats the
+transaction as belonging to, since all of those already read the same `Date` objects via local
+getters too — internally consistent with existing behavior, not a fix to `parseDate`'s deeper
+UTC/local inconsistency, which is a separate, real, pre-existing issue this fix deliberately did
+not expand scope to address (flagged below as tracked debt, not silently left broken). Applied to
+both `LegacyWorkspace.handleData` and the new `UploadPage.jsx`'s `handleData`. Also upgraded
+`LegacyWorkspace`'s silent `.catch(() => {})` to at least `console.error` on a non-`ok` response or
+a network failure — real error surfacing, not a UI redesign (no visible error slot exists in the
+legacy Dashboard's header for a background save; adding one is out of this fix's scope, tracked
+below). **Status**: fixed and covered by a new regression test
+(`tests/e2e/upload.spec.js`'s legacy-gate persistence test) that specifically proves persistence
+via a reload, the exact gap that let the original bug go undetected — not just that the UI
+renders correctly. **Not yet in production** — see CHECKPOINT.md's "Blockers/assumptions."
+**Tracked, not addressed here**: `parseDate`'s mixed UTC/local `Date`-construction semantics are a
+separate, real, pre-existing inconsistency (which branch fires depends on the exact string format
+a given bank's export uses) that could affect other date-sensitive logic (monthly grouping,
+recurring-payment matching) for users in non-UTC timezones — flagged for a future, dedicated
+investigation, not expanded into this fix's scope.
 
 ### ADR-025 — Phase 8.4 re-hosts the legacy tab bar instead of cutting `/dashboard` over to the new Overview outright
 
@@ -729,6 +848,32 @@ From Phase 8.4 (Dashboard Overview restyle, ADR-025):
   phase (ADR-025) — the gate is untouched and those tests are still valid as originally written.
   Whichever later phase actually removes the gate needs to pick this up explicitly, not assume
   it was already done in 8.4.
+
+From Phase 8.5 (Upload workflow, ADR-026):
+- `parseDate` (`App.jsx`) constructs `Date` objects with mixed UTC/local timezone semantics
+  depending on which internal branch parses a given date string — a real, pre-existing
+  inconsistency, not introduced this phase, uncovered while root-causing ADR-026's persistence
+  bug. Could affect other date-sensitive logic (monthly grouping, recurring-payment matching) for
+  users in non-UTC timezones, depending on their bank's export date format. Not addressed as part
+  of ADR-026's fix (deliberately scoped narrower — see that ADR's "tracked, not addressed here").
+  Needs its own dedicated investigation.
+- The full `utils/csv.js`/`utils/pdf/*` extraction (pure parsing logic out of `App.jsx`) that
+  `phase-8-component-architecture.md`'s target file tree describes is Phase 10 (final cleanup)
+  scope — Phase 8.5 exported the existing `App.jsx` functions for `features/upload/`'s use instead
+  of relocating them a phase early, per that phase's own explicit sequencing.
+- `PreviousUploads.jsx` (the new `/upload` page) is view + delete only — clicking an older upload
+  to make it "active" again (as the legacy gate's `onLoadFile` does) isn't supported there, since
+  `LegacyWorkspace`'s auto-restore only ever loads the *most recent* file and the new page has no
+  shared state with it. Reactivating an older upload is still fully possible via the unchanged
+  legacy gate. Closing this gap needs either a backend field (e.g. `lastAccessedAt`) or lifting
+  upload/dashboard state out of `LegacyWorkspace` — likely resolved naturally once Phase 8.6+
+  moves more of `LegacyWorkspace`'s responsibilities into real, independent pages.
+- The legacy `LegacyWorkspace.handleData`'s background file-history save now logs failures
+  (`console.error`) instead of silently swallowing them (ADR-026), but still has no visible
+  UI error slot — a user whose real upload fails to save (e.g. a transient network issue) sees
+  nothing on screen. A `Toast` primitive is a planned, not-yet-built design-system component
+  (`phase-8-design-system.md` § Toasts) that would be the natural fix; tracked here rather than
+  built speculatively ahead of the primitive existing.
 
 From `docs/security/threat-model.md` (Phase 4):
 - Pagination and search validators were explicitly requested by the Phase 4 spec but not

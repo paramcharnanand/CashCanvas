@@ -280,7 +280,30 @@ function categorize(desc, customCats, merchantRules) {
   return "Other";
 }
 
-function parseAmount(val) {
+/**
+ * `date`'s *local* calendar date as `YYYY-MM-DD` — what the backend's
+ * `isValidTransactionDate` (api/_lib/validation.js) actually requires
+ * (`DATE_RE = /^\d{4}-\d{2}-\d{2}$/`, no time component). Deliberately
+ * local getters (`getFullYear`/`getMonth`/`getDate`), not `.toISOString()`
+ * (UTC) — every other consumer of these Date objects (monthly grouping,
+ * recurring-payment detection, CSV export) already reads them via local
+ * getters, so this keeps the date sent to the server the same calendar day
+ * the rest of the app already treats the transaction as belonging to.
+ * `.toISOString().slice(0, 10)` would silently shift the date backward by
+ * one day for any user in a positive-UTC-offset timezone whose statement
+ * date was parsed via `parseDate`'s local-time constructor branch — this
+ * avoids introducing that new bug while fixing the one that sent
+ * `.toISOString()`'s full datetime (rejected outright by `DATE_RE`) in the
+ * first place.
+ */
+export function toDateOnlyString(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+export function parseAmount(val) {
   if (typeof val === "number") return val;
   if (!val) return 0;
   const s = String(val).replace(/[$,\s]/g, "");
@@ -291,7 +314,7 @@ function parseAmount(val) {
   return neg ? -num : num;
 }
 
-function parseDate(val) {
+export function parseDate(val) {
   if (!val) return null;
   const s = String(val).trim();
   const formats = [
@@ -314,7 +337,7 @@ function parseDate(val) {
   return null;
 }
 
-function detectColumns(headers) {
+export function detectColumns(headers) {
   const h = headers.map(x => (x || "").toLowerCase().trim());
   let dateCol = h.findIndex(x => /date|posted|trans/.test(x));
   let descCol = h.findIndex(x => /desc|narr|memo|detail|merchant|payee|name/.test(x));
@@ -803,7 +826,7 @@ async function strategyAI(file, statementType = "unknown") {
   }
 }
 
-async function parsePDF(file, onProgress = () => {}) {
+export async function parsePDF(file, onProgress = () => {}) {
   let pages;
   let extractionError = null;
   try {
@@ -1300,7 +1323,7 @@ function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
   );
 }
 
-function generateSampleData() {
+export function generateSampleData() {
   const txns = [];
   const now = new Date();
   const merchants = [
@@ -2888,9 +2911,17 @@ export function LegacyWorkspace() {
         body: JSON.stringify({
           fileName: name,
           statementType: type,
-          transactions: txns.map(t => ({ ...t, date: t.date instanceof Date ? t.date.toISOString() : t.date })),
+          // toDateOnlyString, not .toISOString() (bug fixed this session):
+          // the backend's DATE_RE requires a bare YYYY-MM-DD, no time
+          // component, so .toISOString()'s full datetime string was
+          // rejected outright on every real (non-sample) upload — the
+          // save silently failed below, every time, for every user, since
+          // whichever phase introduced this. See ROADMAP.md's ADR-026.
+          transactions: txns.map(t => ({ ...t, date: t.date instanceof Date ? toDateOnlyString(t.date) : t.date })),
         }),
-      }).catch(() => {});
+      }).then(res => {
+        if (!res.ok) console.error("Failed to save uploaded file to history:", res.status);
+      }).catch(err => console.error("Failed to save uploaded file to history:", err));
     }
   }, [auth?.user]);
 

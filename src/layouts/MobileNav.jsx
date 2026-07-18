@@ -4,9 +4,9 @@ import { SIDEBAR_ITEMS } from "./navigation.js";
 /**
  * Bottom-anchored nav (< --bp-md), replacing the sidebar rather than hiding
  * behind a hamburger — see design-system.md § Responsive Grid "Navigation
- * collapse". Sparse today (one real destination) by design, not a bug —
- * grows automatically as SIDEBAR_ITEMS gains entries in later phases, no
- * changes needed here.
+ * collapse". Sparse today (Overview + Upload) by design, not a bug — grows
+ * automatically as SIDEBAR_ITEMS gains entries in later phases, no changes
+ * needed here.
  */
 export function MobileNav() {
   return (

@@ -1,4 +1,4 @@
-import { Home, List, BarChart3, Tag, Store, Target, Settings } from "lucide-react";
+import { Home, Upload, List, BarChart3, Tag, Store, Target, Settings } from "lucide-react";
 
 /**
  * Single source of truth for primary navigation — read by Sidebar,
@@ -15,6 +15,7 @@ import { Home, List, BarChart3, Tag, Store, Target, Settings } from "lucide-reac
  */
 export const NAV_ITEMS = [
   { id: "overview", to: "/dashboard", label: "Overview", icon: Home, enabled: true, phase: null },
+  { id: "upload", to: "/upload", label: "Upload", icon: Upload, enabled: true, phase: null },
   { id: "transactions", to: "/transactions", label: "Transactions", icon: List, enabled: false, phase: "8.6" },
   { id: "analytics", to: "/analytics", label: "Analytics", icon: BarChart3, enabled: false, phase: "8.7" },
   { id: "categories", to: "/categories", label: "Categories", icon: Tag, enabled: false, phase: "8.6" },

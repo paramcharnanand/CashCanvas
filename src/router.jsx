@@ -7,6 +7,7 @@ import SignupPage from "./pages/SignupPage.jsx";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage.jsx";
 import ResetPasswordPage from "./pages/ResetPasswordPage.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
+import UploadPage from "./pages/UploadPage.jsx";
 import NotFoundPage from "./pages/NotFoundPage.jsx";
 
 /**
@@ -27,13 +28,15 @@ export const router = createBrowserRouter([
   { path: "/forgot-password", element: <ForgotPasswordPage /> },
   { path: "/reset-password", element: <ResetPasswordPage /> },
   {
-    path: "/dashboard",
     element: (
       <ProtectedRoute>
         <AppShell />
       </ProtectedRoute>
     ),
-    children: [{ index: true, element: <DashboardPage /> }],
+    children: [
+      { path: "/dashboard", element: <DashboardPage /> },
+      { path: "/upload", element: <UploadPage /> },
+    ],
   },
   { path: "*", element: <NotFoundPage /> },
 ]);

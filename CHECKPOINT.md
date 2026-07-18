@@ -6,12 +6,27 @@ re-deriving context from the repo.
 
 ## Release status
 
-**Phase 8.1 through 8.4 verified and committed this session**, plus two CI hotfixes along the
+**Phase 8.1 through 8.5 verified and committed this session**, plus two CI hotfixes along the
 way (see `git log` — `5d42cf8` Phase 8.1, `bd9241c` router hotfix, `bebb653` CI stability hotfix,
-the Phase 8.2 commit, the Phase 8.3 commit, and the Phase 8.4 commit). GitHub Actions CI is green
-on `main` as of the CI stability hotfix — it was red (webkit-only, deterministic) since before
-this session started; see "CI stability" below. Phase 6 (Testing infrastructure, six logical
-commits) and Phase 7 (CI/CD, `64a1280`) were the last things pushed before this session.
+the Phase 8.2/8.3/8.4/8.5 commits). GitHub Actions CI is green on `main` as of the CI stability
+hotfix — it was red (webkit-only, deterministic) since before this session started; see "CI
+stability" below. Phase 6 (Testing infrastructure, six logical commits) and Phase 7 (CI/CD,
+`64a1280`) were the last things pushed before this session.
+
+**Phase 8.5 found a real, pre-existing production data-loss bug, not something this session
+introduced** (see the Phase 8.5 completion note below and ROADMAP.md's ADR-026 for full detail):
+every real (non-sample) statement upload — via the legacy gate, the only path that has existed
+until this phase — silently failed to persist to the database, for as long as this validation
+rule has existed. The upload *looked* successful (client-side rendering doesn't depend on the
+save) but the file was never actually saved, and vanished on the next login/reload. Root cause: a
+date-format mismatch (`Date.toISOString()`'s full datetime vs. the backend's bare-`YYYY-MM-DD`
+validation) combined with the save request's failure being silently swallowed
+(`.catch(() => {})`, no `res.ok` check). Verified via a harness-independent `curl` reproduction
+against the real API handler (not inferred from a test failure) before touching any code. Fixed
+at the root (a timezone-safe `toDateOnlyString` helper, applied to both the legacy path and the
+new `/upload` page), with real error surfacing added to the previously-silent legacy save, and a
+new regression test that specifically proves persistence (reload after upload), not just
+client-side rendering — the gap that let this go undetected.
 
 Phase 8.3 itself picked up mid-flight: a prior pass in this same session had already written the
 full restyle (`src/features/auth/*`, `components/ui/{Field,OtpInput,Spinner}.jsx`, the four
@@ -32,11 +47,11 @@ Phase 8.4 completion note below for the resulting design).
 
 ## Current status
 
-**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.4 of ~8.9 sub-steps done).** Phases 1–5
+**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.5 of ~8.9 sub-steps done).** Phases 1–5
 and 7 verified/landed in prior sessions; Phase 6 (testing infrastructure) completed two sessions
-ago; Phase 8.1 through 8.4 completed this session. Full writeup: `docs/engineering-lessons/
+ago; Phase 8.1 through 8.5 completed this session. Full writeup: `docs/engineering-lessons/
 phase-6-testing.md` (testing concepts), `docs/frontend/phase-8-*.md` (design system, component
-architecture, migration plan), `ROADMAP.md` ADR-019 through ADR-024. Full phase/ADR history:
+architecture, migration plan), `ROADMAP.md` ADR-019 through ADR-026. Full phase/ADR history:
 `ROADMAP.md`.
 
 ## CI stability (fixed this session, unrelated to Phase 8's own code)
@@ -147,11 +162,69 @@ GitHub Actions run for `bebb653` completed successfully in 10m56s.
   this session) — the Playwright suite's real, headless-browser rendering across 5 engines is the
   verification basis instead, not just unit/lint/build.
 
-- **8.5–8.9 not started**: Upload → Transactions → Analytics → Categories/Merchant Rules →
-  Settings/Savings → remaining cleanup, per `docs/frontend/phase-8-migration-plan.md` and the
-  user's requested order. One page per phase, full verification gate (lint/test/e2e/build) green
-  before moving to the next — see that file's "keep the existing suite passing" section for the
-  exact discipline.
+- **8.5 done** (this session): `pages/UploadPage.jsx` + `features/upload/` at a real, always-
+  reachable `/upload` route (added to `Sidebar`/`MobileNav` via `navigation.js`'s `NAV_ITEMS`,
+  matching `phase-8-component-architecture.md`'s stated end state: "`/upload` becomes a normal,
+  always-reachable route... not a gate"). New `DropZone.jsx` is a real `<button>` (Tab-focusable,
+  Enter/Space opens the file picker natively) replacing the legacy `UploadScreen`'s `<div onClick>`
+  drop target — the one real behavior fix this phase makes, verified via an actual filechooser-
+  driven keyboard test, not just `setInputFiles`. `PreviousUploads.jsx` restyles the real file-
+  history list onto `Card`/`EmptyState` (the fake "Recent transactions" panel is dropped per the
+  migration plan — it was never real data). `useFileUpload.js` ports the legacy CSV/PDF parsing
+  logic via named exports from `App.jsx` (`detectColumns`/`parseAmount`/`parseDate`/`parsePDF`) —
+  the full `utils/csv.js`/`utils/pdf/*` extraction the target architecture describes is explicitly
+  Phase 10 (final cleanup) scope, not this phase's.
+
+  **Additive, not a replacement**: per Phase 8.4's ADR-025, the legacy `UploadScreen`-as-gate is
+  untouched — `/upload` is a second, independent entry point. "Try with sample data" is
+  deliberately not offered on the new page (sample data is never persisted, so this page has no
+  way to hand it to `/dashboard` without restructuring `LegacyWorkspace`, out of scope); Previous
+  Uploads here is view+delete only, not click-to-reactivate (same reasoning — see
+  `PreviousUploads.jsx`'s docblock). Both are still fully available on the unchanged legacy gate.
+
+  **Found and fixed a real, pre-existing production bug, not a Phase 8.5 regression** — see
+  ROADMAP.md's ADR-026 for full detail. Summary: every real (non-sample) upload has silently
+  failed to persist since this validation rule was introduced (predates this entire session), due
+  to `Date.toISOString()` vs. the backend's bare-`YYYY-MM-DD` requirement, compounded by the save
+  request's failure being silently swallowed. Verified via a harness-independent `curl`
+  reproduction against the real API handler before concluding it was a real bug, not a test/harness
+  artifact (a healthy server was confirmed running throughout). Fixed via a new `toDateOnlyString`
+  helper (timezone-safe — uses local getters, not UTC, matching how every other consumer of these
+  `Date` objects already reads them) applied to both the legacy path and the new page, plus real
+  error surfacing on the previously-silent legacy save. New regression test specifically proves
+  persistence (upload → reload → data still there), the exact gap that let this go undetected.
+
+  **Also found and fixed a real, evidenced test-timing bug** in `auth.spec.js`'s pre-existing
+  forgot-password test (not introduced this phase, but investigated and fixed here): `LoginForm`
+  and `ForgotPasswordForm` share the identical `"you@example.com"` placeholder, and the test
+  clicked a client-side-routed `<Link>` then immediately called `.fill()` on that placeholder with
+  no wait for the new route to actually mount — under CPU contention, `.fill()` could grab the
+  about-to-unmount `LoginForm`'s field instead of the new page's, submitting an empty field a
+  moment later. Root-caused via 5x isolated repro (100% clean) vs. reproducible-under-full-suite-
+  load failure, confirming it was contention-dependent timing, not test logic — fixed with a
+  deterministic wait for content unique to the new page before filling, not a timeout increase.
+
+  Verification gate: `npm run lint` (0 errors, 44 warnings, unchanged), `npm test` (88/88), full
+  `npx playwright test` — genuinely noisy locally this phase (see below), stabilized to the
+  expected 231 passed / 16 skipped / 0 failed after both fixes above, `npm run build` (succeeds).
+  One visual baseline regenerated (`app-shell-empty`, chromium-only) — expected, since `Sidebar`/
+  `MobileNav` now render an additional "Upload" nav item.
+
+  **A note on this phase's noisy local verification, for the next session**: several *additional*
+  test failures appeared across repeated full-suite runs this phase (a11y create-account timing,
+  reload-heavy timeouts, several mobile-chrome timing failures) that did **not** reproduce
+  consistently and were **not** caused by this phase's code — traced to two runaway, unrelated VS
+  Code helper processes (a Docker/Dockerfile language server) consuming >500% combined CPU
+  continuously on this specific machine (confirmed via `ps`/`top`/`uptime`, load average 13–20 on
+  a 10-core machine). Not something this session fixed or should fix (outside this task's scope,
+  not this codebase's problem) — noted here so a future local run's noise isn't mistaken for a
+  regression. CI (GitHub Actions' dedicated runners) is unaffected and is this phase's real gate;
+  see its status below.
+
+- **8.6–8.9 not started**: Transactions → Analytics → Categories/Merchant Rules → Settings/Savings
+  → remaining cleanup, per `docs/frontend/phase-8-migration-plan.md` and the user's requested
+  order. One page per phase, full verification gate (lint/test/e2e/build) green before moving to
+  the next — see that file's "keep the existing suite passing" section for the exact discipline.
 
 ### Remaining phases
 9. Advanced AI features & product enhancements — not started
@@ -259,22 +332,26 @@ That surfaced a real, blocking problem immediately — see below — before any 
 ## Test suite
 
 `npm test` — **88/88 passing** (unchanged this session — Phase 8 touched no `api/**` code).
-`npx playwright test` (all 5 browser projects) — **199 passed, 0 failed, 16 skipped** (visual
-regression except chromium, by design — see ADR-020). `npm run lint` — 0 errors, **44**
-pre-existing warnings (down from 46: deleting `AuthScreen.jsx` removed its own 2 unescaped-entity
-warnings along with the file, nothing newly suppressed). `npm run build` — succeeds. GitHub
-Actions CI on `main` — green as of `07d918d` (confirmed via `gh run view`, not assumed); the
-separate "Deployment Verification" check has been failing since 2026-07-14 on a per-deployment
-preview URL requiring Vercel SSO (pre-existing, unrelated to any frontend work, tracked below).
+`npx playwright test` (all 5 browser projects) — **231 passed, 0 failed, 16 skipped** (visual
+regression except chromium, by design — see ADR-020; one new spec file, `upload.spec.js`, 7 new
+tests). `npm run lint` — 0 errors, **44** pre-existing warnings (down from 46: deleting
+`AuthScreen.jsx` removed its own 2 unescaped-entity warnings along with the file). `npm run build`
+— succeeds. GitHub Actions CI on `main` — green (confirmed via `gh run view`, not assumed; see
+each phase's commit for its own run); the separate "Deployment Verification" check has been
+failing since 2026-07-14 on a per-deployment preview URL requiring Vercel SSO (pre-existing,
+unrelated to any frontend work, tracked below).
 
-Real regressions found and fixed in prior phases this session, all before commit, none left for a
-future session to discover: Phase 8.1's nav shell introduced 2 accessibility violations
-(ADR-022); a router gap broke password-reset links (ADR-023); Phase 8.2's Landing page introduced
-a color-contrast token bug (ADR-024) and a heading-order bug; CI itself had a pre-existing (not
-Phase-8-caused) webkit test bug plus resource-contention flakiness, both fixed in `bebb653`.
-Phases 8.3 and 8.4 both introduced no new bugs — full gate green on first run in both cases. Full
-detail in ROADMAP.md's "Phase 8.1/8.2/8.3/8.4 completion note"s and the CI stability section
-above.
+Real regressions found and fixed this session, all before commit, none left for a future session
+to discover: Phase 8.1's nav shell introduced 2 accessibility violations (ADR-022); a router gap
+broke password-reset links (ADR-023); Phase 8.2's Landing page introduced a color-contrast token
+bug (ADR-024) and a heading-order bug; CI itself had a pre-existing (not Phase-8-caused) webkit
+test bug plus resource-contention flakiness, both fixed in `bebb653`. Phases 8.3 and 8.4
+introduced no new bugs. Phase 8.5 found the session's most serious defect — a real, pre-existing
+production data-loss bug in real (non-sample) statement uploads, present since before this session
+started, plus a genuine test-timing bug in an existing forgot-password test — both root-caused via
+actual evidence (a harness-independent `curl` reproduction for the former, 5x isolated-vs-
+full-suite repro for the latter) and fixed, not just patched around. See ADR-026 and the Phase 8.5
+completion note for full detail.
 
 ## Deployment status (carried forward, unchanged this session)
 
@@ -294,16 +371,21 @@ suites already re-verified all of them post-fix.
 
 ## Current production readiness estimate
 
-**~82%** (up from ~78% after Phase 7). Auth/session/security/data-integrity remain
-production-grade and now have real browser-level (not just API-level) regression coverage across
-5 browser engines, plus accessibility and visual regression baselines. The three application bugs
-this phase found (WebKit/HSTS, JWT rotation collision, `ForgotPasswordScreen`'s silent failure)
-were real correctness/security gaps in already-shipped code, now fixed and covered — exactly the
-kind of thing Phase 6 was chartered to find. Remaining gaps are the same ones Phase 7 already
-named (`VERCEL_TOKEN` secret, branch protection) plus Phase 6's own honest leftovers: visual
-regression not yet running in CI (Linux baseline gap, ADR-020), and product-facing polish
-(a11y fixes themselves, dark mode) — Phase 8 scope, now measurably tracked via
-`tests/e2e/a11y.spec.js`'s allowlist instead of just a general note.
+**~83%.** Up from ~82%, but the honest story is more nuanced than a number: Phase 8.5 found and
+fixed a real, previously-undetected **data-loss bug in already-shipped, currently-in-production
+code** (ADR-026) — real statement uploads have never actually persisted since this validation
+rule existed, only rendering correctly for the remainder of the session that uploaded them. This
+is exactly the kind of gap Phase 6/8's real-browser, real-persistence testing exists to catch, and
+finding + fixing it is a genuine readiness improvement — but it's also a reminder that "looks
+correct in the UI" and "actually works" are different claims, and this bug shipped for some
+number of prior phases/sessions before anything caught it. Auth/session/security/data-integrity
+remain production-grade with real browser-level regression coverage across 5 browser engines,
+plus accessibility and visual regression baselines. Remaining gaps: the same ones Phase 7 already
+named (`VERCEL_TOKEN` secret, branch protection); visual regression not yet running in CI (Linux
+baseline gap, ADR-020); product-facing polish (a11y fixes themselves, dark mode) — Phase 8 scope,
+tracked via `tests/e2e/a11y.spec.js`'s allowlist; and the upload-persistence fix itself hasn't yet
+reached production (see "Blockers/assumptions" below) — real users are still affected until the
+next deploy.
 
 ## Remaining technical debt
 
@@ -328,20 +410,18 @@ warnings remain (44, down from 46 — see "Test suite" above).
 
 ## Next recommended step
 
-**Phase 8.5: Upload workflow** — `pages/UploadPage.jsx` + `features/upload/` at its own real
-`/upload` route (no longer only a pre-Dashboard gate), per
-`docs/frontend/phase-8-migration-plan.md`'s Phase 5. `DropZone` gets real keyboard/focus support
-(a `<button>`-based drop target — the legacy `UploadScreen`'s drop zone has none today) and the
-hardcoded fake "Recent transactions" preview panel is dropped (it was never real data). Per this
-session's Phase 8.4 scope decision, the legacy `UploadScreen`-as-gate (no-data state) stays
-exactly as it is for now — this phase gives Upload an *additional* real route/entry point
-alongside the existing gate, it doesn't yet replace the gate itself (that full cutover, and the
-associated `auth.spec.js`/`auth-resilience.spec.js` "try with sample data" test updates the
-migration plan originally scoped to Phase 4, are now deferred to whichever later phase actually
-removes the gate — flag this explicitly if/when that happens, don't silently assume it's already
-covered). Same discipline as 8.1–8.4: full verification gate green before moving to 8.6
-(Transactions), any bug found gets root-caused and fixed (with a regression test) before
-continuing, not deferred.
+**Phase 8.6: Transactions + Categories/Merchant Rules** — `pages/TransactionsPage.jsx` +
+`features/transactions/` at a real `/transactions` route (today: only reachable via a stat-card
+click inside the legacy `Dashboard`, unbookmarkable, lost on refresh) with real search/filter/sort
+— the one phase in the plan that's genuinely new functionality, not a restyle, per
+`docs/frontend/phase-8-migration-plan.md`'s Phase 6. Needs a small, additive `api/data.js` change
+(`search`/`category`/`dateFrom`/`dateTo` query params `GET /api/files` doesn't accept today) with
+its own Vitest coverage added first, TDD-style, before the frontend consumes it. Categories +
+Merchant Rules (`pages/CategoriesPage.jsx`, `pages/MerchantRulesPage.jsx`) are grouped with this
+phase per the plan. Same discipline as 8.1–8.5: full verification gate green before moving to 8.7
+(Analytics), any bug found gets root-caused and fixed (with a regression test) before continuing,
+not deferred — and per this phase's own lesson, prefer a real reproduction (curl/direct API call,
+isolated-vs-full-suite repro) over inferring root cause from a single test failure.
 
 ## Blockers / assumptions
 
@@ -354,7 +434,14 @@ continuing, not deferred.
 - Full authenticated production round-trip (signup → login → upload → categorize) still hasn't
   been verified end-to-end by a real user since deployment — reCAPTCHA correctly prevents
   automated verification of this specific path. Carried forward from prior sessions.
-- The three application-code bug fixes from this session (WebKit/HSTS headers, JWT `jti`,
+- The three application-code bug fixes from an earlier session (WebKit/HSTS headers, JWT `jti`,
   `ForgotPasswordScreen`) haven't been separately re-verified against the live production
   deployment yet — worth a quick manual check after the next deploy, per "Deployment status"
   above.
+- **Phase 8.5's upload-persistence fix (ADR-026) is real user-impacting and not yet in
+  production** — until the next deploy, real (non-sample) statement uploads on
+  cash-canvas-sigma.vercel.app continue to silently fail to persist, exactly as they have since
+  this validation rule existed. Worth prioritizing this deploy over waiting for more Phase 8
+  phases to batch up, and worth a manual smoke check (upload a real file, reload, confirm it's
+  still there) against production specifically once deployed, not just the e2e suite's coverage
+  of it.

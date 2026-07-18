@@ -246,6 +246,21 @@ test.describe("forgot password", () => {
     // accordingly, a deliberate improvement, not a regression.
     await page.getByRole("link", { name: "Forgot password?" }).click();
 
+    // Deterministic wait for the *new* route to have actually mounted,
+    // fixing a real stale-element race found this session (Phase 8.5):
+    // LoginForm and ForgotPasswordForm both use the identical placeholder
+    // "you@example.com" for their email field, and .click() on a
+    // client-side <Link> only waits for the click event to dispatch, not
+    // for React's resulting re-render to flush. Under CPU contention (a
+    // full multi-worker suite run — not reproducible in isolation, 5/5
+    // clean), the very next line's .fill("you@example.com") could
+    // sometimes still find and fill the about-to-unmount LoginForm's email
+    // field instead of ForgotPasswordForm's, which then gets replaced by a
+    // fresh, empty instance a moment later, submitted empty. Waiting for
+    // "Reset password" — content unique to the new page — closes that
+    // window instead of racing on a shared placeholder.
+    await expect(page.getByRole("heading", { name: "Reset password" })).toBeVisible();
+
     await page.getByPlaceholder("you@example.com").fill("someone@example.test");
     await page.locator('button[type="submit"]').click();
 
