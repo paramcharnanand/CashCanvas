@@ -283,8 +283,15 @@ test.describe("account deletion", () => {
 
     await expect(page.getByRole("button", { name: "Sign In" }).first()).toBeVisible();
     const cookies = await page.context().cookies();
-    expect(cookieByName(cookies, "cc_at"), "cc_at cookie").toBeFalsy();
-    expect(cookieByName(cookies, "cc_rt"), "cc_rt cookie").toBeFalsy();
+    // Same WebKit quirk the "logout" test above already found and fixed:
+    // a cleared cookie can still appear in the jar snapshot with an empty
+    // value rather than being absent outright — check value emptiness, not
+    // presence, for a deterministic assertion across all 5 browser
+    // projects (this one, unlike "logout", hadn't been updated to match).
+    const at = cookieByName(cookies, "cc_at");
+    const rt = cookieByName(cookies, "cc_rt");
+    expect(!at || at.value === "", "cc_at cookie").toBe(true);
+    expect(!rt || rt.value === "", "cc_rt cookie").toBe(true);
 
     // The same email being signup-able again (rather than "already
     // registered") proves the account row, not just the session, is gone.

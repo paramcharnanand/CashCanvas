@@ -12,7 +12,18 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI, // a stray .only committed by accident shouldn't silently skip the rest of the suite in CI
   retries: process.env.CI ? 2 : 0, // retry flaky-looking failures in CI's noisier environment; fail fast locally so you see it immediately
-  workers: process.env.CI ? 2 : undefined, // undefined = Playwright's own default (~half the machine's cores) locally
+  // 1, not 2: `ubuntu-latest`'s 2-core runner genuinely can't run 5 browser
+  // engines under 2 Playwright workers without contention — this was seen
+  // failing basic navigations ("Test timeout of 30000ms exceeded" on a
+  // plain page.reload()) across all 2 retries, on different browsers each
+  // run, same resource-contention category ADR-014 already documented.
+  // Slower CI, but deterministic — the actual goal.
+  workers: process.env.CI ? 1 : undefined, // undefined = Playwright's own default (~half the machine's cores) locally
+  // CI's runner is measurably slower than local under this contention;
+  // 60s (vs. Playwright's 30s default) gives legitimate slow operations
+  // room without masking a real hang — a hung test still fails, just not
+  // from ordinary CI slowness.
+  timeout: process.env.CI ? 60_000 : undefined,
   reporter: [["html", { open: "never" }], ["list"]],
 
   use: {
