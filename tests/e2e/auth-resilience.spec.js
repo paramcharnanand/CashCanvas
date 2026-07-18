@@ -42,6 +42,11 @@ test.describe("refresh-token rotation", () => {
 
 test.describe("expired access token", () => {
   test("apiFetch silently refreshes an expired access token and the request succeeds transparently", async ({ authenticatedPage: page }) => {
+    // A full page.reload() plus a real refresh-and-retry round trip is
+    // heavier than most assertions here; under CI's contended runner
+    // (ADR-014/CI-stability class) this occasionally needs more than the
+    // default budget. test.slow() (3x timeout) gives real headroom.
+    test.slow();
     // Real, valid cc_rt/cc_csrf from the fixture's signup; cc_at replaced
     // with one that is validly *signed* (same secret the server uses) but
     // already expired — the precise condition src/api.js's apiFetch() is
@@ -161,8 +166,21 @@ test.describe("duplicate/rapid login submissions", () => {
     // AuthScreen.jsx), but only *after* React re-renders; two clicks fired
     // in the same tick can both register before that happens. This is
     // exactly the race the app is supposed to be safe against even if the
-    // disabled-attribute race loses.
-    await Promise.all([submitButton.click(), submitButton.click()]);
+    // disabled-attribute race loses. `force: true` is required to actually
+    // create that race deterministically: Playwright's default click()
+    // waits for the button to be enabled before dispatching, so on a
+    // slower runner the first click's React re-render can disable the
+    // button before the second click's own actionability check completes —
+    // Playwright then retries the second click against a button that will
+    // never re-enable (login already succeeded, the app already navigated
+    // away), hanging for the full test timeout instead of ever firing it.
+    // force: true dispatches both clicks immediately regardless of
+    // enabled/visible state, which is what "even if the disabled-attribute
+    // race loses" already meant to test.
+    await Promise.all([
+      submitButton.click({ force: true }),
+      submitButton.click({ force: true }),
+    ]);
 
     await expect(page.getByRole("button", { name: /try with sample data/i })).toBeVisible();
     // However many login requests actually fired, exactly one valid session

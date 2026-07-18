@@ -149,6 +149,12 @@ test.describe("protected routes / direct navigation", () => {
 
 test.describe("session persistence across reload", () => {
   test("stays authenticated across a page reload, and across several in a row", async ({ authenticatedPage: page }) => {
+    // Three full page.reload()s share one test-level timeout, not one each —
+    // under CI's contended runner (ADR-014/CI-stability class), each reload
+    // can legitimately take long enough that the cumulative total, not any
+    // single reload, is what exceeds the default budget. test.slow() (3x
+    // timeout) gives real headroom without inflating every other test's.
+    test.slow();
     await expect(page.getByRole("button", { name: /try with sample data/i })).toBeVisible();
 
     for (let i = 0; i < 3; i++) {
