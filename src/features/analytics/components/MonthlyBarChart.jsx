@@ -6,6 +6,20 @@ import { useKeyboardChartNav } from "../hooks/useKeyboardChartNav.js";
 const fmt = (v) => "$" + Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /**
+ * Y-axis tick label. Recharts' auto-generated tick values aren't always
+ * round thousands (a $3,200 max can produce ticks at 0/800/1600/2400/3200)
+ * — truncating every tick to a whole "k" collapsed 1600 and 2400 to the
+ * same "$2k" label, an axis with two identical ticks. Keeping one decimal
+ * whenever the value isn't already a round thousand keeps every tick's
+ * label distinct.
+ */
+export function formatYAxisTick(v) {
+  const thousands = v / 1000;
+  const rounded = Number.isInteger(thousands) ? thousands : Math.round(thousands * 10) / 10;
+  return `$${rounded}k`;
+}
+
+/**
  * Restyled from the legacy `Dashboard`'s "Monthly Overview" bar chart
  * (`App.jsx`) — see docs/frontend/phase-8-design-system.md § Charts. Same
  * keyboard pattern as `SpendingDonut.jsx`: one tab stop, Left/Right arrows
@@ -30,7 +44,7 @@ export function MonthlyBarChart({ monthlyData }) {
         <BarChart data={monthlyData} barGap={3} barSize={10}>
           <CartesianGrid stroke="var(--border)" strokeDasharray="0" vertical={false} />
           <XAxis dataKey="month" tick={{ fill: "var(--text-subtle)", fontSize: 11 }} axisLine={false} tickLine={false} />
-          <YAxis tick={{ fill: "var(--text-subtle)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+          <YAxis tick={{ fill: "var(--text-subtle)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={formatYAxisTick} />
           <Bar dataKey="Income" radius={[2, 2, 0, 0]} onMouseEnter={(_d, i) => setActiveIndex(i)} onMouseLeave={() => setActiveIndex(null)}>
             {monthlyData.map((_m, i) => (
               <Cell key={i} fill="var(--positive)" fillOpacity={activeIndex === null || activeIndex === i ? 1 : 0.3} />
