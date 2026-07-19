@@ -97,8 +97,15 @@ export function useCategoriesData() {
   categoryNameSet.delete("Other");
   categoryNameSet.delete("Income");
 
-  // Only categories with real transactions or configured keywords are shown
-  // — matches the legacy Categories tab's own visibility rule exactly.
+  // Categories with real transactions, configured keywords, or a real
+  // server-side record (`apiCat` — the user explicitly created it via "New
+  // Category") are shown. Only never-used *default* categories (no id, no
+  // transactions, no keywords) are hidden, to avoid cluttering the grid
+  // with all of DEFAULT_CATEGORIES. A user-created category necessarily
+  // starts with zero transactions and zero keywords, so excluding it too
+  // (the legacy Dashboard's original rule, ported unchanged into Phase 8.8)
+  // was a real bug: its card is the only UI that can ever add a keyword to
+  // it, so a brand-new category had no path to ever become visible.
   const categories = Array.from(categoryNameSet)
     .map((name, i) => {
       const apiCat = apiCategories.find((c) => c.categoryName === name);
@@ -116,7 +123,7 @@ export function useCategoriesData() {
         pct: totalExpenses > 0 ? (catTotal / totalExpenses) * 100 : 0,
       };
     })
-    .filter((c) => c.count > 0 || c.keywords.length > 0)
+    .filter((c) => c.count > 0 || c.keywords.length > 0 || c.id != null)
     .sort((a, b) => b.total - a.total);
 
   /**

@@ -38,7 +38,7 @@ test.describe("categories page", () => {
     await expect(page.getByText("100%", { exact: false })).toBeVisible(); // fully auto-categorized, 0 "Other"
   });
 
-  test("creates a new category, persisted server-side", async ({ authenticatedPage: page }) => {
+  test("creates a new category, persisted server-side and visible immediately", async ({ authenticatedPage: page }) => {
     await seedTransactions(page);
     await page.goto("/categories");
 
@@ -46,10 +46,29 @@ test.describe("categories page", () => {
     await page.getByPlaceholder("e.g. Pet Care, Education...").fill("Pet Care");
     await page.getByRole("button", { name: "Create Category" }).click();
 
-    // A brand-new category has no transactions or keywords yet, so it
-    // doesn't render a card (matches the legacy Dashboard's own visibility
-    // rule exactly — not a regression). Verify persistence directly against
-    // the API instead of a UI element that legitimately isn't shown yet.
+    // A brand-new category has no transactions or keywords yet, but it was
+    // explicitly created by the user — it must render a card immediately,
+    // with no refresh, so there's a way to add a keyword to it at all.
+    // (Real bug found: the visibility rule that hides never-used *default*
+    // categories from cluttering the grid was also hiding user-created
+    // ones, which by definition start empty — a dead end, since the card
+    // is the only UI that can ever add a keyword to it. Fixing it also
+    // surfaces the category as a quick-fix chip in UncategorizedPanel,
+    // which reads the same list — hence two matches below, not one.)
+    await expect(page.getByText("Pet Care", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Pet Care", { exact: true })).toHaveCount(2);
+
+    // The card is real, not just a label — a keyword can be added to it
+    // immediately, closing the dead end the bug caused. Scoped to the
+    // card itself (`CategoryCard` sets a distinguishing `border-left`
+    // style on its `Card` wrapper) since "+ Add merchant" also repeats
+    // once per pre-existing default-category card.
+    const petCareCard = page.locator('div[style*="border-left"]', { hasText: "Pet Care" });
+    await petCareCard.getByRole("button", { name: "+ Add merchant" }).click();
+    await page.getByLabel("Add a keyword to Pet Care").fill("petsmart");
+    await page.keyboard.press("Enter");
+    await expect(petCareCard.getByText("petsmart", { exact: true })).toBeVisible();
+
     await expect.poll(async () => {
       const res = await page.request.get("/api/categories");
       const cats = await res.json();
