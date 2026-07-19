@@ -6,6 +6,26 @@ re-deriving context from the repo.
 
 ## Release status
 
+**Phase 10 (final cleanup) shipped this session — Phase 8 (frontend redesign) is fully done.**
+`App.jsx` (1,945 lines, all that remained of the pre-Phase-8 codebase) deleted outright, confirmed
+genuinely orphaned first (`main.jsx` already renders providers + `<RouterProvider>` directly).
+`/dashboard` is now the real authenticated landing — always reachable, `DashboardPage`'s own
+`EmptyState` when there's no data, never a categorically different gate screen. Pure logic
+extracted unchanged into `src/utils/` first; the legacy `Dashboard`/`UploadScreen` turned out to be
+the last home for three real, still-used capabilities ("try with sample data," bulk reassign-
+category, switching the active upload) — each resolved via an explicit decision presented to the
+user before writing code, not assumed (see ROADMAP.md's Phase 10 completion note for all three).
+Found and fixed two real, systemic accessibility bugs during the full a11y re-scan this phase
+required: a `page-has-heading-one` gap across five pages' empty states (an early-return branch that
+skipped the page's own `<h1>`), and a critical-impact `label` violation on every OTP digit input,
+affecting both the login/signup verification screen and `/reset-password` — the latter never
+scanned before this phase grew a11y coverage from Phase 6's original 4 states to all 13+ real
+routes. Also closed two long-deferred Phase 8.1 debt items now that their stated trigger
+("once those pages migrate and their own `<header>` goes away") was finally true: `Header.jsx` is a
+real `<header>` again (ADR-022), and the Material Symbols Google Fonts CDN link is gone. See
+ROADMAP.md's Phase 10 completion note for full detail; summarized in "Phase 8 — in progress" below
+(now "Phase 8 — complete").
+
 **Deployment Verification's long-standing "Homepage returned 302" failure fixed and confirmed
 green this session — a CI/workflow fix, not application code.** Root-caused before touching
 anything: Vercel's GitHub integration never populates `deployment_status`'s

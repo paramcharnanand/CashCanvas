@@ -6,8 +6,7 @@ require re-deriving context that already existed once.
 
 ## Progress
 
-**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.9 of ~8.9 sub-steps done, final
-cleanup — the migration plan's own Phase 10 — remaining).**
+**8 of 9 phases complete (89%). Phase 8 (frontend redesign) is fully done.**
 
 | # | Phase | Status | Docs |
 |---|---|---|---|
@@ -18,7 +17,7 @@ cleanup — the migration plan's own Phase 10 — remaining).**
 | 5 | Dependency maintenance (`npm audit`, upgrades) | ✅ Done | `docs/security/threat-model.md` (Dependency posture) |
 | 6 | Testing infrastructure | ✅ Done | `docs/engineering-lessons/phase-6-testing.md` |
 | 7 | CI/CD (GitHub Actions) | ✅ Done | `docs/engineering-lessons/phase-7-ci-cd.md` |
-| 8 | Frontend redesign (design system, routing, navigation shell, a11y) | 🟨 In progress (8.1–8.9 done, final cleanup remaining) | `docs/frontend/phase-8-*.md` |
+| 8 | Frontend redesign (design system, routing, navigation shell, a11y) | ✅ Done | `docs/frontend/phase-8-*.md` |
 | 9 | Advanced AI features & product enhancements | ⬜ Not started | — |
 
 ### Phase 8.1 completion note (routing, navigation shell, design foundation)
@@ -576,6 +575,131 @@ Next: Phase 10, final cleanup — `App.jsx` reduced to its ~30-line target shape
 look at `services/http.js`'s `api.js` assessment now that this phase's `Field` fix joins Phase 8.8's
 `apiFetch` `Content-Type` fix — per `docs/frontend/phase-8-migration-plan.md`'s own Phase 10 scope
 and this file's "Known technical debt" section below.
+
+### Phase 10 completion note (final cleanup — Phase 8 is now fully done)
+
+Delivered, per `docs/frontend/phase-8-migration-plan.md`'s own Phase 10 scope: `App.jsx` (1,945
+lines, all that remained of the pre-Phase-8 codebase) **deleted outright** — confirmed genuinely
+orphaned first (`main.jsx` already renders providers + `<RouterProvider>` directly, the actual
+~30-line shape the plan describes; `App.jsx` hadn't been the real entry point since early Phase 8,
+just a dumping ground for not-yet-migrated legacy components). Its pure logic was extracted first,
+unchanged, into `src/utils/` (`categorization.js`, `csv.js`, `csvExport.js`, `pdf.js`,
+`sampleData.js`) — kept as five cohesive files, not the target architecture's full
+`utils/pdf/{loadPdfJs,lineBuilder,dateAmount,statementType,strategies}.js` five-way split for the
+PDF engine specifically: those functions are tightly interdependent (shared pattern constants,
+strategies calling the same line/date helpers), and splitting ~450 lines of dense, already-working
+regex-based parsing logic into five files for organizational purity alone — with real transcription
+risk and no functional benefit — isn't worth it without a concrete trigger, matching ADR-016's
+precedent. `/dashboard` is now the real authenticated landing per the migration plan's own routing
+architecture: always reachable, rendering `DashboardPage`'s own `EmptyState` (no data) or the
+Overview stats/recent-activity view (data), never a categorically different gate screen.
+
+**Three real product decisions, presented to the user explicitly before writing code, not
+assumed** — the legacy `Dashboard`/`UploadScreen` turned out to still be the *only* place three
+real, still-used capabilities lived, each requiring a decision on where (or whether) they'd
+continue to exist once the legacy component was gone:
+1. **"Try with sample data"** — client-only demo data, never persisted, previously only offered on
+   the legacy gate (deliberately *not* carried to `/upload` in Phase 8.5, since that page has no
+   way to hand unpersisted data to a separate route). Rebuilt on `DashboardPage`'s own empty state
+   (`useDashboardData.js`'s `loadSampleData`) — same behavior, same non-persistence, closing the
+   gap Phase 8.5 had left open rather than silently dropping the feature.
+2. **The bulk reassign-category flow** — select any transactions, pick an existing category or
+   create one inline, applied to all of them at once (learns a merchant rule per transaction, same
+   `POST /api/merchant-rules` mechanism Categories' quick-fix already uses). Only ever lived on the
+   legacy `Dashboard`'s *hidden* "Transactions" tab (reachable via a stat-card click, not the
+   visible tab bar) — Phase 8.6 explicitly built the real `/transactions` page read-only to avoid
+   duplicating this exact state, deferring its real home. Ported onto `/transactions` itself
+   (`ReassignDialog.jsx`, `useTransactionsData.js`'s new `reassign`/`createCategory`) — the same
+   capability, now on a bookmarkable route with real row-selection checkboxes instead of a hidden
+   tab.
+3. **Switching which uploaded file is "active"** — clicking an older file in the legacy gate's
+   history to reactivate it. Investigated, not rebuilt: every Phase 8.6+ page (Transactions,
+   Analytics, Categories, Savings, and now Dashboard) already only ever reads the *most recent*
+   file — Phase 8.5's own completion note flagged this as a deliberate, out-of-scope gap when
+   `/upload`'s `PreviousUploads` was built view-only. Phase 10 doesn't make this worse (it removes
+   the *last* place the old capability existed, consistent with every page built since 8.5) and a
+   real multi-file switcher is a genuinely separate feature, not "final cleanup" — tracked below,
+   not silently expanded into.
+
+**Two real, systemic accessibility bugs found while re-scanning every route, not assumed clean**:
+1. **`page-has-heading-one`, across five pages' empty states** (Dashboard, Savings, Transactions,
+   Categories, Analytics) — each one's "no data yet" branch is an early `return` that skips the
+   page's own `<h1>` entirely (only reached in the "has data" branch), leaving the empty state with
+   no top-level heading at all. Invisible until now because `a11y.spec.js`'s existing cases always
+   seeded data before scanning; Dashboard's empty state is reachable by construction (it's the
+   default landing for any account with no data) and was the first case that didn't. Fixed at the
+   source — `components/ui/EmptyState.jsx`'s new `headingLevel` prop, opted into on exactly these
+   five page-top-level usages, left as a plain `<div>` (unchanged) for in-panel usages
+   (`CategoryGrid`, `UncategorizedPanel`, `RecentActivity`) where promoting it to `<h1>` would be a
+   heading-level violation, not a fix. New a11y test cases added for all five pages' true empty
+   states (previously never scanned), not just Dashboard's.
+2. **A critical-impact `label` violation on every OTP digit box** (`components/ui/OtpInput.jsx`) —
+   none of the six `<input>`s had any accessible name (no `<label>`, `aria-label`, or `title`),
+   affecting both the login/signup verification screen and `/reset-password`, since both share this
+   one component. Found on `/reset-password`, the first time that route was ever included in the
+   a11y suite (routes covered grew from Phase 6's original 4 states to all 13+ real routes this
+   phase, including `/upload`, `/transactions`, `/forgot-password`, `/reset-password`, and the 404
+   page). Fixed with a real per-digit `aria-label` ("Verification code digit N of 6") — critical-
+   impact violations are this suite's hard gate, not something a per-page allowlist can accept, so
+   this couldn't have been deferred even if it hadn't been fixed immediately.
+
+**A real, deterministic test-authoring bug found and fixed while updating the suite for the
+`/dashboard` cutover**: the new row-selection checkbox's `aria-label={"Select transaction: " +
+desc}` embedded the transaction description as a literal substring — Playwright's `getByRole`
+matches substrings by default, so every existing `getByRole("cell", { name: someDescription })`
+assertion across `transactions.spec.js` (and the two column-index-dependent tests reading a
+category value via `.nth(2)`, now `.nth(3)` after the checkbox column shifted every index) started
+matching two elements instead of one. Fixed with a generic, non-colliding label ("Select
+transaction") — standard practice for table row-selection checkboxes; a screen-reader user
+navigating the table already gets row context from the adjacent cells.
+
+**Also closed at the source, not left as tracked debt once its trigger existed**: `Header.jsx`'s
+`role="region"` workaround (ADR-022, Phase 8.1) is now a real `<header>` — the comment marking it
+temporary said "reconsider once those pages migrate and their own `<header>` goes away," which
+this phase's deletion of `App.jsx` made literally true (confirmed via `grep`: only `LandingPage`'s
+own, non-conflicting `<header>` remains). The Material Symbols Outlined Google Fonts CDN link
+(`index.html`) — kept exactly this long for the same reason, the legacy screens' last icon
+consumer — removed once `grep` confirmed nothing in `src/` still uses
+`className="material-symbols-outlined"`.
+
+**The "largest mechanical test-update pass" ADR-025 named two phases in advance**: the
+`authenticatedPage` fixture itself needed no changes (it waits for "try with sample data" text,
+which still exists, now on `/dashboard` instead of the gate) — but `homepage.spec.js`,
+`auth.spec.js`, `auth-resilience.spec.js`, `performance.spec.js`, and `upload.spec.js` all had
+assertions tied to markup or page objects (`UploadPage.mjs`'s `uploadFile()`/`sampleDataButton`,
+the old tab bar's "Overview" button) that no longer existed. A new `DashboardPage.mjs` page object
+replaces the deleted `UploadPage.mjs` (itself deleted once `grep` confirmed zero remaining
+importers — the same "confirm before deleting" discipline as every prior phase's dead-code
+cleanup); `upload.spec.js`'s dedicated "legacy upload gate — real upload persistence" describe
+block (ADR-026's original regression test) was folded into its sibling test on the real `/upload`
+page rather than duplicated, since the legacy gate it tested no longer exists.
+
+**Linux-native visual baselines**: `.github/workflows/generate-visual-baselines.yml` (new,
+`workflow_dispatch`-only, deliberately not self-committing — a workflow that pushes back to `main`
+unattended is a real footgun) generates chromium snapshots on Ubuntu and uploads them as a
+downloadable artifact for deliberate review and commit, rather than trusting an automated
+pixel-diff commit. See "CI stability" / deployment notes below for whether this closed ADR-020 in
+this session specifically.
+
+**Verification gate**: `npm run lint` (0 errors, 41 warnings — unchanged from the Phase 8.9
+baseline; the temporary doubling from `App.jsx`'s duplicated-then-removed logic net-zeroed out),
+`npm test` (111/111, unchanged — this phase touched no `api/**` code), `npx playwright test` — full
+suite green (the exact count is in CHECKPOINT.md's "Test suite" section, which isn't duplicated
+here to avoid drift) with one visual baseline regenerated (`app-shell-empty`, chromium — the empty
+state's markup changed shape entirely). Several full-suite-only firefox failures (browser-context-
+closed crashes, not assertion failures) appeared across runs this phase — the same already-
+diagnosed local CPU-contention class as every prior phase (ADR-014); 100% clean in isolated reruns
+each time, not a code defect.
+
+**Tracked, not addressed this phase**: a real multi-file "switch which upload is active" capability
+(decision 3 above) — every data-fetching hook in the app reads only the most recent uploaded file;
+a genuinely separate feature, not cleanup, if ever prioritized. `DELETE /api/savings` still has no
+UI caller (Phase 8.9's own tracked item, unchanged). The Vite bundle's chunk-size warning
+(`dist/assets/index-*.js` ~928 kB) predates this phase and wasn't investigated — code-splitting is
+a real, separate optimization project, not "final cleanup."
+
+Phase 8 (frontend redesign) is complete. Remaining project scope: Phase 9 (Advanced AI features &
+product enhancements) — not started, no concrete plan exists yet.
 
 ### ADR-027 — `deploy-verify.yml` checked Vercel's per-deployment alias, not the production domain — a real workflow bug, not an application bug
 
@@ -1242,63 +1366,30 @@ From Phase 6 (Testing infrastructure):
   specific function it applies to.
 
 From Phase 8.1 (routing, navigation shell, design foundation):
-- `Header.jsx`'s topbar is `role="region"`, not a real `<header>`, until the last unmigrated page
-  using its own `<header>` (`UploadScreen`/`Dashboard`, Phase 8.5+) is gone — see ADR-022.
-- Material Symbols Outlined icon font stays on Google Fonts' CDN (not self-hosted like
-  Newsreader/Manrope/Inter) until every old screen still calling `<span class="material-symbols-
-  outlined">` (`App.jsx`) is migrated to `lucide-react` — removing it earlier would blank out
-  every icon those screens render. Tracked to close alongside Phase 8.8. (`AuthScreen.jsx` no
-  longer applies here — retired in full as of Phase 8.3.)
+- ~~`Header.jsx`'s topbar is `role="region"`, not a real `<header>`~~ — closed in Phase 10:
+  `App.jsx` (the last page rendering its own competing `<header>`) is deleted; `Header.jsx` is now
+  a real `<header>`. See ADR-022 and the Phase 10 completion note.
+- ~~Material Symbols Outlined icon font stays on Google Fonts' CDN~~ — closed in Phase 10: removed
+  from `index.html` once `grep` confirmed no remaining `className="material-symbols-outlined"`
+  usage anywhere in `src/` (`App.jsx`, its last consumer, is deleted).
 
-From Phase 8.4 (Dashboard Overview restyle, ADR-025):
-- The legacy `Dashboard` component (`App.jsx`) still owns Categories, Savings, Transactions, the
-  tab bar, and the header — only its Overview tab's content was migrated this phase, by deliberate
-  choice (ADR-025), not oversight. Each of Phases 8.6–8.9 shrinks it by one more tab; it and
-  `LegacyWorkspace` are deleted outright in Phase 10 once nothing is left inside them.
-- The migration plan's original Phase 4 called for `/dashboard` replacing `UploadScreen`'s gate
-  role outright, with a matching test-suite update across `auth.spec.js`/`auth-resilience.spec.js`
-  ("try with sample data" → a `/dashboard`-specific signal). That cutover didn't happen this
-  phase (ADR-025) — the gate is untouched and those tests are still valid as originally written.
-  Whichever later phase actually removes the gate needs to pick this up explicitly, not assume
-  it was already done in 8.4.
-
-From Phase 8.5 (Upload workflow, ADR-026):
-- `parseDate` (`App.jsx`) constructs `Date` objects with mixed UTC/local timezone semantics
-  depending on which internal branch parses a given date string — a real, pre-existing
-  inconsistency, not introduced this phase, uncovered while root-causing ADR-026's persistence
-  bug. Could affect other date-sensitive logic (monthly grouping, recurring-payment matching) for
-  users in non-UTC timezones, depending on their bank's export date format. Not addressed as part
-  of ADR-026's fix (deliberately scoped narrower — see that ADR's "tracked, not addressed here").
-  Needs its own dedicated investigation.
-- The full `utils/csv.js`/`utils/pdf/*` extraction (pure parsing logic out of `App.jsx`) that
-  `phase-8-component-architecture.md`'s target file tree describes is Phase 10 (final cleanup)
-  scope — Phase 8.5 exported the existing `App.jsx` functions for `features/upload/`'s use instead
-  of relocating them a phase early, per that phase's own explicit sequencing.
-- `PreviousUploads.jsx` (the new `/upload` page) is view + delete only — clicking an older upload
-  to make it "active" again (as the legacy gate's `onLoadFile` does) isn't supported there, since
-  `LegacyWorkspace`'s auto-restore only ever loads the *most recent* file and the new page has no
-  shared state with it. Reactivating an older upload is still fully possible via the unchanged
-  legacy gate. Closing this gap needs either a backend field (e.g. `lastAccessedAt`) or lifting
-  upload/dashboard state out of `LegacyWorkspace` — likely resolved naturally once Phase 8.6+
-  moves more of `LegacyWorkspace`'s responsibilities into real, independent pages.
-- The legacy `LegacyWorkspace.handleData`'s background file-history save now logs failures
-  (`console.error`) instead of silently swallowing them (ADR-026), but still has no visible
-  UI error slot — a user whose real upload fails to save (e.g. a transient network issue) sees
-  nothing on screen. A `Toast` primitive is a planned, not-yet-built design-system component
-  (`phase-8-design-system.md` § Toasts) that would be the natural fix; tracked here rather than
-  built speculatively ahead of the primitive existing.
+From Phase 8.4 (Dashboard Overview restyle, ADR-025) and Phase 8.5 (Upload workflow, ADR-026) —
+~~the legacy `Dashboard`/`UploadScreen`/`LegacyWorkspace` gate pattern these two phases' tracked
+debt was about~~ is deleted outright in Phase 10; see that phase's completion note for the three
+real capabilities it turned out to be the last home for (sample data, bulk reassign, file
+switching) and how each was resolved. One item from this pair remains genuinely open, unrelated to
+the gate itself:
+- `parseDate` (now `utils/csv.js`) constructs `Date` objects with mixed UTC/local timezone
+  semantics depending on which internal branch parses a given date string — a real, pre-existing
+  inconsistency, uncovered while root-causing ADR-026's persistence bug, not yet dedicated
+  investigation. Could affect date-sensitive logic (monthly grouping, recurring-payment matching)
+  for users in non-UTC timezones depending on their bank's export date format.
 
 From Phase 8.6 (Transactions):
-- `/transactions` has no reassign-category action — deliberate this phase (see the Phase 8.6
-  completion note's scope decision 2), not an oversight. The legacy `Dashboard`'s Transactions tab
-  still fully covers reassignment; closing this gap on the new page needs either lifting
-  `txnOverrides` out of `LegacyWorkspace` into shared/persisted state, or accepting the
-  cross-page-divergence risk described in that decision — a call for whichever phase actually
-  retires the legacy tab, not this one.
-- Categories + Merchant Rules (`pages/CategoriesPage.jsx`, `pages/MerchantRulesPage.jsx`) — this
-  session's own earlier "Phase 8.6" note had bundled these with Transactions; scoped out to their
-  own phase (now 8.8) once Transactions alone proved to be the plan's full Phase 6 scope. Not
-  started.
+- ~~`/transactions` has no reassign-category action~~ — closed in Phase 10: ported from the legacy
+  `Dashboard`'s hidden Transactions tab onto `/transactions` itself (`ReassignDialog.jsx`), the
+  cross-page-divergence risk this note flagged mooted by the legacy tab's deletion. See the Phase
+  10 completion note.
 - Filtering/sorting on `/transactions` is client-side (scope decision 1, Phase 8.6 completion
   note) rather than the `api/data.js` query-param extension the migration plan's "backend note"
   suggested — revisit if the data model ever moves off "one embedded transactions array per file."
