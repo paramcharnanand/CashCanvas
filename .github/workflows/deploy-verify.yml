@@ -26,11 +26,30 @@ jobs:
     # no deployment_status payload, so it always runs.
     if: github.event_name == 'workflow_dispatch' || github.event.deployment_status.state == 'success'
     steps:
+      # Root cause of the long-standing "Homepage returned 302" failure
+      # (tracked in CHECKPOINT.md since 2026-07-14): Vercel's GitHub
+      # integration never populates target_url/environment_url/log_url with
+      # the stable custom production domain for this project — only ever
+      # the unique per-deployment alias (e.g.
+      # cash-canvas-<hash>-param-1210s-projects.vercel.app). That alias is
+      # protected by Vercel's own Deployment Protection/SSO by default, even
+      # for Production-environment deployments — confirmed directly via
+      # `curl -I` (302 to vercel.com/sso-api, a _vercel_sso_nonce cookie,
+      # x-robots-tag: noindex — all Vercel platform behavior, not this
+      # app's routing). The app itself is healthy; the workflow was just
+      # checking the wrong URL. Fix: for a Production deployment, use the
+      # known stable domain (the same one workflow_dispatch already
+      # defaults to) instead of trusting Vercel's per-deployment target_url.
+      # Non-Production (e.g. Preview) deployments keep using target_url —
+      # an SSO redirect there is the *correct*, expected response for an
+      # unauthenticated request, not a bug to work around.
       - name: Resolve target URL
         id: target
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "url=${{ inputs.url }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.deployment_status.environment }}" = "Production" ]; then
+            echo "url=https://cash-canvas-sigma.vercel.app" >> "$GITHUB_OUTPUT"
           else
             echo "url=${{ github.event.deployment_status.target_url }}" >> "$GITHUB_OUTPUT"
           fi
