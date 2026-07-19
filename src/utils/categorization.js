@@ -1,7 +1,10 @@
 // Client-side transaction categorization — rule-based keyword matching plus
-// user-learned merchant rules (exact/prefix/fuzzy). Extracted from App.jsx
-// (Phase 10 final cleanup, docs/frontend/phase-8-component-architecture.md's
-// utils/categorization.js) — logic unchanged, moved verbatim.
+// user-learned merchant rules (exact/prefix/first-token/fuzzy, see
+// merchantNormalization.js). Extracted from App.jsx (Phase 10 final
+// cleanup).
+import { cleanDesc, extractMerchant, matchMerchant } from "./merchantNormalization.js";
+
+export { cleanDesc };
 
 export const DEFAULT_CATEGORIES = {
   "Housing": [
@@ -162,86 +165,17 @@ export const DEFAULT_CATEGORIES = {
   "Other": [],
 };
 
-export function cleanDesc(desc) {
-  if (!desc) return "";
-  // Segment merged/camelCase words before lowercasing (e.g. "AMZNMktpUS" → "AMZN Mktp US")
-  let text = desc.trim()
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
-  return text.toLowerCase()
-    // Bank boilerplate prefixes/suffixes
-    .replace(/\b(card\s+purchase|pos\s+(debit|credit|purchase)|ach\s+(debit|credit|payment|transfer)|online\s+(payment|transfer|banking)|bill\s+pay(ment)?|direct\s+dep(osit)?|wire\s+transfer|check\s+(paid|deposit|crd)|mobile\s+(payment|deposit)|contactless\s+purchase|recurring\s+(charge|payment)|autopay|preauthorized|authorized\s+on|payment\s+to|purchase\s+at|pending|memo|ref\s*#?|tran\s*#?|checkcard|visa\s+debit|visa\s+credit|ext\s+credit|ext\s+debit)\b/g, " ")
-    // POS-system prefixes
-    .replace(/\b(sq|tst|dsh)\s*\*/gi, "")
-    // Replace asterisks
-    .replace(/\*/g, " ")
-    // Remove date patterns
-    .replace(/\b\d{1,2}\/\d{1,2}(\/\d{2,4})?\b/g, " ")
-    // Remove #StoreNumber and bare store numbers
-    .replace(/#\s*\d+/g, " ")
-    .replace(/\bstore\s+\d+/g, " ")
-    .replace(/\b\d{4,}\b/g, " ")
-    // Remove US state abbreviations (standalone 2-letter codes)
-    .replace(/\b(al|ak|az|ar|ca|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy|dc)\b/g, " ")
-    // Remove alphanumeric reference codes
-    .replace(/\b[a-z]{0,3}\d{3,}[a-z0-9]*\b/g, " ")
-    // Remove long codes — requires at least one digit (a real reference/
-    // transaction code), not just any 9+ character token: this same regex
-    // without that requirement used to strip plain merchant names that
-    // happen to be one word of 9+ letters (e.g. "starbucks", "walgreens")
-    // down to nothing, so categorize() had no text left to match against
-    // and silently fell through to "Other" — a real bug, found via a direct
-    // reproduction (`cleanDesc("STARBUCKS")` returned ""), not inferred.
-    .replace(/\b(?=[a-z0-9]*\d)[a-z0-9]{9,}\b/g, " ")
-    .replace(/\s+/g, " ").trim();
-}
-
-// Dice-coefficient similarity (0–1). Used for fuzzy merchant matching in categorize().
-function diceCoefficient(a, b) {
-  if (!a || !b) return 0;
-  const al = a.toLowerCase().trim();
-  const bl = b.toLowerCase().trim();
-  if (al === bl) return 1.0;
-  if (al.length < 2 || bl.length < 2) return 0;
-  const bigrams = (s) => {
-    const set = new Set();
-    for (let i = 0; i < s.length - 1; i++) set.add(s.substring(i, i + 2));
-    return set;
-  };
-  const bigramsA = bigrams(al);
-  const bigramsB = bigrams(bl);
-  let intersection = 0;
-  for (const bg of bigramsA) { if (bigramsB.has(bg)) intersection++; }
-  return (2 * intersection) / (bigramsA.size + bigramsB.size);
-}
-
-// Extract the core merchant name — first 1-3 meaningful words after cleaning
-function extractMerchant(cleaned) {
-  const stopWords = new Set(["the", "and", "for", "from", "with", "inc", "llc", "corp", "ltd", "co"]);
-  const words = cleaned.split(" ").filter(w => w.length > 1 && !stopWords.has(w));
-  return words.slice(0, 2).join(" ");
-}
-
 export function categorize(desc, customCats, merchantRules) {
   const cleaned = cleanDesc(desc);
   const merchant = extractMerchant(cleaned);
 
-  // User-learned rules — exact, prefix, then fuzzy (dice ≥ 0.65)
+  // User-learned rules — exact, prefix, brand-token, then fuzzy (dice ≥
+  // 0.65). Same tiered matching the server-side AI pipeline uses
+  // (merchantNormalization.js's matchMerchant) — one algorithm, not two
+  // independently-maintained copies that can drift.
   if (merchantRules?.size) {
-    if (merchantRules.has(cleaned)) return merchantRules.get(cleaned);
-    if (merchant && merchantRules.has(merchant)) return merchantRules.get(merchant);
-    // Prefix match
-    for (const [key, cat] of merchantRules) {
-      if (merchant && key.startsWith(merchant)) return cat;
-    }
-    // Fuzzy match via Dice coefficient
-    let bestScore = 0;
-    let bestCat = null;
-    for (const [key, cat] of merchantRules) {
-      const score = Math.max(diceCoefficient(cleaned, key), diceCoefficient(merchant, key));
-      if (score > bestScore) { bestScore = score; bestCat = cat; }
-    }
-    if (bestScore >= 0.65) return bestCat;
+    const match = matchMerchant(cleaned, merchantRules);
+    if (match) return match.category;
   }
 
   const cats = { ...DEFAULT_CATEGORIES, ...customCats };

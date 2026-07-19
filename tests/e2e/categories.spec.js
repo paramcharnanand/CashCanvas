@@ -135,6 +135,38 @@ test.describe("categories page", () => {
     await expect(page.getByRole("cell", { name: "Groceries" })).toBeVisible();
   });
 
+  test("a learned merchant rule generalizes to real-world variants of the same merchant, not just the exact string", async ({ authenticatedPage: page }) => {
+    // Teach the system "ZZQX BREW CO" → Groceries via the same quick-fix
+    // flow as the test above.
+    await seedTransactions(page, [
+      { date: "2025-01-10", desc: "ZZQX BREW CO #4521", amount: -19.99 },
+      { date: "2025-01-11", desc: "WHOLE FOODS MARKET", amount: -40 },
+    ]);
+    await page.goto("/categories");
+    await page.getByRole("button", { name: "Groceries" }).click();
+    await expect(page.getByText("ZZQX BREW CO #4521")).not.toBeVisible();
+
+    // A later statement with real-world formatting variants of the same
+    // merchant — different store number, different case, a trailing
+    // descriptor word, and no store number at all — none of these are an
+    // exact string match for the rule learned above ("zzqx brew co").
+    // Every one should still land in Groceries automatically, with no
+    // further quick-fix action, the moment the file is uploaded.
+    await seedTransactions(page, [
+      { date: "2025-02-01", desc: "Zzqx Brew Co #9081", amount: -12.5 },
+      { date: "2025-02-02", desc: "ZZQX BREW CO", amount: -8.25 },
+      { date: "2025-02-03", desc: "Zzqx Brew Co Reserve", amount: -15.0 },
+    ], "second-statement.csv");
+
+    await page.goto("/transactions");
+    const rows = page.getByRole("row").filter({ hasNot: page.getByRole("columnheader") });
+    await expect(rows).toHaveCount(3);
+    for (const desc of ["Zzqx Brew Co #9081", "ZZQX BREW CO", "Zzqx Brew Co Reserve"]) {
+      const row = rows.filter({ has: page.getByRole("cell", { name: desc, exact: true }) });
+      await expect(row.getByRole("cell", { name: "Groceries", exact: true })).toBeVisible();
+    }
+  });
+
   test("Categories is a real, always-visible nav destination", async ({ authenticatedPage: page }) => {
     await page.goto("/dashboard");
     await page.getByRole("link", { name: "Categories" }).click();
