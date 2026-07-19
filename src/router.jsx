@@ -8,6 +8,7 @@ import ForgotPasswordPage from "./pages/ForgotPasswordPage.jsx";
 import ResetPasswordPage from "./pages/ResetPasswordPage.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
 import UploadPage from "./pages/UploadPage.jsx";
+import TransactionsPage from "./pages/TransactionsPage.jsx";
 import NotFoundPage from "./pages/NotFoundPage.jsx";
 
 /**
@@ -36,6 +37,7 @@ export const router = createBrowserRouter([
     children: [
       { path: "/dashboard", element: <DashboardPage /> },
       { path: "/upload", element: <UploadPage /> },
+      { path: "/transactions", element: <TransactionsPage /> },
     ],
   },
   { path: "*", element: <NotFoundPage /> },

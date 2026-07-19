@@ -1,0 +1,121 @@
+import { test, expect, sampleTransactions, seedTransactions } from "./fixtures/index.mjs";
+
+/**
+ * Covers the new `/transactions` route (Phase 8.6, `src/pages/
+ * TransactionsPage.jsx`) — a real, bookmarkable route with client-side
+ * search/filter/sort, replacing the pre-Phase-8 "only reachable via a
+ * stat-card click" pattern, per docs/frontend/phase-8-migration-plan.md's
+ * Phase 6. Uses `seedTransactions` (a direct API seed, not driving a real
+ * upload) since these tests are about filter/sort/search behavior
+ * downstream of upload, not the upload mechanism itself — that's
+ * `upload.spec.js`'s job.
+ */
+test.describe("transactions page", () => {
+  test("requires authentication — an unauthenticated visitor is redirected to sign in", async ({ page }) => {
+    await page.goto("/transactions");
+    await expect(page).toHaveURL(/\/login/);
+  });
+
+  test("an authenticated account with no data sees an empty state with an upload CTA", async ({ authenticatedPage: page }) => {
+    await page.goto("/transactions");
+    await expect(page.getByText("No transactions yet")).toBeVisible();
+    await page.getByRole("link", { name: /upload a statement/i }).click();
+    await expect(page).toHaveURL(/\/upload$/);
+  });
+
+  test("shows every seeded transaction with a real table", async ({ authenticatedPage: page }) => {
+    await seedTransactions(page);
+    await page.goto("/transactions");
+
+    await expect(page.getByRole("table")).toBeVisible();
+    await expect(page.getByText(`${sampleTransactions.length} of ${sampleTransactions.length} transaction`, { exact: false })).toBeVisible();
+    for (const t of sampleTransactions) {
+      await expect(page.getByRole("cell", { name: t.desc })).toBeVisible();
+    }
+  });
+
+  test("search filters results to matching descriptions only", async ({ authenticatedPage: page }) => {
+    await seedTransactions(page);
+    await page.goto("/transactions");
+
+    await page.getByRole("textbox", { name: "Search transactions" }).fill("netflix");
+    await expect(page.getByRole("cell", { name: "NETFLIX.COM" })).toBeVisible();
+    await expect(page.getByRole("cell", { name: "WHOLE FOODS MARKET" })).not.toBeVisible();
+    await expect(page.getByText("1 of 10 transaction")).toBeVisible();
+    // Debounced search still lands in the URL, once settled, for a real
+    // bookmarkable/refreshable filtered view.
+    await expect(page).toHaveURL(/[?&]q=netflix/);
+  });
+
+  test("category filter narrows results to only that category", async ({ authenticatedPage: page }) => {
+    await seedTransactions(page);
+    await page.goto("/transactions");
+
+    const groceryRow = page.getByRole("row", { name: /WHOLE FOODS MARKET/i });
+    const category = await groceryRow.getByRole("cell").nth(2).innerText();
+
+    await page.getByRole("combobox", { name: "Filter by category" }).selectOption(category);
+
+    const rows = page.getByRole("row").filter({ hasNot: page.getByRole("columnheader") });
+    // .selectOption() only waits for the <select>'s change event to fire,
+    // not for React's resulting re-render of the filtered table — a bare
+    // rows.count() right after it can capture a stale, pre-filter count.
+    // toHaveCount() auto-retries until the count actually settles (any
+    // value other than the original, unfiltered 10), a deterministic wait
+    // instead of a fixed sleep.
+    await expect(rows).not.toHaveCount(sampleTransactions.length);
+    const count = await rows.count();
+    for (let i = 0; i < count; i++) {
+      await expect(rows.nth(i).getByRole("cell").nth(2)).toHaveText(category);
+    }
+  });
+
+  test("search and category filters compose (both narrow the same result set)", async ({ authenticatedPage: page }) => {
+    await seedTransactions(page);
+    await page.goto("/transactions");
+
+    const groceryRow = page.getByRole("row", { name: /WHOLE FOODS MARKET/i });
+    const category = await groceryRow.getByRole("cell").nth(2).innerText();
+    await page.getByRole("combobox", { name: "Filter by category" }).selectOption(category);
+    await page.getByRole("textbox", { name: "Search transactions" }).fill("whole foods");
+
+    await expect(page.getByRole("cell", { name: "WHOLE FOODS MARKET" })).toBeVisible();
+    await expect(page.getByText("1 of 10 transaction")).toBeVisible();
+  });
+
+  test("clearing filters restores the full, unfiltered list", async ({ authenticatedPage: page }) => {
+    await seedTransactions(page);
+    await page.goto("/transactions");
+
+    await page.getByRole("textbox", { name: "Search transactions" }).fill("netflix");
+    await expect(page.getByText("1 of 10 transaction")).toBeVisible();
+
+    await page.getByRole("button", { name: "Clear filters" }).click();
+    await expect(page.getByText("10 of 10 transaction")).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Search transactions" })).toHaveValue("");
+  });
+
+  test("sort is a real query param that survives a page refresh", async ({ authenticatedPage: page }) => {
+    await seedTransactions(page);
+    await page.goto("/transactions");
+
+    await page.getByRole("combobox", { name: "Sort by" }).selectOption("amount-desc");
+    await expect(page).toHaveURL(/[?&]sort=amount-desc/);
+
+    // Highest amount in sampleTransactions is the +3200 payroll deposit.
+    const firstDataRow = page.getByRole("row").filter({ hasNot: page.getByRole("columnheader") }).first();
+    await expect(firstDataRow.getByRole("cell", { name: "PAYROLL DEPOSIT" })).toBeVisible();
+
+    await page.reload();
+    await expect(page).toHaveURL(/[?&]sort=amount-desc/);
+    await expect(page.getByRole("combobox", { name: "Sort by" })).toHaveValue("amount-desc");
+    const firstRowAfterReload = page.getByRole("row").filter({ hasNot: page.getByRole("columnheader") }).first();
+    await expect(firstRowAfterReload.getByRole("cell", { name: "PAYROLL DEPOSIT" })).toBeVisible();
+  });
+
+  test("Transactions is a real, always-visible nav destination", async ({ authenticatedPage: page }) => {
+    await page.goto("/dashboard");
+    await page.getByRole("link", { name: "Transactions" }).click();
+    await expect(page).toHaveURL(/\/transactions$/);
+  });
+});

@@ -6,12 +6,20 @@ re-deriving context from the repo.
 
 ## Release status
 
-**Phase 8.1 through 8.5 verified and committed this session**, plus two CI hotfixes along the
+**Phase 8.1 through 8.6 verified and committed this session**, plus two CI hotfixes along the
 way (see `git log` — `5d42cf8` Phase 8.1, `bd9241c` router hotfix, `bebb653` CI stability hotfix,
-the Phase 8.2/8.3/8.4/8.5 commits). GitHub Actions CI is green on `main` as of the CI stability
-hotfix — it was red (webkit-only, deterministic) since before this session started; see "CI
-stability" below. Phase 6 (Testing infrastructure, six logical commits) and Phase 7 (CI/CD,
-`64a1280`) were the last things pushed before this session.
+the Phase 8.2–8.6 commits). GitHub Actions CI is green on `main` as of the CI stability hotfix —
+it was red (webkit-only, deterministic) since before this session started; see "CI stability"
+below. Phase 6 (Testing infrastructure, six logical commits) and Phase 7 (CI/CD, `64a1280`) were
+the last things pushed before this session.
+
+**Phase 8.6 scoped down from this file's own earlier "Transactions + Categories/Merchant Rules"
+note**: built Transactions only (a real `/transactions` route, search/filter/sort, per the
+migration plan's own Phase 6) — Categories/Merchant Rules is deferred to its own phase, matching
+the migration plan's actual Phase 8, not squeezed into one oversized step. See the Phase 8.6
+completion note below for the two scope decisions made along the way (client-side filtering
+instead of new backend query params; no reassign-category action on the new page) and the test-
+timing bug found and fixed.
 
 **Phase 8.5 found a real, pre-existing production data-loss bug, not something this session
 introduced** (see the Phase 8.5 completion note below and ROADMAP.md's ADR-026 for full detail):
@@ -47,9 +55,9 @@ Phase 8.4 completion note below for the resulting design).
 
 ## Current status
 
-**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.5 of ~8.9 sub-steps done).** Phases 1–5
+**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.6 of ~8.9 sub-steps done).** Phases 1–5
 and 7 verified/landed in prior sessions; Phase 6 (testing infrastructure) completed two sessions
-ago; Phase 8.1 through 8.5 completed this session. Full writeup: `docs/engineering-lessons/
+ago; Phase 8.1 through 8.6 completed this session. Full writeup: `docs/engineering-lessons/
 phase-6-testing.md` (testing concepts), `docs/frontend/phase-8-*.md` (design system, component
 architecture, migration plan), `ROADMAP.md` ADR-019 through ADR-026. Full phase/ADR history:
 `ROADMAP.md`.
@@ -221,10 +229,45 @@ GitHub Actions run for `bebb653` completed successfully in 10m56s.
   regression. CI (GitHub Actions' dedicated runners) is unaffected and is this phase's real gate;
   see its status below.
 
-- **8.6–8.9 not started**: Transactions → Analytics → Categories/Merchant Rules → Settings/Savings
-  → remaining cleanup, per `docs/frontend/phase-8-migration-plan.md` and the user's requested
-  order. One page per phase, full verification gate (lint/test/e2e/build) green before moving to
-  the next — see that file's "keep the existing suite passing" section for the exact discipline.
+- **8.6 done** (this session): `pages/TransactionsPage.jsx` + `features/transactions/` at a real,
+  bookmarkable `/transactions` route (added to `Sidebar`/`MobileNav`), replacing the pre-Phase-8
+  "only reachable via a stat-card click, lost on refresh" pattern. New `components/ui/Table.jsx`
+  (real `<table>`/`<thead>`/`<tbody>`, closing the ADR-019-tracked `role="table"` gap) and
+  `hooks/useDebounce.js`. Search/category/date-range filters and sort all live in the URL
+  (`useSearchParams`), so a filtered/sorted view is a real, shareable link and survives a refresh
+  — the migration plan's own stated goal for this phase.
+
+  **Two scope decisions, evidence-based, not guessed**: (1) filtering/sorting is client-side, not
+  the `api/data.js` query-param round trip the migration plan's "backend note" suggested — the
+  whole active file's transactions are already fetched in full today (≤10,000/file, already in
+  memory), so server-side search would be real backend surface with no functional need yet, the
+  same reasoning `ROADMAP.md`'s Phase 4 tech debt note already applied to pagination. (2) the new
+  page is read-only — no reassign-category action — matching the migration plan's own stated
+  Phase 6 scope exactly (reassignment isn't listed in it) and avoiding a real state-consistency
+  risk: the legacy `Dashboard`'s per-transaction overrides are local component state, never
+  persisted server-side, so duplicating that state on a second, independent page could let a
+  reassignment silently diverge between the two. The existing reassign flow stays on the legacy
+  `Dashboard`, fully functional, unchanged.
+
+  **Found and fixed a genuine test-timing bug**, not an application bug: a new test asserted on
+  filtered-table row count immediately after `selectOption()`, which only waits for the `<select>`
+  element's own change event, not React's resulting re-render — capturing a stale count. Fixed
+  with a real, auto-retrying wait (`expect(rows).not.toHaveCount(...)`) before reading the settled
+  count, not a timeout increase.
+
+  **Verification gate**: `npm run lint` (0 errors, 44 warnings, unchanged), `npm test` (88/88,
+  unchanged — this phase touched no `api/**` code, by design, per scope decision (1) above), `npx
+  playwright test` — 278 passed / 16 skipped / 0 failed after the fix above (9 new tests in
+  `tests/e2e/transactions.spec.js`), `npm run build` (succeeds). One visual baseline regenerated
+  (`app-shell-empty`, chromium-only) — expected, another new nav item. Local runs this phase again
+  showed occasional firefox `page.reload()` timeouts — same external, already-diagnosed cause as
+  Phase 8.5 (the runaway VS Code helper processes, reconfirmed still active via `ps`/`uptime`);
+  5/5 clean on isolated repro each time. CI is the real gate; see its status below.
+
+- **8.7–8.9 not started**: Analytics → Categories/Merchant Rules → Settings/Savings → remaining
+  cleanup, per `docs/frontend/phase-8-migration-plan.md` and the user's requested order. One page
+  per phase, full verification gate (lint/test/e2e/build) green before moving to the next — see
+  that file's "keep the existing suite passing" section for the exact discipline.
 
 ### Remaining phases
 9. Advanced AI features & product enhancements — not started
@@ -332,14 +375,14 @@ That surfaced a real, blocking problem immediately — see below — before any 
 ## Test suite
 
 `npm test` — **88/88 passing** (unchanged this session — Phase 8 touched no `api/**` code).
-`npx playwright test` (all 5 browser projects) — **231 passed, 0 failed, 16 skipped** (visual
-regression except chromium, by design — see ADR-020; one new spec file, `upload.spec.js`, 7 new
-tests). `npm run lint` — 0 errors, **44** pre-existing warnings (down from 46: deleting
-`AuthScreen.jsx` removed its own 2 unescaped-entity warnings along with the file). `npm run build`
-— succeeds. GitHub Actions CI on `main` — green (confirmed via `gh run view`, not assumed; see
-each phase's commit for its own run); the separate "Deployment Verification" check has been
-failing since 2026-07-14 on a per-deployment preview URL requiring Vercel SSO (pre-existing,
-unrelated to any frontend work, tracked below).
+`npx playwright test` (all 5 browser projects) — **278 passed, 0 failed, 16 skipped** (visual
+regression except chromium, by design — see ADR-020; two new spec files, `upload.spec.js` and
+`transactions.spec.js`, 16 new tests combined). `npm run lint` — 0 errors, **44** pre-existing
+warnings (down from 46: deleting `AuthScreen.jsx` removed its own 2 unescaped-entity warnings
+along with the file). `npm run build` — succeeds. GitHub Actions CI on `main` — green (confirmed
+via `gh run view`, not assumed; see each phase's commit for its own run); the separate
+"Deployment Verification" check has been failing since 2026-07-14 on a per-deployment preview URL
+requiring Vercel SSO (pre-existing, unrelated to any frontend work, tracked below).
 
 Real regressions found and fixed this session, all before commit, none left for a future session
 to discover: Phase 8.1's nav shell introduced 2 accessibility violations (ADR-022); a router gap
@@ -410,18 +453,22 @@ warnings remain (44, down from 46 — see "Test suite" above).
 
 ## Next recommended step
 
-**Phase 8.6: Transactions + Categories/Merchant Rules** — `pages/TransactionsPage.jsx` +
-`features/transactions/` at a real `/transactions` route (today: only reachable via a stat-card
-click inside the legacy `Dashboard`, unbookmarkable, lost on refresh) with real search/filter/sort
-— the one phase in the plan that's genuinely new functionality, not a restyle, per
-`docs/frontend/phase-8-migration-plan.md`'s Phase 6. Needs a small, additive `api/data.js` change
-(`search`/`category`/`dateFrom`/`dateTo` query params `GET /api/files` doesn't accept today) with
-its own Vitest coverage added first, TDD-style, before the frontend consumes it. Categories +
-Merchant Rules (`pages/CategoriesPage.jsx`, `pages/MerchantRulesPage.jsx`) are grouped with this
-phase per the plan. Same discipline as 8.1–8.5: full verification gate green before moving to 8.7
-(Analytics), any bug found gets root-caused and fixed (with a regression test) before continuing,
-not deferred — and per this phase's own lesson, prefer a real reproduction (curl/direct API call,
-isolated-vs-full-suite repro) over inferring root cause from a single test failure.
+**Phase 8.7: Analytics** — `pages/AnalyticsPage.jsx` + `features/analytics/`, splitting the
+Recharts donut/monthly-bar/cash-flow-line block out of the legacy `Dashboard`'s Overview tab
+(untouched by Phase 8.4, which only migrated the hero/stats/recurring/recent-activity content
+around it — see ADR-025) onto the standardized Chart system, per `docs/frontend/
+phase-8-migration-plan.md`'s Phase 7: reconciled palette, real `aria-label`s, keyboard-reachable
+tooltips. New test: chart keyboard navigation (Tab to a data point, tooltip on focus — charts are
+mouse-only today). The `tests/e2e/a11y.spec.js` "dashboard (with data loaded)" scan's two
+chart-specific allowlist entries (`svg-img-alt`, `scrollable-region-focusable`) should move to
+scan `/analytics` instead once this lands, same allowlist-based approach (ADR-019), revalidated
+against the rebuilt markup — flag explicitly if a new violation appears rather than widening the
+allowlist to make it pass. Then Phase 8.8, Categories + Merchant Rules (deferred out of this
+session's Phase 8.6, which scoped down to Transactions only). Same discipline as 8.1–8.6: full
+verification gate green before moving on, any bug found gets root-caused and fixed (with a
+regression test) before continuing, not deferred — and per Phase 8.5/8.6's own lesson, prefer a
+real reproduction (curl/direct API call, isolated-vs-full-suite repro) over inferring root cause
+from a single test failure.
 
 ## Blockers / assumptions
 

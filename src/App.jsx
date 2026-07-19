@@ -8,7 +8,7 @@ import { OverviewHeader } from "./features/dashboard/components/OverviewHeader.j
 import { RecentActivity } from "./features/dashboard/components/RecentActivity.jsx";
 
 // ─── CATEGORY ENGINE ───
-const DEFAULT_CATEGORIES = {
+export const DEFAULT_CATEGORIES = {
   "Housing": [
     "rent", "mortgage", "property tax", "hoa", "landlord", "lease payment", "storage unit",
     "renters insurance", "homeowners", "real estate", "apartment", "sublease", "leasing",
@@ -223,7 +223,7 @@ function extractMerchant(cleaned) {
   return words.slice(0, 2).join(" ");
 }
 
-function categorize(desc, customCats, merchantRules) {
+export function categorize(desc, customCats, merchantRules) {
   const cleaned = cleanDesc(desc);
   const merchant = extractMerchant(cleaned);
 

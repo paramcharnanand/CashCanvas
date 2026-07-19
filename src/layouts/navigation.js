@@ -16,12 +16,12 @@ import { Home, Upload, List, BarChart3, Tag, Store, Target, Settings } from "luc
 export const NAV_ITEMS = [
   { id: "overview", to: "/dashboard", label: "Overview", icon: Home, enabled: true, phase: null },
   { id: "upload", to: "/upload", label: "Upload", icon: Upload, enabled: true, phase: null },
-  { id: "transactions", to: "/transactions", label: "Transactions", icon: List, enabled: false, phase: "8.6" },
+  { id: "transactions", to: "/transactions", label: "Transactions", icon: List, enabled: true, phase: null },
   { id: "analytics", to: "/analytics", label: "Analytics", icon: BarChart3, enabled: false, phase: "8.7" },
-  { id: "categories", to: "/categories", label: "Categories", icon: Tag, enabled: false, phase: "8.6" },
-  { id: "merchant-rules", to: "/merchant-rules", label: "Merchant Rules", icon: Store, enabled: false, phase: "8.6" },
-  { id: "savings", to: "/savings", label: "Savings", icon: Target, enabled: false, phase: "8.8" },
-  { id: "settings", to: "/settings", label: "Settings", icon: Settings, enabled: false, phase: "8.8" },
+  { id: "categories", to: "/categories", label: "Categories", icon: Tag, enabled: false, phase: "8.8" },
+  { id: "merchant-rules", to: "/merchant-rules", label: "Merchant Rules", icon: Store, enabled: false, phase: "8.8" },
+  { id: "savings", to: "/savings", label: "Savings", icon: Target, enabled: false, phase: "8.9" },
+  { id: "settings", to: "/settings", label: "Settings", icon: Settings, enabled: false, phase: "8.9" },
 ];
 
 export const SIDEBAR_ITEMS = NAV_ITEMS.filter((item) => item.enabled);

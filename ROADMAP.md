@@ -6,7 +6,7 @@ require re-deriving context that already existed once.
 
 ## Progress
 
-**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.5 of ~8.9 sub-steps done).**
+**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.6 of ~8.9 sub-steps done).**
 
 | # | Phase | Status | Docs |
 |---|---|---|---|
@@ -17,7 +17,7 @@ require re-deriving context that already existed once.
 | 5 | Dependency maintenance (`npm audit`, upgrades) | ✅ Done | `docs/security/threat-model.md` (Dependency posture) |
 | 6 | Testing infrastructure | ✅ Done | `docs/engineering-lessons/phase-6-testing.md` |
 | 7 | CI/CD (GitHub Actions) | ✅ Done | `docs/engineering-lessons/phase-7-ci-cd.md` |
-| 8 | Frontend redesign (design system, routing, navigation shell, a11y) | 🟨 In progress (8.1–8.5 done) | `docs/frontend/phase-8-*.md` |
+| 8 | Frontend redesign (design system, routing, navigation shell, a11y) | 🟨 In progress (8.1–8.6 done) | `docs/frontend/phase-8-*.md` |
 | 9 | Advanced AI features & product enhancements | ⬜ Not started | — |
 
 ### Phase 8.1 completion note (routing, navigation shell, design foundation)
@@ -206,6 +206,61 @@ for a regression in a future session. GitHub Actions' dedicated runners are unaf
 
 Next: Phase 8.6, Transactions (real search/filter/sort, a genuinely new feature per the plan) plus
 Categories/Merchant Rules, per `docs/frontend/phase-8-migration-plan.md`'s Phase 6/8.
+
+### Phase 8.6 completion note (Transactions — real search/filter/sort at a real route)
+
+Delivered, per `docs/frontend/phase-8-migration-plan.md`'s Phase 6: `pages/TransactionsPage.jsx` +
+`features/transactions/` at a real, bookmarkable `/transactions` route (added to `Sidebar`/
+`MobileNav`), replacing "only reachable via a stat-card click, unbookmarkable, lost on refresh."
+New `components/ui/Table.jsx` — real `<table>`/`<thead>`/`<tbody>` semantics, closing the
+`role="table"` gap ADR-019 tracked — and `hooks/useDebounce.js`. Search, category filter,
+date-range filter, and sort all live in the URL (`useSearchParams`), so a filtered/sorted view is
+a real, shareable, refresh-surviving link, exactly this phase's stated goal.
+
+**Scoped down from this session's own earlier "Phase 8.6: Transactions + Categories/Merchant
+Rules" note**: built Transactions only. Categories/Merchant Rules is deferred to its own phase
+(now 8.8), matching the migration plan's actual Phase 8, not bundled in — the combined scope was
+this session's own earlier estimate, revised once the actual size of Transactions alone (a new
+`Table` primitive, URL-state-backed filtering, a real read/write-consistency question — see
+below) became clear.
+
+**Two scope decisions, both evidenced, neither silently assumed:**
+1. **Client-side filtering, not the `api/data.js` query-param round trip the migration plan's
+   "backend note" suggested.** The active file's full transaction set is already fetched and held
+   in memory today (the app caps at 10,000 transactions/file) — adding `search`/`category`/
+   `dateFrom`/`dateTo` query params to `GET /api/files` would be real, new backend surface with no
+   functional need yet, since nothing requires paginated/partial fetches at current scale. Same
+   reasoning `ROADMAP.md`'s Phase 4 tech debt note already applied to pagination validators
+   ("adding validators with no caller would be dead code"). Revisit if the data model ever moves
+   off "one embedded transactions array per file" (ADR-006 territory).
+2. **No reassign-category action on the new page** — matching the migration plan's own Phase 6
+   scope precisely (its "Build" bullet lists Table/search/filters/sort; reassignment isn't in it,
+   and its "Expected test changes" note explicitly says the existing reassign flow is "unaffected"
+   by this phase). Avoids a real risk a rebuild would introduce: the legacy `Dashboard`'s
+   per-transaction `txnOverrides` are local component state, never persisted server-side (only the
+   merchant-name rule a reassignment *learns* is) — a second, independent page with its own
+   override state could let a reassignment diverge between the two until a shared merchant rule
+   resynced them. The existing flow stays on the legacy `Dashboard`, fully functional.
+
+**Found and fixed a genuine test-timing bug** (not an application bug): a new test read filtered-
+row count via `rows.count()` immediately after `selectOption()`, which only waits for the
+`<select>`'s own `change` event, not React's resulting re-render — capturing a stale,
+pre-filter count on an unlucky run. Fixed with `expect(rows).not.toHaveCount(originalCount)` first
+(a real, auto-retrying wait for the filter to actually take effect) before reading the settled
+count, not a timeout increase.
+
+**Verification gate**: `npm run lint` (0 errors, 44 warnings, unchanged), `npm test` (88/88,
+unchanged — no `api/**` code touched, by design, per scope decision 1 above), `npx playwright
+test` — 278 passed / 16 skipped / 0 failed after the fix above (9 new tests,
+`tests/e2e/transactions.spec.js`), `npm run build` (succeeds). One visual baseline regenerated
+(`app-shell-empty`, chromium-only) — expected, another new nav item. Local full-suite runs this
+phase again surfaced occasional firefox `page.reload()` timeouts — the same external, already-
+diagnosed cause as Phase 8.5 (two runaway VS Code helper processes on this development machine,
+reconfirmed still active via `ps`); 5/5 clean on isolated repro. Not a code defect; CI is the real
+gate.
+
+Next: Phase 8.7, Analytics (splitting the Recharts block out of `Dashboard`'s Overview tab onto
+the standardized Chart system), then Phase 8.8, Categories + Merchant Rules.
 
 ### ADR-026 — Real statement uploads never persisted: `Date.toISOString()` vs. the backend's bare-`YYYY-MM-DD` requirement, plus a silently-swallowed save failure
 
@@ -874,6 +929,21 @@ From Phase 8.5 (Upload workflow, ADR-026):
   nothing on screen. A `Toast` primitive is a planned, not-yet-built design-system component
   (`phase-8-design-system.md` § Toasts) that would be the natural fix; tracked here rather than
   built speculatively ahead of the primitive existing.
+
+From Phase 8.6 (Transactions):
+- `/transactions` has no reassign-category action — deliberate this phase (see the Phase 8.6
+  completion note's scope decision 2), not an oversight. The legacy `Dashboard`'s Transactions tab
+  still fully covers reassignment; closing this gap on the new page needs either lifting
+  `txnOverrides` out of `LegacyWorkspace` into shared/persisted state, or accepting the
+  cross-page-divergence risk described in that decision — a call for whichever phase actually
+  retires the legacy tab, not this one.
+- Categories + Merchant Rules (`pages/CategoriesPage.jsx`, `pages/MerchantRulesPage.jsx`) — this
+  session's own earlier "Phase 8.6" note had bundled these with Transactions; scoped out to their
+  own phase (now 8.8) once Transactions alone proved to be the plan's full Phase 6 scope. Not
+  started.
+- Filtering/sorting on `/transactions` is client-side (scope decision 1, Phase 8.6 completion
+  note) rather than the `api/data.js` query-param extension the migration plan's "backend note"
+  suggested — revisit if the data model ever moves off "one embedded transactions array per file."
 
 From `docs/security/threat-model.md` (Phase 4):
 - Pagination and search validators were explicitly requested by the Phase 4 spec but not
