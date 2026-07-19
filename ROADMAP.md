@@ -577,6 +577,38 @@ look at `services/http.js`'s `api.js` assessment now that this phase's `Field` f
 `apiFetch` `Content-Type` fix — per `docs/frontend/phase-8-migration-plan.md`'s own Phase 10 scope
 and this file's "Known technical debt" section below.
 
+### ADR-027 — `deploy-verify.yml` checked Vercel's per-deployment alias, not the production domain — a real workflow bug, not an application bug
+
+**Context**: `.github/workflows/deploy-verify.yml`'s "Homepage returns 200" check had been failing
+since 2026-07-14 (before Phase 8.9), reporting `302` instead of `200`, and stayed unexamined —
+tracked as "pre-existing, unrelated to any frontend work" in prior checkpoints rather than
+root-caused. Investigated directly rather than assumed: `curl -I` against the exact URL the
+workflow's "Resolve target URL" step was resolving
+(`https://cash-canvas-<hash>-param-1210s-projects.vercel.app`, pulled from
+`github.event.deployment_status.target_url`) returned `302` to `https://vercel.com/sso-api?...`,
+with a `_vercel_sso_nonce` cookie and `x-robots-tag: noindex` — genuine Vercel platform behavior
+(Deployment Protection/SSO), not anything this app's routing controls. The same `curl` against the
+real production domain (`https://cash-canvas-sigma.vercel.app`) returned a healthy `200` the whole
+time. Confirmed via the GitHub Deployments API (`gh api .../deployments/:id/statuses`) that Vercel's
+integration reports `environment: "Production"` for these deployments but never populates
+`target_url`/`environment_url`/`log_url` with the stable custom domain for this project — only ever
+the unique, SSO-protected per-deployment alias. **Decision**: resolve the target URL to the known
+stable domain (the same one `workflow_dispatch`'s own default already used) when
+`deployment_status.environment == "Production"`, instead of trusting Vercel's per-deployment
+`target_url`. Non-Production environments (e.g. a future Preview-deployment trigger) keep using
+`target_url` as before — an SSO redirect there is the *correct*, expected response for an
+unauthenticated request, not a bug to route around. **Rationale**: matches this project's standing
+"root-cause before fixing, and fix the actual broken thing" discipline — the instinct to "just
+follow the redirect" or loosen the assertion to accept `302` was explicitly rejected in favor of
+checking the right URL, the same reasoning ADR-019's "flag explicitly, don't allowlist away a real
+finding" rule already established for a11y. **Status**: fixed and verified against a real
+`deployment_status` event (`gh run rerun` on the actual failed run, not just re-reasoning about the
+YAML) — `Homepage returns 200`, `/api/auth`/`/api/data`/`/api/ai` all return the expected `401`. The
+repository owner then added the previously-missing `VERCEL_TOKEN` secret (ADR-018's own tracked
+gap), closing the "exactly 3 Serverless Functions" check too — confirmed via the real `vercel
+inspect` output listing `api/ai`/`api/auth`/`api/data` and nothing else. `main` is green across
+every GitHub Actions check with no known gaps, for the first time since 2026-07-14.
+
 ### ADR-026 — Real statement uploads never persisted: `Date.toISOString()` vs. the backend's bare-`YYYY-MM-DD` requirement, plus a silently-swallowed save failure
 
 **Context**: found while building Phase 8.5's `/upload` route — a new end-to-end test (upload a
@@ -930,9 +962,11 @@ repository secret (documented in `docs/release-process.md`, not something this p
 itself) and fails loudly with an explanation if that secret is missing, rather than silently
 skipping. **Status**: verified against the live production deployment during Phase 7 (the exact
 `curl`/`vercel inspect`/`grep` logic in the workflow was run manually against
-`cash-canvas-sigma.vercel.app` and confirmed to detect all three functions correctly) — not yet
-exercised by an actual GitHub Actions run, since that requires the `VERCEL_TOKEN` secret to be
-added by the repository owner first.
+`cash-canvas-sigma.vercel.app` and confirmed to detect all three functions correctly). The
+`VERCEL_TOKEN` secret was added by the repository owner after Phase 8.9 and the function-count
+check now runs and passes on real `deployment_status` events — see ADR-027 for a real bug this
+same event-driven design surfaced along the way, unrelated to this ADR's own trigger-mechanism
+decision.
 
 ### ADR-017 — Dependabot ignores major-version bumps globally, not via a hand-picked package list
 **Context**: Phase 7.7 required Dependabot configured with "packages that should not
@@ -1169,9 +1203,11 @@ From `database.md`:
   collection, `GET/PUT/DELETE /api/savings`); see ADR-007 and the Phase 8.9 completion note above.
 
 From Phase 7 (CI/CD):
-- `.github/workflows/deploy-verify.yml`'s Serverless Function count check needs a `VERCEL_TOKEN`
-  repository secret this project cannot add itself — documented in `docs/release-process.md`,
-  not yet exercised by an actual GitHub Actions run (see ADR-018).
+- ~~`.github/workflows/deploy-verify.yml`'s Serverless Function count check needs a `VERCEL_TOKEN`
+  repository secret this project cannot add itself~~ — closed after Phase 8.9: the repository owner
+  added the secret, and a real, separate workflow bug (checking Vercel's SSO-protected
+  per-deployment alias instead of the production domain) was found and fixed along the way — see
+  ADR-027. `main` is now green across every GitHub Actions check.
 - `docs/github-branch-protection.md`'s recommendations are unapplied — branch protection is a
   GitHub repository *setting*, deliberately out of scope for this project's own files (Phase
   7.8 explicitly says not to modify GitHub settings). CI checks exist and pass; nothing yet

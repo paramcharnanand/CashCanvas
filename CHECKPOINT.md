@@ -6,7 +6,29 @@ re-deriving context from the repo.
 
 ## Release status
 
-**Phase 8.9 (Settings + Savings) verified and committed this session — closes ADR-007.** Picked up
+**Deployment Verification's long-standing "Homepage returned 302" failure fixed and confirmed
+green this session — a CI/workflow fix, not application code.** Root-caused before touching
+anything: Vercel's GitHub integration never populates `deployment_status`'s
+`target_url`/`environment_url`/`log_url` with the stable custom production domain for this
+project — only the unique per-deployment alias (`cash-canvas-<hash>-param-1210s-projects.vercel.app`),
+which is protected by Vercel's own Deployment Protection/SSO by default, even for
+Production-environment deployments. Confirmed directly via `curl -I` before writing any fix: the
+per-deployment alias 302s to `vercel.com/sso-api` (a `_vercel_sso_nonce` cookie, `x-robots-tag:
+noindex` — genuine Vercel platform behavior), while the real production domain
+(`cash-canvas-sigma.vercel.app`) returned a healthy 200 the whole time. The application was never
+broken — `deploy-verify.yml`'s "Resolve target URL" step was checking the wrong URL. Fixed by
+resolving to the known stable domain when `deployment_status.environment == "Production"`, keeping
+`target_url` for any other environment (an SSO redirect on a real Preview deployment is the
+*correct* response, not a bug to route around). Verified via a real re-run against a real
+`deployment_status` event (`gh run rerun`), not just reasoning about the YAML: all 4 HTTP-level
+checks now pass (`200`/`401`/`401`/`401`). The user then added the previously-missing
+`VERCEL_TOKEN` repository secret (this project's own workflows/agent sessions can't add repo
+secrets themselves); with it, the 5th check — exactly 3 Serverless Functions
+(`api/ai`/`api/auth`/`api/data`) — also passes, confirmed via the real `vercel inspect` output, not
+assumed. **`main` is now green across every GitHub Actions check with no known gaps**: CI, Security,
+and Deployment Verification.
+
+**Phase 8.9 (Settings + Savings) verified and committed in a prior session — closes ADR-007.** Picked up
 mid-flight: a prior pass had already built `SettingsPage`/`SavingsPage`, `features/settings/`,
 `features/savings/`, the `GET/PUT/DELETE /api/savings` route + its 10 Vitest integration tests, and
 the `savings_goals` collection, but left it uncommitted with half the phase's scope still
@@ -540,9 +562,9 @@ explained in the Phase 8.9 completion note; two new spec files, `savings.spec.js
 `settings.spec.js`, 16 new tests, plus 2 new a11y cases). `npm run lint` — 0 errors, **41**
 pre-existing warnings (down from 43 — two dead-code warnings resolved this session, see below).
 `npm run build` — succeeds. GitHub Actions CI on `main` — green as of the last push (confirmed via
-`gh run view`, not assumed); the separate "Deployment Verification" check has been failing since
-2026-07-14 on a per-deployment preview URL requiring Vercel SSO (pre-existing, unrelated to any
-frontend work, tracked below).
+`gh run view`, not assumed). Deployment Verification — also green (see "Release status" above for
+the root-caused 302 fix and the `VERCEL_TOKEN` secret that closed out the function-count check);
+every GitHub Actions check on `main` is green with no known gaps.
 
 Real bugs found and fixed this session, all before commit: an accessibility bug in
 `components/ui/Field.jsx` (its `<label>` had no `htmlFor`/`id` association with its `<input>`,
@@ -576,7 +598,11 @@ other application-code fixes from prior Phase 8 sessions still haven't reached p
 
 ## Current production readiness estimate
 
-**~87%.** Up from ~85%. Phase 8.9's `Field.jsx` accessibility fix (unassociated `<label>`,
+**~89%.** Up from ~87%. `main` is green across every GitHub Actions check for the first time since
+2026-07-14 — Deployment Verification's real, root-caused workflow bug is fixed and its
+`VERCEL_TOKEN` gap is closed, so the deployed Serverless Function count is now actually verified on
+every production deploy rather than silently skipped. Phase 8.9's `Field.jsx` accessibility fix
+(unassociated `<label>`,
 present since Phase 8.3) is a genuine, real improvement for **already-shipped, currently-in-
 production** forms (Login, Signup, Categories' "New Category" dialog, all built on this
 primitive), not just new-feature scope — like Phase 8.5's upload-persistence fix and Phase 8.8's
@@ -585,12 +611,13 @@ genuinely new pages, closing two real, previously-tracked gaps (no Settings/Prof
 at all; savings goals were unsaved client-side state, ADR-007) — both pass a11y scans against the
 same shell-level allowlist every other authenticated page carries. The legacy `Dashboard` component
 now renders only its Overview tab (every other tab has migrated to its own route across Phases
-8.6–8.9), the closest it's been to Phase 10's deletion target. Remaining gaps: the same ones Phase
-7 already named (`VERCEL_TOKEN` secret, branch protection); visual regression not yet running in CI
-(Linux baseline gap, ADR-020); and three real application-code fixes — Phase 8.5's upload-
-persistence fix, Phase 8.8's categorization fix, and this phase's `Field.jsx` a11y fix — still
-haven't reached production (see "Blockers/assumptions" below) — real users remain affected until
-the next deploy.
+8.6–8.9), the closest it's been to Phase 10's deletion target. `main` is green across every GitHub
+Actions check with no known gaps — the `VERCEL_TOKEN`/Deployment Verification gap Phase 7 named is
+now closed (see "Release status" above). Remaining gaps: branch protection recommendations
+unapplied; visual regression not yet running in CI (Linux baseline gap, ADR-020); and three real
+application-code fixes — Phase 8.5's upload-persistence fix, Phase 8.8's categorization fix, and
+Phase 8.9's `Field.jsx` a11y fix — still haven't reached production (see "Blockers/assumptions"
+below) — real users remain affected until the next deploy.
 
 ## Remaining technical debt
 
@@ -614,9 +641,10 @@ Phase 10. Also carried forward: visual regression doesn't run in CI yet (ADR-020
 allowlist in `tests/e2e/a11y.spec.js` is real, current, Phase-8-scoped debt for every page except
 Landing/Analytics/Categories/Merchant Rules/Savings/Settings (ADR-019); `api/auth.js`'s OTP/email-
 verification branches remain untestable without real Gmail SMTP credentials (ADR-021);
-`logoutAllDevices()` has no UI caller; `deploy-verify.yml` needs its `VERCEL_TOKEN` secret; branch
-protection recommendations are unapplied; 41 pre-existing ESLint warnings remain (see "Test suite"
-above).
+`logoutAllDevices()` has no UI caller; branch protection recommendations are unapplied; 41
+pre-existing ESLint warnings remain (see "Test suite" above). Closed this session:
+`deploy-verify.yml`'s `VERCEL_TOKEN` gap and its underlying URL-resolution bug (see "Release status"
+above) — no longer tracked debt.
 
 ## Next recommended step
 
@@ -638,9 +666,8 @@ explicitly rather than widening an allowlist or loosening an assertion to make i
 
 ## Blockers / assumptions
 
-- None blocking Phase 8 itself — the verification gate is green (see "Test suite" above).
-- `deploy-verify.yml`'s function-count check is still unverified by an actual GitHub Actions run
-  — needs `VERCEL_TOKEN` added as a repo secret first. Carried forward, unchanged.
+- None blocking Phase 8 itself — the verification gate is green (see "Test suite" above), and
+  `main` is now green across every GitHub Actions check, including Deployment Verification.
 - `nodemailer` major-version upgrade (Phase 4/5, ADR-013) still hasn't been verified via a live
   send through real Gmail SMTP — the same missing credentials also block real test coverage of
   `api/auth.js`'s OTP/email branches (ADR-021). Carried forward, now doubly relevant.
