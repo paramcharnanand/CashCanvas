@@ -1,6 +1,6 @@
 import { injectAxe, getViolations } from "axe-playwright";
 import { test, expect, seedTransactions } from "./fixtures/index.mjs";
-import { UploadPage } from "./pages/UploadPage.mjs";
+import { DashboardPage } from "./pages/DashboardPage.mjs";
 
 /**
  * Accessibility scans via axe-core (Deque's engine, driven through
@@ -65,13 +65,20 @@ test.describe("accessibility", () => {
     await checkA11yAgainstBaseline(page, ["color-contrast", "landmark-one-main", "page-has-heading-one", "region"]);
   });
 
-  test("authenticated upload screen has no unexpected a11y violations", async ({ authenticatedPage: page }) => {
-    await checkA11yAgainstBaseline(page, ["color-contrast"]);
+  test("dashboard, empty state, has no unexpected a11y violations", async ({ authenticatedPage: page }) => {
+    // Before Phase 10, this scanned the legacy UploadScreen gate, which had
+    // its own real <header>/<main>-shaped wrapper and so ran with a
+    // narrower allowlist than every other authenticated page. DashboardPage
+    // is a normal page like the rest now (no special-cased markup), so it
+    // carries the same shell-level landmark debt every other authenticated
+    // page's allowlist already tracks (ADR-019) — not a new regression.
+    await checkA11yAgainstBaseline(page, ["color-contrast", "landmark-one-main", "region"]);
   });
 
   test("dashboard (with data loaded) has no unexpected a11y violations", async ({ authenticatedPage: page }) => {
-    await new UploadPage(page).loadSampleData();
-    await expect(page.getByRole("button", { name: "Overview" })).toBeVisible();
+    const dashboardPage = new DashboardPage(page);
+    await dashboardPage.loadSampleData();
+    await expect(dashboardPage.welcomeHeading).toBeVisible();
     // As of Phase 8.7, the Recharts donut/bar/line block that used to live
     // here moved to its own /analytics route (see below) — the two
     // chart-specific findings this baseline used to carry (svg-img-alt,
@@ -102,10 +109,26 @@ test.describe("accessibility", () => {
     await checkA11yAgainstBaseline(page, ["color-contrast", "landmark-one-main", "region"]);
   });
 
+  test("analytics page, empty state, has no unexpected a11y violations", async ({ authenticatedPage: page }) => {
+    // Never scanned in its true empty state before Phase 10 — every other
+    // a11y case here seeds data first. This is what caught a real,
+    // page-has-heading-one violation (the empty-state early return skipped
+    // the page's own <h1>) — see EmptyState.jsx's headingLevel prop.
+    await page.goto("/analytics");
+    await expect(page.getByRole("heading", { name: "No data to analyze yet" })).toBeVisible();
+    await checkA11yAgainstBaseline(page, ["color-contrast", "landmark-one-main", "region"]);
+  });
+
   test("categories page has no unexpected a11y violations", async ({ authenticatedPage: page }) => {
     await seedTransactions(page);
     await page.goto("/categories");
     await expect(page.getByRole("heading", { name: "Categories" })).toBeVisible();
+    await checkA11yAgainstBaseline(page, ["color-contrast", "landmark-one-main", "region"]);
+  });
+
+  test("categories page, empty state, has no unexpected a11y violations", async ({ authenticatedPage: page }) => {
+    await page.goto("/categories");
+    await expect(page.getByRole("heading", { name: "No data to categorize yet" })).toBeVisible();
     await checkA11yAgainstBaseline(page, ["color-contrast", "landmark-one-main", "region"]);
   });
 
@@ -122,9 +145,58 @@ test.describe("accessibility", () => {
     await checkA11yAgainstBaseline(page, ["color-contrast", "landmark-one-main", "region"]);
   });
 
+  test("savings page, empty state, has no unexpected a11y violations", async ({ authenticatedPage: page }) => {
+    await page.goto("/savings");
+    await expect(page.getByRole("heading", { name: "No data to plan against yet" })).toBeVisible();
+    await checkA11yAgainstBaseline(page, ["color-contrast", "landmark-one-main", "region"]);
+  });
+
   test("settings page has no unexpected a11y violations", async ({ authenticatedPage: page }) => {
     await page.goto("/settings");
     await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
     await checkA11yAgainstBaseline(page, ["color-contrast", "landmark-one-main", "region"]);
   });
+
+  test("transactions page has no unexpected a11y violations", async ({ authenticatedPage: page }) => {
+    await seedTransactions(page);
+    await page.goto("/transactions");
+    await expect(page.getByRole("heading", { name: "Transactions" })).toBeVisible();
+    await checkA11yAgainstBaseline(page, ["color-contrast", "landmark-one-main", "region"]);
+  });
+
+  test("transactions page, empty state, has no unexpected a11y violations", async ({ authenticatedPage: page }) => {
+    await page.goto("/transactions");
+    await expect(page.getByRole("heading", { name: "No transactions yet" })).toBeVisible();
+    await checkA11yAgainstBaseline(page, ["color-contrast", "landmark-one-main", "region"]);
+  });
+
+  test("upload page has no unexpected a11y violations", async ({ authenticatedPage: page }) => {
+    await page.goto("/upload");
+    await expect(page.getByRole("heading", { name: "Upload a statement" })).toBeVisible();
+    await checkA11yAgainstBaseline(page, ["color-contrast", "landmark-one-main", "region"]);
+  });
+
+  test("forgot-password screen has no unexpected a11y violations", async ({ page }) => {
+    await page.goto("/forgot-password");
+    await expect(page.getByRole("button", { name: "Send reset link" })).toBeVisible();
+    await checkA11yAgainstBaseline(page, ["color-contrast", "landmark-one-main", "page-has-heading-one", "region"]);
+  });
+
+  test("reset-password screen has no unexpected a11y violations", async ({ page }) => {
+    await page.goto("/reset-password?token=some-test-token");
+    await expect(page.getByRole("heading", { name: "Set new password" })).toBeVisible();
+    await checkA11yAgainstBaseline(page, ["color-contrast", "landmark-one-main", "page-has-heading-one", "region"]);
+  });
+
+  test("404 page has no unexpected a11y violations", async ({ page }) => {
+    await page.goto("/this-route-does-not-exist");
+    await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
+    // NotFoundPage renders standalone (outside AppShell, no Header/Sidebar
+    // landmarks to lean on) with a plain <div> wrapper — the same
+    // landmark-one-main/region shell-level gap every other page in the app
+    // carries (ADR-019), not something unique to this one. Never scanned
+    // before Phase 10's full route re-scan.
+    await checkA11yAgainstBaseline(page, ["landmark-one-main", "region"]);
+  });
+
 });

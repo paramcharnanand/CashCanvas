@@ -1,0 +1,55 @@
+name: Generate Visual Baselines
+
+# Manual-only (workflow_dispatch) — this generates Linux-native visual
+# regression snapshots so ci.yml's own Playwright run can stop excluding
+# tests/e2e/visual.spec.js (see ADR-020 in ROADMAP.md: the committed
+# baselines were generated on macOS and would fail every comparison on
+# Linux's different font/anti-aliasing rendering, not a real regression).
+# Deliberately does NOT commit back to the repo itself — a self-committing
+# workflow is a real footgun (accidental loops, unreviewed pixel diffs
+# landing on main unattended). Instead it uploads the generated PNGs as a
+# downloadable artifact; a human downloads them, reviews the diff against
+# the current macOS baselines, and commits deliberately. Re-run this
+# whenever the screens it covers (sign-in, create-account, landing,
+# authenticated app shell before data loads) change enough to need new
+# baselines.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    name: Generate Linux visual baselines
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.x"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      # --update-snapshots writes new baseline PNGs instead of failing on
+      # mismatch — that's the entire point of this run. chromium only,
+      # matching visual.spec.js's own deliberate single-engine scope (see
+      # its header comment: cross-engine font rendering would be constant
+      # false positives, not the point of this suite).
+      - name: Generate snapshots
+        run: npx playwright test tests/e2e/visual.spec.js --project=chromium --update-snapshots
+
+      - name: Upload Linux baselines
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-visual-baselines
+          path: tests/e2e/visual.spec.js-snapshots/*-linux.png
+          retention-days: 14

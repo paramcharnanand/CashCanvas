@@ -1,19 +1,12 @@
 import { StatCard } from "../../../components/ui/StatCard.jsx";
 
 /**
- * Mounted inside the legacy `Dashboard`'s Overview tab (src/App.jsx) — see
- * docs/frontend/phase-8-component-architecture.md's mapping table,
- * "Dashboard's Overview stats/lists (1721–1743, 1832–1926)". Restyled onto
- * `StatCard`/design tokens; the charts row between the stats and
- * `RecentActivity` (1744–1831, the Recharts donut/bar) stays exactly where
- * it is in `Dashboard` — Analytics is its own later phase (8.7), not
- * touched here.
- *
- * Kept as a prop-driven, presentation-only component (all figures already
- * computed by `Dashboard`, e.g. `totalIncome`/`catBreakdown`) rather than
- * recomputing anything, per this session's Phase 8.4 decision to re-host
- * the existing tab bar/Categories/Savings/Transactions behavior unchanged
- * and migrate only the Overview content itself.
+ * Mounted directly on `pages/DashboardPage.jsx` as of Phase 10 (final
+ * cleanup) — originally built Phase 8.4 inside the legacy `Dashboard`'s
+ * Overview tab (`App.jsx`, deleted this phase), unchanged since:
+ * a prop-driven, presentation-only component (all figures computed by
+ * `features/dashboard/hooks/useDashboardData.js`) rather than recomputing
+ * anything itself.
  */
 export function OverviewHeader({
   userName,

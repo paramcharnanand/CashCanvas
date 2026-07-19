@@ -33,6 +33,7 @@ export default function CategoriesPage() {
       <div style={{ maxWidth: 720, margin: "0 auto", padding: "var(--space-8) var(--space-6)" }}>
         <EmptyState
           icon={Tag}
+          headingLevel="h1"
           headline="No data to categorize yet"
           body="Upload a statement to start organizing your spending by category."
           action={

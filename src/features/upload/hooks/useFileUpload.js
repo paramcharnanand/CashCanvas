@@ -1,17 +1,13 @@
 import { useCallback, useState } from "react";
 import * as Papa from "papaparse";
-import { detectColumns, parseAmount, parseDate, parsePDF } from "../../../App.jsx";
+import { detectColumns, parseAmount, parseDate } from "../../../utils/csv.js";
+import { parsePDF } from "../../../utils/pdf.js";
 
 /**
- * CSV/PDF parsing + drag state for the new `/upload` route (see
- * `pages/UploadPage.jsx`). Parsing logic itself (`detectColumns`/
- * `parseAmount`/`parseDate`/`parsePDF`) is ported unchanged from the legacy
- * `UploadScreen` (`App.jsx`) via named exports, not duplicated — the full
- * `utils/csv.js`/`utils/pdf/*` extraction the target architecture describes
- * is explicitly Phase 10 (final cleanup) scope, not this phase's; exporting
- * the existing functions is the lower-risk move for now (mechanical, zero
- * logic change) versus relocating ~450 lines of intricate PDF-parsing
- * heuristics a phase early.
+ * CSV/PDF parsing + drag state for the `/upload` route (see
+ * `pages/UploadPage.jsx`). Parsing logic itself now lives in `utils/csv.js`/
+ * `utils/pdf.js` (Phase 10 final cleanup's extraction out of the legacy
+ * `App.jsx`), imported here rather than duplicated.
  *
  * `onData(transactions, fileName, statementType)` is called once parsing
  * succeeds — `UploadPage.jsx` owns what happens next (POST to `/api/files`,

@@ -20,6 +20,13 @@ import { useEffect, useRef, useState } from "react";
  * the original — its own "Reset password" button validates the code
  * together with both password fields — so it only needs the running
  * value (`onChange`, fires on every keystroke, complete or not).
+ *
+ * Each digit box carries its own `aria-label` ("Verification code digit N
+ * of 6") — a real, critical-impact a11y gap (axe's `label` rule: no
+ * accessible name at all) found in Phase 10's full a11y re-scan of every
+ * route, the first time `/reset-password` was ever actually scanned. Fixed
+ * here rather than allowlisted since critical-impact violations are this
+ * suite's hard gate, not something a per-page allowlist can accept.
  */
 export function OtpInput({ onChange, onComplete, error = false, disabled = false }) {
   const [digits, setDigits] = useState(["", "", "", "", "", ""]);
@@ -82,6 +89,7 @@ export function OtpInput({ onChange, onComplete, error = false, disabled = false
           maxLength={1}
           value={d}
           disabled={disabled}
+          aria-label={`Verification code digit ${i + 1} of 6`}
           onChange={(e) => handleChange(i, e.target.value)}
           onKeyDown={(e) => handleKeyDown(i, e)}
           onPaste={i === 0 ? handlePaste : undefined}

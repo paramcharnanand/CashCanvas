@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 import { test, expect, uniqueEmail } from "./fixtures/index.mjs";
 import { AuthPage } from "./pages/AuthPage.mjs";
-import { UploadPage } from "./pages/UploadPage.mjs";
+import { DashboardPage } from "./pages/DashboardPage.mjs";
 import { SettingsPage } from "./pages/SettingsPage.mjs";
 
 // Matches tests/e2e/e2e-server.mjs's hardcoded test secret exactly — this
@@ -130,21 +130,22 @@ test.describe("browser closed and reopened", () => {
 
 test.describe("network interruption", () => {
   test("actions taken while offline fail gracefully (no unhandled rejection), and the app recovers once connectivity returns", async ({ authenticatedPage: page, context }) => {
-    // Regression test for a real bug this test found: App.jsx's mount-time
-    // session check (`fetchCurrentUser().then(...).finally(...)`) had no
-    // .catch() — every other apiFetch call site in App.jsx does. Going
-    // offline and triggering app activity surfaced an unhandled promise
-    // rejection; fixed in App.jsx's initial `useEffect`.
+    // Regression test for a real bug this test found: AuthContext.jsx's
+    // mount-time session check (`fetchCurrentUser().then(...).finally(...)`)
+    // had no .catch() — every other apiFetch call site does. Going offline
+    // and triggering app activity surfaced an unhandled promise rejection;
+    // fixed in AuthContext's initial `useEffect`.
     const pageErrors = [];
     page.on("pageerror", (err) => pageErrors.push(err));
 
     await context.setOffline(true);
-    // "Try with sample data" transitions to the Dashboard, which fires
-    // several of its own mount-time API calls (merchant-rules, categories,
-    // auto-categorize) — exercising the app's error handling broadly while
-    // offline, not just one call site.
-    await new UploadPage(page).loadSampleData();
-    await expect(page.getByRole("button", { name: "Overview" })).toBeVisible();
+    // "Try with sample data" renders through useDashboardData.js's normal
+    // pipeline, which fires several of its own mount-time API calls
+    // (merchant-rules, categories, auto-categorize) — exercising the app's
+    // error handling broadly while offline, not just one call site.
+    const dashboardPage = new DashboardPage(page);
+    await dashboardPage.loadSampleData();
+    await expect(dashboardPage.welcomeHeading).toBeVisible();
 
     expect(pageErrors.map((e) => e.message), "no unhandled rejection while offline").toEqual([]);
 

@@ -7,6 +7,7 @@ import { Button } from "../components/ui/Button.jsx";
 import { useDebounce } from "../hooks/useDebounce.js";
 import { useTransactionsData } from "../features/transactions/hooks/useTransactionsData.js";
 import { TransactionsToolbar } from "../features/transactions/components/TransactionsToolbar.jsx";
+import { ReassignDialog } from "../features/transactions/components/ReassignDialog.jsx";
 
 const fmt = (v) => "$" + Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -17,17 +18,13 @@ const fmt = (v) => "$" + Math.abs(v).toLocaleString(undefined, { minimumFraction
  * Search/filter/sort state lives entirely in the URL (`useSearchParams`),
  * satisfying that phase's "sort persists across a page refresh" goal.
  *
- * Deliberately read-only (no reassign-category action) — the migration
- * plan's own Phase 6 scope is "Table primitive, search, category/date-range
- * filters, sort," not a reassignment rebuild; the existing reassign flow
- * stays on the legacy `Dashboard`, unchanged (its own "Expected test
- * changes" note confirms this explicitly). Avoids a real state-consistency
- * risk a rebuild would introduce: `Dashboard`'s per-transaction
- * `txnOverrides` are local component state, never persisted server-side
- * (only the merchant-name rule a reassignment *learns* is) — duplicating
- * that state here would let a reassignment diverge between the two pages
- * until a shared merchant rule resynced them. Out of this phase's scope to
- * fix; tracked in ROADMAP.md.
+ * Row selection + bulk "Reassign Category" (Phase 10 final cleanup) ports
+ * the legacy `Dashboard`'s hidden "Transactions" tab — deliberately kept
+ * off this page through Phase 8.6 to avoid a second, independent
+ * `txnOverrides` drifting from the legacy one before a shared merchant
+ * rule resynced them. That risk is moot now that the legacy component is
+ * deleted outright; see `useTransactionsData.js`'s docblock and
+ * ROADMAP.md's Phase 10 completion note.
  *
  * Filtering/sorting is client-side, not a `GET /api/files` query-param
  * round trip, despite the migration plan's "backend note" suggesting one:
@@ -40,8 +37,10 @@ const fmt = (v) => "$" + Math.abs(v).toLocaleString(undefined, { minimumFraction
  * per file."
  */
 export default function TransactionsPage() {
-  const { transactions, loading } = useTransactionsData();
+  const { transactions, loading, allCategories, reassign, createCategory } = useTransactionsData();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [reassignOpen, setReassignOpen] = useState(false);
 
   const [searchInput, setSearchInput] = useState(searchParams.get("q") || "");
   const debouncedSearch = useDebounce(searchInput, 250);
@@ -107,6 +106,35 @@ export default function TransactionsPage() {
     setSearchParams({});
   };
 
+  const toggleSelected = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every((t) => selectedIds.has(t.id));
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      if (allFilteredSelected) {
+        const next = new Set(prev);
+        filtered.forEach((t) => next.delete(t.id));
+        return next;
+      }
+      return new Set([...prev, ...filtered.map((t) => t.id)]);
+    });
+  };
+
+  const handleReassign = (categoryName) => {
+    reassign(Array.from(selectedIds), categoryName);
+    setSelectedIds(new Set());
+  };
+
+  const handleCreateAndReassign = (name) => {
+    createCategory(name).finally(() => handleReassign(name));
+  };
+
   if (loading) return null;
 
   if (transactions.length === 0) {
@@ -114,6 +142,7 @@ export default function TransactionsPage() {
       <div style={{ maxWidth: 720, margin: "0 auto", padding: "var(--space-8) var(--space-6)" }}>
         <EmptyState
           icon={Receipt}
+          headingLevel="h1"
           headline="No transactions yet"
           body="Upload a statement to see your transactions here."
           action={
@@ -154,9 +183,60 @@ export default function TransactionsPage() {
         hasActiveFilters={hasActiveFilters}
       />
 
+      {selectedIds.size > 0 && (
+        <div
+          style={{
+            display: "flex", alignItems: "center", gap: "var(--space-3)",
+            padding: "var(--space-3) var(--space-4)", marginBottom: "var(--space-3)",
+            background: "var(--positive-soft)", borderRadius: "var(--radius-sm)",
+            border: "1px solid var(--positive)",
+          }}
+        >
+          <span style={{ font: "var(--text-body-sm)", fontWeight: 600, color: "var(--primary)" }}>
+            {selectedIds.size} selected
+          </span>
+          <Button variant="primary" size="sm" onClick={() => setReassignOpen(true)}>
+            Reassign Category
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => setSelectedIds(new Set())}>
+            Clear
+          </Button>
+        </div>
+      )}
+
       <Table
         emptyMessage="No transactions match your filters."
         columns={[
+          {
+            key: "select",
+            label: (
+              <input
+                type="checkbox"
+                checked={allFilteredSelected}
+                onChange={toggleSelectAll}
+                aria-label="Select all visible transactions"
+                style={{ cursor: "pointer", accentColor: "var(--primary)" }}
+              />
+            ),
+            render: (t) => (
+              <input
+                type="checkbox"
+                checked={selectedIds.has(t.id)}
+                onChange={() => toggleSelected(t.id)}
+                // Deliberately not `Select transaction: ${t.desc}` — that
+                // embeds the description as a literal substring, which
+                // collides with every getByRole("cell", { name: desc })
+                // assertion elsewhere in this suite (Playwright's default
+                // substring matching means the checkbox cell itself would
+                // also match). A generic per-row label is standard practice
+                // for table row-selection checkboxes; a screen-reader user
+                // navigating the table already gets row context from the
+                // adjacent cells' own content.
+                aria-label="Select transaction"
+                style={{ cursor: "pointer", accentColor: "var(--primary)" }}
+              />
+            ),
+          },
           { key: "date", label: "Date", render: (t) => t.date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) },
           { key: "desc", label: "Description", wrap: true },
           { key: "category", label: "Category" },
@@ -170,6 +250,15 @@ export default function TransactionsPage() {
           },
         ]}
         rows={filtered}
+      />
+
+      <ReassignDialog
+        open={reassignOpen}
+        onClose={() => setReassignOpen(false)}
+        selectedCount={selectedIds.size}
+        categories={allCategories}
+        onReassign={handleReassign}
+        onCreateAndReassign={handleCreateAndReassign}
       />
     </div>
   );

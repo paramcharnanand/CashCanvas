@@ -33,6 +33,7 @@ export default function SavingsPage() {
       <div style={{ maxWidth: 720, margin: "0 auto", padding: "var(--space-8) var(--space-6)" }}>
         <EmptyState
           icon={Target}
+          headingLevel="h1"
           headline="No data to plan against yet"
           body="Upload a statement so savings suggestions can be based on your real spending."
           action={

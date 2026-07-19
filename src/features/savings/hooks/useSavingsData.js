@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import _ from "lodash";
 import { apiFetch } from "../../../api.js";
-import { categorize } from "../../../App.jsx";
+import { categorize } from "../../../utils/categorization.js";
 
 const emptyGoal = { name: "", amount: "", deadline: "" };
 

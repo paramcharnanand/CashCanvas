@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cleanDesc, categorize } from "../src/App.jsx";
+import { cleanDesc, categorize } from "../src/utils/categorization.js";
 
 // Found while building Phase 8.8 (Categories, src/features/categories/):
 // cleanDesc's "remove long codes" step stripped *any* bare 9+ character

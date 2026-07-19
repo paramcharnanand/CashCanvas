@@ -3,12 +3,10 @@ import { Card } from "../../../components/ui/Card.jsx";
 import { EmptyState } from "../../../components/ui/EmptyState.jsx";
 
 /**
- * Mounted inside the legacy `Dashboard`'s Overview tab (src/App.jsx),
- * directly below the charts row — see docs/frontend/
- * phase-8-component-architecture.md's mapping table, "Dashboard's Overview
- * stats/lists (1721–1743, 1832–1926)". Restyled onto `Card`/`EmptyState`/
- * design tokens; same two-panel (Recurring Payments, Recent Transactions)
- * layout and data as the original.
+ * Mounted directly on `pages/DashboardPage.jsx` as of Phase 10 (final
+ * cleanup) — originally built Phase 8.4 inside the legacy `Dashboard`'s
+ * Overview tab (`App.jsx`, deleted this phase). Same two-panel (Recurring
+ * Payments, Recent Transactions) layout and data as the original.
  */
 function RecurringRow({ desc, avg, category, isFixed, fmt }) {
   return (

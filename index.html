@@ -8,28 +8,15 @@
     <title>CashCanvas</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <!--
-      Newsreader/Manrope/Inter are self-hosted now (src/styles/globals.css,
-      src/assets/fonts/) — one fewer external runtime dependency, see
-      docs/frontend/phase-8-design-system.md § Iconography for the same
-      reasoning applied to icons.
-
-      Material Symbols Outlined stays on the CDN for now: the not-yet-migrated
-      screens (old Dashboard/UploadScreen/AuthScreen, replaced in their own
-      Phase 8.x, not this one) still use it throughout. Removing it before
-      those screens are rewritten would blank out every icon they render —
-      a real regression, not a cleanup. Dropped once Phase 8.8 finishes and
-      no old screen references it anymore.
+      Newsreader/Manrope/Inter are self-hosted (src/styles/globals.css,
+      src/assets/fonts/) — one fewer external runtime dependency. Material
+      Symbols Outlined (Google Fonts CDN) was the last remaining external
+      font dependency, kept only for the legacy Dashboard/UploadScreen/
+      AuthScreen icons — removed in Phase 10 (final cleanup) once those
+      screens (App.jsx, deleted this phase) had no remaining consumer; every
+      current screen uses lucide-react (bundled, not CDN) instead. See
+      docs/frontend/phase-8-design-system.md § Iconography.
     -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
-    <style>
-      .material-symbols-outlined {
-        font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
-        user-select: none;
-        vertical-align: middle;
-      }
-    </style>
   </head>
   <body>
     <div id="root"></div>

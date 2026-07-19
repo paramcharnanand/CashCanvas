@@ -19,7 +19,7 @@ describe("preprocessForAI — abbreviation expansion", () => {
 // word is wiped while other words in the same description survive (a
 // silent, partial mis-clean rather than a visible failure). The identical
 // bug and identical fix (require a digit in the stripped token) were found
-// in src/App.jsx's cleanDesc, src/App.jsx's own frontend copy of this logic.
+// in src/utils/categorization.js's cleanDesc, the frontend's own copy of this logic.
 describe("cleanTransaction — long-code stripping doesn't eat plain merchant names", () => {
   it("keeps a bare 9+ letter merchant name intact", () => {
     expect(cleanTransaction("STARBUCKS")).toBe("starbucks");

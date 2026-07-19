@@ -1,5 +1,5 @@
 import { test, expect } from "./fixtures/index.mjs";
-import { UploadPage } from "./pages/UploadPage.mjs";
+import { DashboardPage } from "./pages/DashboardPage.mjs";
 
 /**
  * Performance smoke tests — see docs/engineering-lessons/phase-6-testing.md's
@@ -24,8 +24,9 @@ test.describe("performance smoke tests", () => {
 
   test("dashboard loads within a reasonable time", async ({ authenticatedPage: page }) => {
     const start = Date.now();
-    await new UploadPage(page).loadSampleData();
-    await page.getByRole("button", { name: "Overview" }).waitFor({ state: "visible" });
+    const dashboardPage = new DashboardPage(page);
+    await dashboardPage.loadSampleData();
+    await dashboardPage.welcomeHeading.waitFor({ state: "visible" });
     const elapsedMs = Date.now() - start;
 
     expect(elapsedMs, `dashboard took ${elapsedMs}ms to render after loading sample data`).toBeLessThan(5000);

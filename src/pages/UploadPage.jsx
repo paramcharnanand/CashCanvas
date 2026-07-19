@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../api.js";
-import { toDateOnlyString } from "../App.jsx";
+import { toDateOnlyString } from "../utils/csv.js";
 import { DropZone } from "../features/upload/components/DropZone.jsx";
 import { PreviousUploads } from "../features/upload/components/PreviousUploads.jsx";
 import { useFileUpload } from "../features/upload/hooks/useFileUpload.js";
@@ -45,7 +45,7 @@ export default function UploadPage() {
           statementType,
           // toDateOnlyString: the backend requires a bare YYYY-MM-DD, no
           // time component (api/_lib/validation.js's DATE_RE) — see
-          // App.jsx's toDateOnlyString docblock and ROADMAP.md's ADR-026.
+          // utils/csv.js's toDateOnlyString docblock and ROADMAP.md's ADR-026.
           transactions: txns.map((t) => ({ ...t, date: t.date instanceof Date ? toDateOnlyString(t.date) : t.date })),
         }),
       });

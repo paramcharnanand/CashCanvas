@@ -1,6 +1,5 @@
 import { test, expect, FILES } from "./fixtures/index.mjs";
 import { AuthPage } from "./pages/AuthPage.mjs";
-import { UploadPage } from "./pages/UploadPage.mjs";
 import { SettingsPage } from "./pages/SettingsPage.mjs";
 
 function cookieByName(cookies, name) {
@@ -173,13 +172,14 @@ test.describe("CSRF protection", () => {
     const csrfCookie = (await page.context().cookies()).find((c) => c.name === "cc_csrf");
     expect(csrfCookie).toBeTruthy();
 
-    // "Try with sample data" is deliberately local-only (App.jsx's
-    // handleData skips the server save when fileName === "sample_data.csv",
-    // so it never sends a request to assert against) — a real file upload
-    // is what actually exercises the mutating POST /api/files path.
+    // "Try with sample data" is deliberately local-only (useDashboardData.js's
+    // loadSampleData never sends a request to assert against) — a real file
+    // upload via /upload is what actually exercises the mutating
+    // POST /api/files path.
+    await page.goto("/upload");
     const [request] = await Promise.all([
       page.waitForRequest((r) => r.url().includes("/api/files") && r.method() === "POST"),
-      new UploadPage(page).uploadFile(FILES.sampleCsv),
+      page.locator('input[type="file"]').setInputFiles(FILES.sampleCsv),
     ]);
     expect(request.headers()["x-csrf-token"]).toBe(csrfCookie.value);
   });

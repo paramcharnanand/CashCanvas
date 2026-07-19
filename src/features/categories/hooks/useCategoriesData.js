@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import _ from "lodash";
 import { apiFetch } from "../../../api.js";
-import { categorize, cleanDesc, DEFAULT_CATEGORIES } from "../../../App.jsx";
+import { categorize, cleanDesc, DEFAULT_CATEGORIES } from "../../../utils/categorization.js";
 
 /**
  * Fetches the most recent uploaded statement + merchant rules/custom

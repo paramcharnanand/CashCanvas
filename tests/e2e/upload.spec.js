@@ -1,17 +1,18 @@
 import { test, expect, FILES } from "./fixtures/index.mjs";
-import { UploadPage } from "./pages/UploadPage.mjs";
 
 /**
- * Covers the new `/upload` route (Phase 8.5, `src/pages/UploadPage.jsx`) —
- * a normal, always-reachable route per `docs/frontend/
- * phase-8-component-architecture.md`'s routing architecture, additive to
- * (not a replacement of) the legacy gate `UploadScreen` still tests via
- * `UploadPage.mjs`/`homepage.spec.js`. The one real behavior change this
- * phase makes (not just a restyle) is a keyboard-operable drop zone — a
- * real `<button>` instead of the legacy gate's `<div onClick>` — verified
- * below via an actual Tab + Enter interaction, not just `setInputFiles`
- * (which bypasses focus/keyboard activation entirely and would prove
- * nothing about this specific fix).
+ * Covers the `/upload` route (`src/pages/UploadPage.jsx`) — a normal,
+ * always-reachable route per `docs/frontend/
+ * phase-8-component-architecture.md`'s routing architecture. As of Phase 10
+ * (final cleanup) this is the only upload path — the legacy gate
+ * (`App.jsx`'s `UploadScreen`) it used to be additive to is deleted.
+ * `DashboardPage`'s own empty state links here rather than offering its own
+ * drop zone. The one real behavior change Phase 8.5 made (not just a
+ * restyle) is a keyboard-operable drop zone — a real `<button>` instead of
+ * the legacy gate's `<div onClick>` — verified below via an actual Tab +
+ * Enter interaction, not just `setInputFiles` (which bypasses focus/
+ * keyboard activation entirely and would prove nothing about this specific
+ * fix).
  */
 test.describe("upload page", () => {
   test("requires authentication — an unauthenticated visitor is redirected to sign in", async ({ page }) => {
@@ -38,16 +39,36 @@ test.describe("upload page", () => {
     await chooser.setFiles(FILES.sampleCsv);
 
     await expect(page).toHaveURL(/\/dashboard$/);
-    await expect(page.getByRole("button", { name: "Overview" })).toBeVisible();
+    await expect(page.getByText("Welcome back")).toBeVisible();
   });
 
-  test("uploading a real statement saves it and lands on the dashboard with that data", async ({ authenticatedPage: page }) => {
+  // Regression test for ROADMAP.md's ADR-026: real (non-sample) uploads used
+  // to send Date.toISOString()'s full datetime string to POST /api/files,
+  // which api/_lib/validation.js's DATE_RE (bare YYYY-MM-DD, no time
+  // component) always rejected — silently, since the save's error response
+  // was never checked. The upload rendered correctly for the rest of that
+  // session (client-side state doesn't depend on the save) but was never
+  // actually persisted — reloading lost it. Reload is the deliberate proof
+  // here — it's the only way to distinguish "rendered from local state"
+  // from "actually saved." Originally covered by a separate "legacy upload
+  // gate" test (App.jsx's UploadScreen/LegacyWorkspace) — folded into this
+  // test once that gate was deleted in Phase 10 (final cleanup), since
+  // /upload is now the only upload path and this is exactly what it should
+  // prove too.
+  test("uploading a real statement actually persists it — surviving a reload proves the save succeeded, not just client-side rendering", async ({ authenticatedPage: page }) => {
     await page.goto("/upload");
     await page.locator('input[type="file"]').setInputFiles(FILES.sampleCsv);
 
     await expect(page).toHaveURL(/\/dashboard$/);
     await expect(page.getByText("Welcome back")).toBeVisible();
     await expect(page.getByText("10 transactions")).toBeVisible();
+
+    await page.reload();
+    // Had the save silently failed, auto-restore would find nothing on the
+    // server and DashboardPage would fall back to its empty state instead.
+    await expect(page.getByText("Welcome back")).toBeVisible();
+    await expect(page.getByText("10 transactions")).toBeVisible();
+    await expect(page.getByRole("button", { name: /try with sample data/i })).not.toBeVisible();
   });
 
   test("an empty/invalid CSV shows an inline error and does not navigate away", async ({ authenticatedPage: page }) => {
@@ -64,34 +85,10 @@ test.describe("upload page", () => {
 
   test("Upload is a real, always-visible nav destination, not gated behind an empty dashboard", async ({ authenticatedPage: page }) => {
     await page.goto("/dashboard");
-    await page.getByRole("link", { name: "Upload" }).click();
+    // exact: true — the empty dashboard's own "Upload a statement" CTA link
+    // also matches "Upload" as a substring; this test means the sidebar's
+    // nav link specifically.
+    await page.getByRole("link", { name: "Upload", exact: true }).click();
     await expect(page).toHaveURL(/\/upload$/);
-  });
-});
-
-test.describe("legacy upload gate — real upload persistence", () => {
-  // Regression test for ROADMAP.md's ADR-026: real (non-sample) uploads via
-  // the legacy gate (App.jsx's UploadScreen/LegacyWorkspace) sent
-  // Date.toISOString()'s full datetime string to POST /api/files, which
-  // api/_lib/validation.js's DATE_RE (bare YYYY-MM-DD, no time component)
-  // always rejected — silently, since handleData's .catch(() => {}) never
-  // checked the response. The upload rendered correctly for the rest of
-  // that session (setTransactions(txns) already happened client-side,
-  // independent of the save) but was never actually persisted — reloading
-  // or logging back in lost it. Nothing in the suite caught this before:
-  // the one existing test that drives a real upload (auth.spec.js's CSRF
-  // test) only asserts the request fired with the right header, never that
-  // it succeeded. Reload is the deliberate proof here — it's the only way
-  // to distinguish "rendered from local state" from "actually saved."
-  test("uploading a real statement actually persists it — surviving a reload proves the save succeeded, not just client-side rendering", async ({ authenticatedPage: page }) => {
-    await new UploadPage(page).uploadFile(FILES.sampleCsv);
-    await expect(page.getByRole("button", { name: "Overview" })).toBeVisible();
-
-    await page.reload();
-    // Had the save silently failed, auto-restore would find nothing on the
-    // server and LegacyWorkspace would fall back to the empty-data upload
-    // gate instead of Dashboard.
-    await expect(page.getByRole("button", { name: "Overview" })).toBeVisible();
-    await expect(page.getByRole("button", { name: /try with sample data/i })).not.toBeVisible();
   });
 });

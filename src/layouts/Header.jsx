@@ -23,18 +23,13 @@ export function Header({ onOpenPalette, showBrand = false }) {
   const ThemeIcon = THEME_ICON[preference];
 
   return (
-    // Not a real <header> (role=banner): the not-yet-migrated UploadScreen
-    // and Dashboard (rendered inside this shell's <Outlet>, see AppShell.jsx)
-    // already render their own unconditional <header>, and axe's
-    // landmark-no-duplicate-banner rule allows at most one banner landmark
-    // per page regardless of naming — a second one always fails, unlike
-    // <nav>, where a unique aria-label is enough. role="region" is a
-    // landmark that permits multiple uniquely-named instances, so it
-    // contains this bar's content (fixing axe's "region" rule) without
-    // colliding with the legacy banner. Reconsider once those pages migrate
-    // and their own <header> goes away.
-    <div
-      role="region"
+    // A real <header> (implicit role=banner) as of Phase 10 (final
+    // cleanup): the legacy UploadScreen/Dashboard that used to render their
+    // own competing <header> inside this shell's <Outlet> are deleted
+    // (App.jsx), so axe's landmark-no-duplicate-banner rule no longer has
+    // anything to collide with. Closes the region/role="region" workaround
+    // ADR-022 flagged as temporary from Phase 8.1.
+    <header
       aria-label="Application header"
       style={{
         display: "flex",
@@ -114,6 +109,6 @@ export function Header({ onOpenPalette, showBrand = false }) {
       >
         <ThemeIcon size={16} strokeWidth={1.75} />
       </button>
-    </div>
+    </header>
   );
 }

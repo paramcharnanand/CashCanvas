@@ -29,6 +29,7 @@ export default function AnalyticsPage() {
       <div style={{ maxWidth: 720, margin: "0 auto", padding: "var(--space-8) var(--space-6)" }}>
         <EmptyState
           icon={BarChart3}
+          headingLevel="h1"
           headline="No data to analyze yet"
           body="Upload a statement to see spending trends and cash flow here."
           action={

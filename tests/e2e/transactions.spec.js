@@ -52,7 +52,10 @@ test.describe("transactions page", () => {
     await page.goto("/transactions");
 
     const groceryRow = page.getByRole("row", { name: /WHOLE FOODS MARKET/i });
-    const category = await groceryRow.getByRole("cell").nth(2).innerText();
+    // nth(3): select(0)/date(1)/desc(2)/category(3)/amount(4) — the
+    // row-selection checkbox column (Phase 10 final cleanup) shifted every
+    // column index by one.
+    const category = await groceryRow.getByRole("cell").nth(3).innerText();
 
     await page.getByRole("combobox", { name: "Filter by category" }).selectOption(category);
 
@@ -66,7 +69,7 @@ test.describe("transactions page", () => {
     await expect(rows).not.toHaveCount(sampleTransactions.length);
     const count = await rows.count();
     for (let i = 0; i < count; i++) {
-      await expect(rows.nth(i).getByRole("cell").nth(2)).toHaveText(category);
+      await expect(rows.nth(i).getByRole("cell").nth(3)).toHaveText(category);
     }
   });
 
@@ -75,7 +78,10 @@ test.describe("transactions page", () => {
     await page.goto("/transactions");
 
     const groceryRow = page.getByRole("row", { name: /WHOLE FOODS MARKET/i });
-    const category = await groceryRow.getByRole("cell").nth(2).innerText();
+    // nth(3): select(0)/date(1)/desc(2)/category(3)/amount(4) — the
+    // row-selection checkbox column (Phase 10 final cleanup) shifted every
+    // column index by one.
+    const category = await groceryRow.getByRole("cell").nth(3).innerText();
     await page.getByRole("combobox", { name: "Filter by category" }).selectOption(category);
     await page.getByRole("textbox", { name: "Search transactions" }).fill("whole foods");
 
