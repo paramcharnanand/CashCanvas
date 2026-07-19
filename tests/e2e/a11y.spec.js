@@ -1,5 +1,5 @@
 import { injectAxe, getViolations } from "axe-playwright";
-import { test, expect } from "./fixtures/index.mjs";
+import { test, expect, seedTransactions } from "./fixtures/index.mjs";
 import { UploadPage } from "./pages/UploadPage.mjs";
 
 /**
@@ -72,17 +72,33 @@ test.describe("accessibility", () => {
   test("dashboard (with data loaded) has no unexpected a11y violations", async ({ authenticatedPage: page }) => {
     await new UploadPage(page).loadSampleData();
     await expect(page.getByRole("button", { name: "Overview" })).toBeVisible();
-    // Two additions over the other screens' baseline, both from the Recharts
-    // pie chart: its <svg> has no accessible name (svg-img-alt), and its
-    // scroll container isn't keyboard-focusable in Safari
-    // (scrollable-region-focusable) — both real, both Recharts' default
-    // markup, both Phase 8 (frontend redesign) scope, not new regressions.
-    await checkA11yAgainstBaseline(page, [
-      "color-contrast",
-      "landmark-one-main",
-      "region",
-      "svg-img-alt",
-      "scrollable-region-focusable",
-    ]);
+    // As of Phase 8.7, the Recharts donut/bar/line block that used to live
+    // here moved to its own /analytics route (see below) — the two
+    // chart-specific findings this baseline used to carry (svg-img-alt,
+    // scrollable-region-focusable) moved with it, not just gotten smaller
+    // by coincidence.
+    await checkA11yAgainstBaseline(page, ["color-contrast", "landmark-one-main", "region"]);
+  });
+
+  test("analytics page has no unexpected a11y violations", async ({ authenticatedPage: page }) => {
+    // seedTransactions, not loadSampleData(): /analytics fetches real,
+    // persisted data from /api/files (a separate route/component tree from
+    // LegacyWorkspace) — "Try with sample data" is deliberately excluded
+    // from server-side persistence (App.jsx's handleData, Phase 8.5), so it
+    // would never reach this page. Same fix analytics.spec.js needed.
+    await seedTransactions(page);
+    await page.goto("/analytics");
+    await expect(page.getByRole("heading", { name: "Analytics" })).toBeVisible();
+    // Restyled onto the standardized chart system this phase — real
+    // aria-labels and a keyboard-focusable container on every chart
+    // directly fix the svg-img-alt/scrollable-region-focusable findings
+    // the old Dashboard-embedded charts carried, rather than re-allowlisting
+    // them at the new route. This is the second page in the app (after
+    // Landing) whose a11y scan runs with a genuinely empty allowlist for
+    // its own new content — "color-contrast"/"landmark-one-main"/"region"
+    // are the same pre-existing, tracked shell-level debt every other
+    // authenticated page still carries (ADR-019), not something this page
+    // introduced.
+    await checkA11yAgainstBaseline(page, ["color-contrast", "landmark-one-main", "region"]);
   });
 });

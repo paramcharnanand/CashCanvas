@@ -6,7 +6,7 @@ require re-deriving context that already existed once.
 
 ## Progress
 
-**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.6 of ~8.9 sub-steps done).**
+**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.7 of ~8.9 sub-steps done).**
 
 | # | Phase | Status | Docs |
 |---|---|---|---|
@@ -17,7 +17,7 @@ require re-deriving context that already existed once.
 | 5 | Dependency maintenance (`npm audit`, upgrades) | ✅ Done | `docs/security/threat-model.md` (Dependency posture) |
 | 6 | Testing infrastructure | ✅ Done | `docs/engineering-lessons/phase-6-testing.md` |
 | 7 | CI/CD (GitHub Actions) | ✅ Done | `docs/engineering-lessons/phase-7-ci-cd.md` |
-| 8 | Frontend redesign (design system, routing, navigation shell, a11y) | 🟨 In progress (8.1–8.6 done) | `docs/frontend/phase-8-*.md` |
+| 8 | Frontend redesign (design system, routing, navigation shell, a11y) | 🟨 In progress (8.1–8.7 done) | `docs/frontend/phase-8-*.md` |
 | 9 | Advanced AI features & product enhancements | ⬜ Not started | — |
 
 ### Phase 8.1 completion note (routing, navigation shell, design foundation)
@@ -261,6 +261,103 @@ gate.
 
 Next: Phase 8.7, Analytics (splitting the Recharts block out of `Dashboard`'s Overview tab onto
 the standardized Chart system), then Phase 8.8, Categories + Merchant Rules.
+
+### Phase 8.7 completion note (Analytics — Recharts block split onto the standardized chart system)
+
+Delivered, per `docs/frontend/phase-8-migration-plan.md`'s Phase 7: `pages/AnalyticsPage.jsx` +
+`features/analytics/` at a real, bookmarkable `/analytics` route (added to `Sidebar`/`MobileNav`,
+flipping `navigation.js`'s existing `enabled: false, phase: "8.7"` placeholder to live). The
+donut/monthly-bar/cash-flow-line block — untouched by Phase 8.4 by design (ADR-025: "that's
+Analytics, Phase 8.7, not this phase") — is deleted from the legacy `Dashboard`'s Overview tab
+(`App.jsx`) now that it lives here; Overview goes back to being the lightweight hero/stats/
+recurring/recent-activity summary Phase 8.4 originally described, not a duplicate of this page.
+Three new `features/analytics/components/*` (`SpendingDonut`, `MonthlyBarChart`, `CashFlowLine`)
+plus `hooks/useAnalyticsData.js` (mirrors `features/transactions/hooks/useTransactionsData.js`'s
+"separate route, no shared state with `LegacyWorkspace`" pattern exactly) and
+`hooks/useKeyboardChartNav.js` (shared Left/Right/Home/End arrow-key cursor logic, one real tab
+stop per chart).
+
+**The one real behavior fix this phase makes, not just a restyle**: keyboard-reachable charts,
+this migration plan's own stated Phase 7 goal. Recharts renders no individually-focusable DOM node
+per data point, so a floating `Tooltip` triggered by keyboard focus (what
+`docs/frontend/phase-8-design-system.md`'s Charts section originally specified) isn't achievable
+against Recharts' actual API — confirmed by reading `Sector.js`, not assumed. Built instead: one
+real tab stop per chart (`role="group" tabIndex={0}`), Left/Right/Home/End arrows moving an
+`activeIndex` cursor, and a permanent visible readout below the chart showing whichever
+point is active — the same "brighten active, dim rest to ~30%" hover state a mouse user gets,
+reached identically by keyboard. This is a deliberate, evidenced deviation from the design doc's
+literal "tooltip on focus" wording, not an oversight — a floating tooltip anchored to an
+unfocusable SVG shape would have had nothing real to attach to.
+
+**A genuinely orphaned file was caught before commit, not shipped**: `components/ui/ChartTooltip.jsx`
+was built as the design system's stated shared tooltip primitive, but the actual chart components
+never import Recharts' `<Tooltip>` at all — the keyboard-driven readout above supersedes it (better
+satisfies "keyboard-triggerable, not mouse-only" than a mouse-only floating tooltip could). Deleted
+before commit rather than left as dead code with no caller, once confirmed via `grep` that nothing
+imports it.
+
+**A real, pre-existing accessibility bug was found and fixed, not introduced this phase** — see the
+verification-gate section below for how it surfaced. `features/dashboard/components/
+RecentActivity.jsx`'s `max-height: 300px; overflow-y: auto` scroll container (Phase 8.4) has always
+had its own `scrollable-region-focusable` violation; it was invisible in `tests/e2e/a11y.spec.js`'s
+per-page allowlist because the *same* rule ID also fired from the now-deleted Recharts pie chart on
+the same page, and the allowlist check only asserts a rule ID is expected somewhere, not how many
+independent elements trigger it. Removing the chart didn't fix anything — it stopped one of two
+occurrences from masking the other. Fixed by adding `tabIndex={0}` to the real scroll container,
+making it a real keyboard-reachable stop, not by re-widening the allowlist — matching this
+project's standing "flag explicitly, don't allowlist away a real finding" rule
+(`CHECKPOINT.md`'s own "Next recommended step" from the prior session named this exact risk in
+advance).
+
+**A second real, browser-dependent a11y finding, also fixed at the root**: Recharts' `Sector.js`
+hard-codes `role="img"` on every pie-slice `<path>` unconditionally, with no accessible name of its
+own — axe's `svg-img-alt`-equivalent finding on each individual slice, surfaced on firefox
+specifically (not chromium/webkit — a real cross-browser accessibility-tree exposure difference,
+not a fluke; re-verified in isolation before concluding that). Fixed by passing a computed
+`aria-label` (category name, amount, percentage) to each `<Cell>` — `aria-label` is in Recharts'
+own `SVGElementPropKeys` passthrough list, so it renders straight onto the generated `<path>`,
+giving each slice a real per-segment name instead of suppressing the finding.
+
+**Two genuine test-authoring bugs found and fixed, not application bugs**: (1) the initial draft of
+`tests/e2e/analytics.spec.js` (and the "analytics page" case in `a11y.spec.js`) seeded data via
+`UploadPage.loadSampleData()` ("Try with sample data"), which Phase 8.5 deliberately excludes from
+server-side persistence (`App.jsx`'s `handleData`, `name !== "sample_data.csv"`) — `/analytics`
+fetches real data from `/api/files`, a separate route/component tree with no shared state with
+`LegacyWorkspace`, so it correctly rendered the empty state every time, deterministically, across
+all 5 browser projects (not flaky — evidence it was a real, reproducible mismatch, not timing).
+Fixed by switching to the `seedTransactions` fixture, the same fix `transactions.spec.js` already
+established for exactly this trap. (2) the donut-chart keyboard test located its visible readout
+via `donut.locator("xpath=following-sibling::*")`, but `SpendingDonut.jsx` nests the readout
+*inside* the `role="group"` container as its second child `<div>`, not as a sibling of it — fixed
+to `donut.locator("> div").nth(1)`.
+
+**Verification gate**: `npm run lint` (0 errors, 44 warnings, unchanged), `npm test` (88/88,
+unchanged — this phase touched no `api/**` code), `npx playwright test` — **313 passed / 16 skipped
+/ 0 failed** after the fixes above (7 new tests in `tests/e2e/analytics.spec.js`, one new case in
+`a11y.spec.js`), `npm run build` (succeeds). One visual baseline regenerated (`app-shell-empty`,
+chromium-only) — expected, another new nav item, same pattern as every prior phase. Two additional,
+non-reproducible-in-isolation firefox failures (`auth.spec.js`'s reload-persistence test,
+`auth-resilience.spec.js`'s multi-tab-logout test) appeared across full-suite runs this phase —
+traced to the same, already-diagnosed external cause as Phases 8.5/8.6 (two runaway VS Code
+Docker-language-server helper processes consuming 280%+ CPU each continuously on this development
+machine, reconfirmed via `ps`/`uptime`, load average 17–23 on this run); both passed cleanly
+(27/27) in an isolated single-worker rerun. Not a code defect; CI's dedicated runners are
+unaffected and remain the real gate.
+
+**Tracked, not addressed this phase**: `SpendingDonut.jsx`'s `--chart-1`/`--chart-2` category
+colors are identical hex values to `--positive`/`--negative` (`tokens.css`) — the top two
+categories in the donut can render in the exact same green/red the Income/Expense bars use
+elsewhere on the same page, a literal violation of `phase-8-design-system.md`'s own stated rule
+("semantic colors... never reused as arbitrary category colors"). Investigated, not fixed: this is
+byte-identical to the legacy `Dashboard`'s pre-Phase-8 `PALETTE`/`theme.green`/`theme.accent`
+values (confirmed via `grep` — `#1a6b4a`/`#b02d21` in both), already shipped in production for as
+long as the app has had a donut chart, unrelated to and unchanged by this phase's own diff — not a
+new regression this phase introduced, so not fixed under this phase's own scope per this project's
+`ADR-016` precedent (don't retrofit a pre-existing, already-shipped design decision without a
+concrete trigger). Flagged here so it's found deliberately next time, not rediscovered by accident.
+
+Next: Phase 8.8, Categories + Merchant Rules, per `docs/frontend/phase-8-migration-plan.md`'s
+Phase 8.
 
 ### ADR-026 — Real statement uploads never persisted: `Date.toISOString()` vs. the backend's bare-`YYYY-MM-DD` requirement, plus a silently-swallowed save failure
 

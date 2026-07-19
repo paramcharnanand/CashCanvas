@@ -6,12 +6,22 @@ re-deriving context from the repo.
 
 ## Release status
 
-**Phase 8.1 through 8.6 verified and committed this session**, plus two CI hotfixes along the
+**Phase 8.7 (Analytics) verified and committed this session** — a continuation session that
+picked up mid-flight: the previous session had already written the full Analytics implementation
+(`pages/AnalyticsPage.jsx`, `features/analytics/`, `tests/e2e/analytics.spec.js`) and left it
+uncommitted, with `ROADMAP.md`/`CHECKPOINT.md` still only reflecting Phase 8.6. This session's job
+was the same verification checkpoint the engineering rules require every time: read every
+changed/new file for correctness before trusting it, then run the full gate for real — which
+surfaced one dead-code cleanup and four real, evidenced bugs (two accessibility, two test-authoring)
+before anything was committed. See the Phase 8.7 completion note in `ROADMAP.md` for full detail;
+summarized in "Phase 8 — in progress" below.
+
+**Phase 8.1 through 8.6 verified and committed in a prior session**, plus two CI hotfixes along the
 way (see `git log` — `5d42cf8` Phase 8.1, `bd9241c` router hotfix, `bebb653` CI stability hotfix,
 the Phase 8.2–8.6 commits). GitHub Actions CI is green on `main` as of the CI stability hotfix —
-it was red (webkit-only, deterministic) since before this session started; see "CI stability"
+it was red (webkit-only, deterministic) since before that session started; see "CI stability"
 below. Phase 6 (Testing infrastructure, six logical commits) and Phase 7 (CI/CD, `64a1280`) were
-the last things pushed before this session.
+the last things pushed before Phase 8 started.
 
 **Phase 8.6 scoped down from this file's own earlier "Transactions + Categories/Merchant Rules"
 note**: built Transactions only (a real `/transactions` route, search/filter/sort, per the
@@ -55,9 +65,10 @@ Phase 8.4 completion note below for the resulting design).
 
 ## Current status
 
-**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.6 of ~8.9 sub-steps done).** Phases 1–5
-and 7 verified/landed in prior sessions; Phase 6 (testing infrastructure) completed two sessions
-ago; Phase 8.1 through 8.6 completed this session. Full writeup: `docs/engineering-lessons/
+**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.7 of ~8.9 sub-steps done).** Phases 1–5
+and 7 verified/landed in prior sessions; Phase 6 (testing infrastructure) completed several
+sessions ago; Phase 8.1 through 8.6 completed in a prior session; Phase 8.7 completed this session.
+Full writeup: `docs/engineering-lessons/
 phase-6-testing.md` (testing concepts), `docs/frontend/phase-8-*.md` (design system, component
 architecture, migration plan), `ROADMAP.md` ADR-019 through ADR-026. Full phase/ADR history:
 `ROADMAP.md`.
@@ -264,10 +275,60 @@ GitHub Actions run for `bebb653` completed successfully in 10m56s.
   Phase 8.5 (the runaway VS Code helper processes, reconfirmed still active via `ps`/`uptime`);
   5/5 clean on isolated repro each time. CI is the real gate; see its status below.
 
-- **8.7–8.9 not started**: Analytics → Categories/Merchant Rules → Settings/Savings → remaining
-  cleanup, per `docs/frontend/phase-8-migration-plan.md` and the user's requested order. One page
-  per phase, full verification gate (lint/test/e2e/build) green before moving to the next — see
-  that file's "keep the existing suite passing" section for the exact discipline.
+- **8.7 done** (this session): `pages/AnalyticsPage.jsx` + `features/analytics/` at a real,
+  bookmarkable `/analytics` route (added to `Sidebar`/`MobileNav`), splitting the donut/monthly-bar/
+  cash-flow-line block out of the legacy `Dashboard`'s Overview tab (untouched by Phase 8.4 by
+  design, ADR-025) onto the standardized chart system. `hooks/useAnalyticsData.js` mirrors
+  `features/transactions/hooks/useTransactionsData.js`'s "separate route, no shared state with
+  `LegacyWorkspace`" pattern; `hooks/useKeyboardChartNav.js` is shared Left/Right/Home/End cursor
+  logic used by all three new chart components.
+
+  **The one real behavior fix, not just a restyle**: keyboard-reachable charts (this phase's own
+  stated goal). Recharts has no per-data-point focusable DOM node, so a floating tooltip
+  triggered by keyboard focus (the design doc's literal wording) isn't achievable against
+  Recharts' actual API — confirmed by reading `Sector.js`, not assumed. Built instead: one real tab
+  stop per chart, arrow keys moving an `activeIndex` cursor, and a permanent visible readout
+  showing whichever point is active — the keyboard equivalent of the existing mouse-hover state,
+  not a lesser experience.
+
+  **Picked up mid-flight, same discipline as Phase 8.3**: the implementation and its test file
+  already existed, uncommitted, from a prior session — this session's job was the verification
+  checkpoint (read every file, run the full gate for real), which found and fixed, before
+  committing: one orphaned file (`components/ui/ChartTooltip.jsx`, built per the design doc but
+  never actually wired into any chart — deleted, not left as dead code); one pre-existing a11y bug
+  in `RecentActivity.jsx` (Phase 8.4) that this phase's chart removal *stopped masking* rather than
+  introduced (`scrollable-region-focusable`, fixed with `tabIndex={0}`, not a widened allowlist);
+  one new, browser-dependent a11y finding from Recharts' own hard-coded `role="img"` on each pie
+  slice (fixed with a real per-slice `aria-label`, surfaced on firefox specifically — a genuine
+  cross-browser accessibility-tree difference, re-verified in isolation); and two test-authoring
+  bugs (seeding via `UploadPage.loadSampleData()`, which Phase 8.5 deliberately excludes from
+  persistence, instead of the `seedTransactions` fixture `transactions.spec.js` already established
+  for exactly this trap; and a donut-chart keyboard test's XPath sibling selector that didn't match
+  the component's actual DOM nesting). See the Phase 8.7 completion note in `ROADMAP.md` for full
+  detail on each.
+
+  **Verification gate**: `npm run lint` (0 errors, 44 warnings, unchanged), `npm test` (88/88,
+  unchanged), `npx playwright test` — 313 passed / 16 skipped / 0 failed after the fixes above (7
+  new tests in `tests/e2e/analytics.spec.js`, one new case in `a11y.spec.js`), `npm run build`
+  (succeeds). One visual baseline regenerated (`app-shell-empty`, chromium-only) — expected,
+  another new nav item. Two additional firefox failures appeared across full-suite runs
+  (`auth.spec.js`'s reload-persistence test, `auth-resilience.spec.js`'s multi-tab-logout test) —
+  same already-diagnosed external cause as Phases 8.5/8.6 (runaway VS Code Docker-language-server
+  helper processes, reconfirmed via `ps`/`uptime`, load average 17–23); 27/27 clean on an isolated
+  single-worker rerun. Not a code defect; CI is the real gate.
+
+  **Tracked, not addressed this phase**: `SpendingDonut.jsx`'s `--chart-1`/`--chart-2` tokens are
+  identical hex values to `--positive`/`--negative`, a literal violation of the design doc's own
+  "semantic colors never reused as category colors" rule — but byte-identical to the legacy
+  `Dashboard`'s pre-Phase-8 `PALETTE`/`theme.green`/`theme.accent` values (confirmed via `grep`),
+  already shipped in production, unrelated to and unchanged by this phase's diff. Not fixed under
+  this phase's scope per ADR-016's precedent (don't retrofit a pre-existing, already-shipped design
+  decision without a concrete trigger); flagged so it's found deliberately next time.
+
+- **8.8–8.9 not started**: Categories/Merchant Rules → Settings/Savings → remaining cleanup, per
+  `docs/frontend/phase-8-migration-plan.md` and the user's requested order. One page per phase,
+  full verification gate (lint/test/e2e/build) green before moving to the next — see that file's
+  "keep the existing suite passing" section for the exact discipline.
 
 ### Remaining phases
 9. Advanced AI features & product enhancements — not started
@@ -375,36 +436,33 @@ That surfaced a real, blocking problem immediately — see below — before any 
 ## Test suite
 
 `npm test` — **88/88 passing** (unchanged this session — Phase 8 touched no `api/**` code).
-`npx playwright test` (all 5 browser projects) — **278 passed, 0 failed, 16 skipped** (visual
-regression except chromium, by design — see ADR-020; two new spec files, `upload.spec.js` and
-`transactions.spec.js`, 16 new tests combined). `npm run lint` — 0 errors, **44** pre-existing
-warnings (down from 46: deleting `AuthScreen.jsx` removed its own 2 unescaped-entity warnings
-along with the file). `npm run build` — succeeds. GitHub Actions CI on `main` — green (confirmed
-via `gh run view`, not assumed; see each phase's commit for its own run); the separate
-"Deployment Verification" check has been failing since 2026-07-14 on a per-deployment preview URL
-requiring Vercel SSO (pre-existing, unrelated to any frontend work, tracked below).
+`npx playwright test` (all 5 browser projects) — **313 passed, 0 failed, 16 skipped** (visual
+regression except chromium, by design — see ADR-020; one new spec file, `analytics.spec.js`, 7 new
+tests, plus one new case in `a11y.spec.js`). `npm run lint` — 0 errors, **44** pre-existing
+warnings (unchanged since Phase 8.3). `npm run build` — succeeds. GitHub Actions CI on `main` —
+green as of the last push (confirmed via `gh run view`, not assumed; see each phase's commit for
+its own run); the separate "Deployment Verification" check has been failing since 2026-07-14 on a
+per-deployment preview URL requiring Vercel SSO (pre-existing, unrelated to any frontend work,
+tracked below).
 
 Real regressions found and fixed this session, all before commit, none left for a future session
-to discover: Phase 8.1's nav shell introduced 2 accessibility violations (ADR-022); a router gap
-broke password-reset links (ADR-023); Phase 8.2's Landing page introduced a color-contrast token
-bug (ADR-024) and a heading-order bug; CI itself had a pre-existing (not Phase-8-caused) webkit
-test bug plus resource-contention flakiness, both fixed in `bebb653`. Phases 8.3 and 8.4
-introduced no new bugs. Phase 8.5 found the session's most serious defect — a real, pre-existing
-production data-loss bug in real (non-sample) statement uploads, present since before this session
-started, plus a genuine test-timing bug in an existing forgot-password test — both root-caused via
-actual evidence (a harness-independent `curl` reproduction for the former, 5x isolated-vs-
-full-suite repro for the latter) and fixed, not just patched around. See ADR-026 and the Phase 8.5
-completion note for full detail.
+to discover: an orphaned, never-imported `ChartTooltip.jsx` primitive (deleted, not shipped as dead
+code); a pre-existing `scrollable-region-focusable` a11y bug in `RecentActivity.jsx` (Phase 8.4)
+that this phase's chart removal stopped masking rather than introduced; a browser-dependent
+(firefox-only) a11y finding from Recharts' hard-coded `role="img"` on pie-chart `<path>` elements;
+and two test-authoring bugs (seeding `/analytics` via non-persisted sample data instead of the
+`seedTransactions` fixture; a keyboard-nav test's selector not matching the component's actual DOM
+nesting). See ROADMAP.md's Phase 8.7 completion note for full detail on each. Carried forward from
+prior sessions, unchanged: Phase 8.1's nav shell a11y fixes (ADR-022), the password-reset routing
+hotfix (ADR-023), Phase 8.2's color-contrast token fix (ADR-024), and Phase 8.5's real,
+pre-existing upload-persistence data-loss bug (ADR-026) — see each ADR for full detail.
 
 ## Deployment status (carried forward, unchanged this session)
 
-No new deployment happened this session — Phase 6 is test infrastructure only, no runtime
-application behavior changed except the four bug fixes listed above (all of which are real fixes
-to shipped code paths: `src/AuthScreen.jsx`, `api/_lib/security-headers.js`, `api/_lib/jwt.js`).
-Those three application-code fixes **will** reach production on the next deploy once this
-session's commits are pushed, and are worth a quick manual smoke check afterward given they
-touch security headers and token issuance directly, even though the local Playwright/Vitest
-suites already re-verified all of them post-fix.
+No new deployment happened this session — Phase 8.7 is frontend-only, no `api/**` code touched.
+Phase 8.5's upload-persistence fix (ADR-026) and the other application-code fixes from prior
+Phase 8 sessions still haven't reached production — see "Blockers/assumptions" below, unchanged
+from the prior checkpoint.
 
 - **Production URL**: https://cash-canvas-sigma.vercel.app
 - **Commit deployed (last verified)**: `08ece44` (see prior checkpoint history for full detail,
@@ -414,61 +472,59 @@ suites already re-verified all of them post-fix.
 
 ## Current production readiness estimate
 
-**~83%.** Up from ~82%, but the honest story is more nuanced than a number: Phase 8.5 found and
-fixed a real, previously-undetected **data-loss bug in already-shipped, currently-in-production
-code** (ADR-026) — real statement uploads have never actually persisted since this validation
-rule existed, only rendering correctly for the remainder of the session that uploaded them. This
-is exactly the kind of gap Phase 6/8's real-browser, real-persistence testing exists to catch, and
-finding + fixing it is a genuine readiness improvement — but it's also a reminder that "looks
-correct in the UI" and "actually works" are different claims, and this bug shipped for some
-number of prior phases/sessions before anything caught it. Auth/session/security/data-integrity
-remain production-grade with real browser-level regression coverage across 5 browser engines,
-plus accessibility and visual regression baselines. Remaining gaps: the same ones Phase 7 already
-named (`VERCEL_TOKEN` secret, branch protection); visual regression not yet running in CI (Linux
-baseline gap, ADR-020); product-facing polish (a11y fixes themselves, dark mode) — Phase 8 scope,
-tracked via `tests/e2e/a11y.spec.js`'s allowlist; and the upload-persistence fix itself hasn't yet
-reached production (see "Blockers/assumptions" below) — real users are still affected until the
-next deploy.
+**~84%.** Up from ~83%. Phase 8.7 shipped no new production-facing regressions — the two real
+defects it found (the `RecentActivity.jsx` scroll-container a11y gap, the Recharts pie-slice
+`role="img"` finding) were both accessibility bugs caught and fixed *before* commit, not shipped
+and later discovered, matching the discipline that already caught Phase 8.5's more serious
+data-loss bug. Auth/session/security/data-integrity remain production-grade with real
+browser-level regression coverage across 5 browser engines, plus accessibility and visual
+regression baselines — `/analytics` is now the second page in the app (after Landing) whose a11y
+scan runs with a genuinely empty allowlist for its own content. Remaining gaps: the same ones
+Phase 7 already named (`VERCEL_TOKEN` secret, branch protection); visual regression not yet running
+in CI (Linux baseline gap, ADR-020); Categories/Merchant Rules/Settings/Savings still on the legacy
+`Dashboard` tab bar (Phase 8.8/8.9); and Phase 8.5's upload-persistence fix itself still hasn't
+reached production (see "Blockers/assumptions" below) — real users remain affected until the next
+deploy, now three phases of accumulated frontend work behind it.
 
 ## Remaining technical debt
 
 Full list with rationale lives in `ROADMAP.md`'s "Known technical debt" section — not duplicated
-here to avoid drift. New this session: `Header.jsx`'s topbar is `role="region"`, not a real
-`<header>`, until the last old-header page (`UploadScreen`/`Dashboard`) is migrated away in Phase
-8.5+ (ADR-022); Material Symbols Outlined icon font stays CDN-hosted, not self-hosted like the
-new typefaces, until every old screen using it migrates off (tracked to close alongside Phase
-8.8) — the legacy `Dashboard`'s Categories/Savings/Transactions tabs and header still use it;
-only the new Overview components use `lucide-react`. `AuthScreen.jsx` is fully retired as of
-Phase 8.3 — no remaining debt there. The legacy `Dashboard` component (`App.jsx`) still owns
-Categories/Savings/Transactions/the tab bar/the header — Phase 8.4 deliberately left these
-untouched (see the 8.4 completion note above); each shrinks the legacy component further as its
-own phase (8.6–8.9) lands, until `Dashboard`/`App.jsx`'s `LegacyWorkspace` can be deleted entirely
-in Phase 10 per the migration plan. Carried forward, unchanged: visual regression doesn't run in
-CI yet (ADR-020); the a11y allowlist in
-`tests/e2e/a11y.spec.js` is real, current, Phase-8-scoped debt for every page except Landing now
-(ADR-019); `api/auth.js`'s OTP/email-verification branches remain untestable without real Gmail
-SMTP credentials (ADR-021); `logoutAllDevices()` has no UI caller; `deploy-verify.yml` needs its
-`VERCEL_TOKEN` secret; branch protection recommendations are unapplied; ~45 pre-existing ESLint
-warnings remain (44, down from 46 — see "Test suite" above).
+here to avoid drift. New this session: `SpendingDonut.jsx`'s `--chart-1`/`--chart-2` tokens are
+identical hex values to `--positive`/`--negative` — a pre-existing, already-shipped design choice
+(byte-identical to the legacy `Dashboard`'s old `PALETTE`), not a new regression, deliberately not
+retrofitted this phase (see the Phase 8.7 completion note in ROADMAP.md). Carried forward,
+unchanged: `Header.jsx`'s topbar is `role="region"`, not a real `<header>`, until the last
+old-header page (`UploadScreen`/`Dashboard`) is migrated away (ADR-022); Material Symbols Outlined
+icon font stays CDN-hosted until every old screen using it migrates off (tracked to close alongside
+Phase 8.8) — the legacy `Dashboard`'s Categories/Savings/Transactions tabs and header still use it.
+The legacy `Dashboard` component (`App.jsx`) still owns Categories/Savings/Transactions/the tab
+bar/the header — each shrinks the legacy component further as its own phase (8.8–8.9) lands, until
+`Dashboard`/`App.jsx`'s `LegacyWorkspace` can be deleted entirely in Phase 10. Also carried forward:
+visual regression doesn't run in CI yet (ADR-020); the a11y allowlist in `tests/e2e/a11y.spec.js`
+is real, current, Phase-8-scoped debt for every page except Landing and now Analytics (ADR-019);
+`api/auth.js`'s OTP/email-verification branches remain untestable without real Gmail SMTP
+credentials (ADR-021); `logoutAllDevices()` has no UI caller; `deploy-verify.yml` needs its
+`VERCEL_TOKEN` secret; branch protection recommendations are unapplied; 44 pre-existing ESLint
+warnings remain (see "Test suite" above).
 
 ## Next recommended step
 
-**Phase 8.7: Analytics** — `pages/AnalyticsPage.jsx` + `features/analytics/`, splitting the
-Recharts donut/monthly-bar/cash-flow-line block out of the legacy `Dashboard`'s Overview tab
-(untouched by Phase 8.4, which only migrated the hero/stats/recurring/recent-activity content
-around it — see ADR-025) onto the standardized Chart system, per `docs/frontend/
-phase-8-migration-plan.md`'s Phase 7: reconciled palette, real `aria-label`s, keyboard-reachable
-tooltips. New test: chart keyboard navigation (Tab to a data point, tooltip on focus — charts are
-mouse-only today). The `tests/e2e/a11y.spec.js` "dashboard (with data loaded)" scan's two
-chart-specific allowlist entries (`svg-img-alt`, `scrollable-region-focusable`) should move to
-scan `/analytics` instead once this lands, same allowlist-based approach (ADR-019), revalidated
-against the rebuilt markup — flag explicitly if a new violation appears rather than widening the
-allowlist to make it pass. Then Phase 8.8, Categories + Merchant Rules (deferred out of this
-session's Phase 8.6, which scoped down to Transactions only). Same discipline as 8.1–8.6: full
-verification gate green before moving on, any bug found gets root-caused and fixed (with a
-regression test) before continuing, not deferred — and per Phase 8.5/8.6's own lesson, prefer a
-real reproduction (curl/direct API call, isolated-vs-full-suite repro) over inferring root cause
-from a single test failure.
+**Phase 8.8: Categories + Merchant Rules** — `pages/CategoriesPage.jsx` + `features/categories/`
+(category cards, keyword editing, uncategorized quick-fix, same logic rebuilt on tokens) at
+`/categories`; new `pages/MerchantRulesPage.jsx` + `features/merchant-rules/` at `/merchant-rules`
+(list + delete), per `docs/frontend/phase-8-migration-plan.md`'s Phase 8. Two-palette problem
+(audit §5) resolved: the New Category modal's color picker pulls from the same reconciled palette
+the charts use — worth reconciling against the `--chart-1`/`--positive` collision flagged as
+tracked debt above while touching this palette code, if in scope. Backend note: confirm whether
+`DELETE /api/merchant-rules/:id` exists yet (`GET`/`POST` do); if not, a small additive route
+following the existing `DELETE /api/categories/:id` pattern. New tests: Merchant Rules list shows a
+rule created via reassignment (cross-feature integration test — reassign in Transactions, verify
+it's listed at `/merchant-rules`), delete a rule, empty state. Then Phase 8.9, Settings + Savings.
+Same discipline as 8.1–8.7: full verification gate green before moving on, any bug found gets
+root-caused and fixed (with a regression test) before continuing, not deferred — prefer a real
+reproduction (curl/direct API call, isolated-vs-full-suite repro, or reading the library source as
+this phase did for Recharts) over inferring root cause from a single test failure, and flag a real
+finding explicitly rather than widening an allowlist to make it pass.
 
 ## Blockers / assumptions
 

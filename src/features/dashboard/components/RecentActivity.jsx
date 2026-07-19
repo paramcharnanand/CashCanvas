@@ -110,7 +110,12 @@ export function RecentActivity({ recurring, recentTransactions, fmt, onViewTrans
         {recurring.length === 0 ? (
           <EmptyState icon={Repeat} body="No recurring payments detected" />
         ) : (
-          <div style={{ maxHeight: 300, overflowY: "auto" }}>
+          // tabIndex makes this real scroll container keyboard-reachable
+          // (axe scrollable-region-focusable) — found in Phase 8.7 once
+          // Analytics' chart removal stopped masking it under the same
+          // rule ID in the a11y allowlist; a real, pre-existing Phase 8.4
+          // gap, not something this list introduced.
+          <div tabIndex={0} style={{ maxHeight: 300, overflowY: "auto" }}>
             {recurring.slice(0, 8).map((r) => <RecurringRow key={r.desc} {...r} fmt={fmt} />)}
           </div>
         )}

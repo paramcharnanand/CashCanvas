@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import * as Papa from "papaparse";
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend, LabelList, ReferenceLine } from "recharts";
+import { XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend, LabelList } from "recharts";
 import _ from "lodash";
 import { apiFetch } from "./api.js";
 import { useAuth } from "./contexts/AuthContext.jsx";
@@ -1466,7 +1466,6 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
   const [aiDone, setAiDone] = useState(false);
   const [rulesLoaded, setRulesLoaded] = useState(false);
   const [showDownload, setShowDownload] = useState(false);
-  const [activeBarIndex, setActiveBarIndex] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // ── API helper ──
@@ -1760,95 +1759,11 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
               onViewTransactions={() => setTab("Transactions")}
             />
 
-            {/* Charts Row */}
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 3fr", gap: 20, marginBottom: 24 }}>
-              {/* Spending Composition Donut */}
-              <div style={{
-                background: theme.surface, borderRadius: 8, padding: "28px 32px",
-                boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
-              }}>
-                <SectionTitle sub="By Category">Spending Composition</SectionTitle>
-                <ResponsiveContainer width="100%" height={220}>
-                  <PieChart>
-                    <Pie data={catBreakdown} dataKey="value" cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={2} strokeWidth={0}>
-                      {catBreakdown.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
-                    </Pie>
-                    <Tooltip content={<CustomTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 16px", marginTop: 8 }}>
-                  {catBreakdown.slice(0, 6).map((c, i) => (
-                    <div key={c.name} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: PALETTE[i % PALETTE.length], flexShrink: 0 }} />
-                      <span style={{ fontSize: 12, color: theme.textSubtle, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Monthly Overview Bar */}
-              <div style={{
-                background: theme.surface, borderRadius: 8, padding: "28px 32px",
-                boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
-              }}>
-                <SectionTitle sub={monthlyData.length < 12 ? `Showing ${monthlyData.length} of 12 months` : "Income vs Expenses · Last 12 Months"}>Monthly Overview</SectionTitle>
-                {monthlyData.length === 0 ? (
-                  <div style={{ height: 260, display: "flex", alignItems: "center", justifyContent: "center", color: theme.textSubtle, fontSize: 14, fontFamily: font }}>
-                    Not enough data available for monthly analytics.
-                  </div>
-                ) : (
-                  <ResponsiveContainer width="100%" height={260}>
-                    <BarChart
-                      data={monthlyData}
-                      barGap={3}
-                      barSize={10}
-                      onMouseMove={s => setActiveBarIndex(s?.activeTooltipIndex ?? null)}
-                      onMouseLeave={() => setActiveBarIndex(null)}
-                    >
-                      <CartesianGrid stroke={theme.surfaceContainerLow} strokeDasharray="0" vertical={false} />
-                      <XAxis dataKey="month" tick={{ fill: theme.textSubtle, fontSize: 11, fontFamily: fontMono }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fill: theme.textSubtle, fontSize: 11, fontFamily: fontMono }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
-                      <Tooltip content={<CustomTooltip />} cursor={{ fill: "transparent" }} />
-                      <Bar dataKey="Income" radius={[2, 2, 0, 0]}>
-                        {monthlyData.map((_, i) => (
-                          <Cell key={i} fill={`${theme.green}${activeBarIndex === null || activeBarIndex === i ? "55" : "1a"}`} />
-                        ))}
-                      </Bar>
-                      <Bar dataKey="Expenses" radius={[2, 2, 0, 0]}>
-                        {monthlyData.map((_, i) => (
-                          <Cell key={i} fill={`${theme.accent}${activeBarIndex === null || activeBarIndex === i ? "77" : "22"}`} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-            </div>
-
-            {/* Net Cashflow Line */}
-            <div style={{
-              background: theme.surface,
-              borderRadius: 8, padding: "28px 32px", marginBottom: 24,
-              boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
-            }}>
-              <SectionTitle sub="Monthly net cash flow">Cash Flow</SectionTitle>
-              {monthlyData.length < 2 ? (
-                <div style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center", color: theme.textSubtle, fontSize: 14, fontFamily: font }}>
-                  Upload statements from multiple months to see cash flow trends.
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={200}>
-                  <LineChart data={monthlyData}>
-                    <CartesianGrid stroke={theme.surfaceContainerLow} strokeDasharray="0" vertical={false} />
-                    <XAxis dataKey="month" tick={{ fill: theme.textSubtle, fontSize: 11, fontFamily: fontMono }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: theme.textSubtle, fontSize: 11, fontFamily: fontMono }} axisLine={false} tickLine={false} tickFormatter={v => `$${v.toLocaleString()}`} domain={[dataMin => Math.min(0, dataMin), dataMax => Math.max(0, dataMax)]} />
-                    <ReferenceLine y={0} stroke={theme.border} strokeDasharray="3 3" />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Line type="monotone" dataKey="Net" stroke={theme.primary} strokeWidth={2.5} dot={{ r: 4, fill: theme.primary, strokeWidth: 0 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
-            </div>
+            {/* Charts (Spending Composition / Monthly Overview / Cash Flow)
+                moved to their own real /analytics route, Phase 8.7 (see
+                src/pages/AnalyticsPage.jsx + src/features/analytics/) —
+                Overview goes back to being the lightweight summary Phase
+                8.4 originally described, not a duplicate of that page. */}
 
             {/* Recurring + Recent Transactions — restyled onto design-system
                 primitives, Phase 8.4 (src/features/dashboard/components/

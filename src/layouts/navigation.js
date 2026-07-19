@@ -17,7 +17,7 @@ export const NAV_ITEMS = [
   { id: "overview", to: "/dashboard", label: "Overview", icon: Home, enabled: true, phase: null },
   { id: "upload", to: "/upload", label: "Upload", icon: Upload, enabled: true, phase: null },
   { id: "transactions", to: "/transactions", label: "Transactions", icon: List, enabled: true, phase: null },
-  { id: "analytics", to: "/analytics", label: "Analytics", icon: BarChart3, enabled: false, phase: "8.7" },
+  { id: "analytics", to: "/analytics", label: "Analytics", icon: BarChart3, enabled: true, phase: null },
   { id: "categories", to: "/categories", label: "Categories", icon: Tag, enabled: false, phase: "8.8" },
   { id: "merchant-rules", to: "/merchant-rules", label: "Merchant Rules", icon: Store, enabled: false, phase: "8.8" },
   { id: "savings", to: "/savings", label: "Savings", icon: Target, enabled: false, phase: "8.9" },
