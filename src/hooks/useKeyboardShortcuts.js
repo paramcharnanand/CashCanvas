@@ -8,9 +8,9 @@ import { useToast } from "../contexts/ToastContext.jsx";
  * and the Phase 8 implementation instructions this responds to.
  *
  * Every shortcut listed is bound now, even ones without a real destination
- * yet (Analytics, Settings) — pressing them gives an honest "coming soon"
- * toast instead of either silently doing nothing (which reads as broken for
- * a *documented* shortcut) or navigating somewhere wrong.
+ * yet (Settings) — pressing them gives an honest "coming soon" toast
+ * instead of either silently doing nothing (which reads as broken for a
+ * *documented* shortcut) or navigating somewhere wrong.
  *
  * Note: Ctrl/Cmd+U and Ctrl/Cmd+D are browser-reserved in some browsers
  * (view-source, bookmark) — preventDefault() is called regardless, but
@@ -38,7 +38,7 @@ export function useKeyboardShortcuts({ onOpenPalette, onShowShortcuts }) {
       }
       if (mod && e.key.toLowerCase() === "u") {
         e.preventDefault();
-        navigate("/dashboard"); // Upload lives at /dashboard until Phase 8.5 gives it its own route.
+        navigate("/upload");
         return;
       }
       if (mod && e.key.toLowerCase() === "d") {
@@ -48,12 +48,12 @@ export function useKeyboardShortcuts({ onOpenPalette, onShowShortcuts }) {
       }
       if (mod && e.key.toLowerCase() === "a") {
         e.preventDefault();
-        show("Analytics is coming in Phase 8.7.", { variant: "info" });
+        navigate("/analytics");
         return;
       }
       if (mod && e.key === ",") {
         e.preventDefault();
-        show("Settings is coming in Phase 8.8.", { variant: "info" });
+        show("Settings is coming in Phase 8.9.", { variant: "info" });
         return;
       }
       // "?" (Shift+/) opens the shortcuts sheet — but not while typing, so a

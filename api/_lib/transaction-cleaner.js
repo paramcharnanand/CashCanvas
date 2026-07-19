@@ -181,7 +181,15 @@ export function cleanTransaction(desc) {
 
   // Step 10: Remove alphanumeric reference codes
   text = text.replace(/\b[a-z]{0,3}\d{3,}[a-z0-9]*\b/g, " ");
-  text = text.replace(/\b[a-z0-9]{9,}\b/g, " ");
+  // Requires at least one digit — a real reference/transaction code, not
+  // just any 9+ character token. The same identical bug (and identical
+  // fix) was found in src/App.jsx's cleanDesc: without this requirement,
+  // a plain one-word merchant name 9+ letters long (e.g. "starbucks")
+  // gets wiped to nothing. Here it's usually masked by the `|| desc...`
+  // fallback below when the whole string empties out, but not when a
+  // long merchant word is wiped while other words in the same
+  // description survive — this fixes both cases, not just the masked one.
+  text = text.replace(/\b(?=[a-z0-9]*\d)[a-z0-9]{9,}\b/g, " ");
 
   // Step 11: Remove individual noise tokens
   const words = text.split(/\s+/).filter((w) => w.length > 0 && !NOISE_TOKENS.has(w));

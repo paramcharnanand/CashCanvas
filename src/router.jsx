@@ -10,6 +10,8 @@ import DashboardPage from "./pages/DashboardPage.jsx";
 import UploadPage from "./pages/UploadPage.jsx";
 import TransactionsPage from "./pages/TransactionsPage.jsx";
 import AnalyticsPage from "./pages/AnalyticsPage.jsx";
+import CategoriesPage from "./pages/CategoriesPage.jsx";
+import MerchantRulesPage from "./pages/MerchantRulesPage.jsx";
 import NotFoundPage from "./pages/NotFoundPage.jsx";
 
 /**
@@ -40,6 +42,8 @@ export const router = createBrowserRouter([
       { path: "/upload", element: <UploadPage /> },
       { path: "/transactions", element: <TransactionsPage /> },
       { path: "/analytics", element: <AnalyticsPage /> },
+      { path: "/categories", element: <CategoriesPage /> },
+      { path: "/merchant-rules", element: <MerchantRulesPage /> },
     ],
   },
   { path: "*", element: <NotFoundPage /> },

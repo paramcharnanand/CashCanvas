@@ -167,9 +167,7 @@ export const DEFAULT_CATEGORIES = {
   "Other": [],
 };
 
-const PALETTE = ["#1a6b4a","#b02d21","#bfc9c0","#6f7a72","#3f4943","#8e130c","#a0b0a8","#005235","#d4a57a","#c8bfb0","#7a6b5a","#4a7a6a"];
-
-function cleanDesc(desc) {
+export function cleanDesc(desc) {
   if (!desc) return "";
   // Segment merged/camelCase words before lowercasing (e.g. "AMZNMktpUS" → "AMZN Mktp US")
   let text = desc.trim()
@@ -192,8 +190,14 @@ function cleanDesc(desc) {
     .replace(/\b(al|ak|az|ar|ca|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy|dc)\b/g, " ")
     // Remove alphanumeric reference codes
     .replace(/\b[a-z]{0,3}\d{3,}[a-z0-9]*\b/g, " ")
-    // Remove long codes
-    .replace(/\b[a-z0-9]{9,}\b/g, " ")
+    // Remove long codes — requires at least one digit (a real reference/
+    // transaction code), not just any 9+ character token: this same regex
+    // without that requirement used to strip plain merchant names that
+    // happen to be one word of 9+ letters (e.g. "starbucks", "walgreens")
+    // down to nothing, so categorize() had no text left to match against
+    // and silently fell through to "Other" — a real bug, found via a direct
+    // reproduction (`cleanDesc("STARBUCKS")` returned ""), not inferred.
+    .replace(/\b(?=[a-z0-9]*\d)[a-z0-9]{9,}\b/g, " ")
     .replace(/\s+/g, " ").trim();
 }
 
@@ -1450,19 +1454,14 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
   const isMobile = useIsMobile();
   const [tab, setTab] = useState("Overview");
   const [customCats, setCustomCats] = useState({});
-  const [apiCategories, setApiCategories] = useState([]); // full objects with _id for API ops
   const [merchantRules, setMerchantRules] = useState(new Map());
   const [savingsGoal, setSavingsGoal] = useState({ amount: "", deadline: "", name: "" });
-  const [editingCat, setEditingCat] = useState(null);
-  const [newKeyword, setNewKeyword] = useState("");
   const [reassignTxn, setReassignTxn] = useState(null);
   const [txnOverrides, setTxnOverrides] = useState({});
   const [newCatName, setNewCatName] = useState("");
   const [selectedTxns, setSelectedTxns] = useState(new Set());
   const [cutSelections, setCutSelections] = useState({});
   const [showPlan, setShowPlan] = useState(false);
-  const [newCatModal, setNewCatModal] = useState(false);
-  const [newCatForm, setNewCatForm] = useState({ name: "", icon: "🏷️", color: "#6f7a72" });
   const [aiDone, setAiDone] = useState(false);
   const [rulesLoaded, setRulesLoaded] = useState(false);
   const [showDownload, setShowDownload] = useState(false);
@@ -1492,7 +1491,6 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
 
     authFetch("/api/categories").then(data => {
       if (Array.isArray(data)) {
-        setApiCategories(data);
         const catMap = {};
         data.forEach(c => { catMap[c.categoryName] = c.keywords || []; });
         setCustomCats(catMap);
@@ -1734,7 +1732,7 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
             )}
           </div>
           <nav style={{ marginTop: 12 }}>
-            <TabBar tabs={["Overview", "Categories", "Savings"]} active={tab} onChange={setTab} />
+            <TabBar tabs={["Overview", "Savings"]} active={tab} onChange={setTab} />
           </nav>
         </div>
         <div style={{ height: 1, background: theme.surfaceContainerLow }} />
@@ -1939,7 +1937,6 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
                               const name = newCatName.trim();
                               setCustomCats(prev => ({ ...prev, [name]: prev[name] || [] }));
                               authFetch("/api/categories", { method: "POST", body: JSON.stringify({ categoryName: name }) })
-                                .then(cat => { if (cat?._id) setApiCategories(prev => [...prev, cat]); })
                                 .catch(() => {});
                               setTxnOverrides(prev => {
                                 const next = { ...prev };
@@ -1963,7 +1960,6 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
                           const name = newCatName.trim();
                           setCustomCats(prev => ({ ...prev, [name]: prev[name] || [] }));
                           authFetch("/api/categories", { method: "POST", body: JSON.stringify({ categoryName: name }) })
-                            .then(cat => { if (cat?._id) setApiCategories(prev => [...prev, cat]); })
                             .catch(() => {});
                           setTxnOverrides(prev => {
                             const next = { ...prev };
@@ -1988,335 +1984,6 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
             )}
           </div>
         )}
-
-        {/* ─── CATEGORIES TAB ─── */}
-        {tab === "Categories" && (() => {
-          const otherTxns = expenses.filter(t => t.category === "Other");
-          const categorizedTxns = expenses.filter(t => t.category !== "Other");
-          const categorizedPct = expenses.length > 0 ? Math.round((categorizedTxns.length / expenses.length) * 100) : 0;
-          // Only show categories that are visible in the organized view (have transactions or keywords)
-          const topCats = allCategories.filter(c => {
-            if (c === "Other" || c === "Income") return false;
-            const hasTxns = expenses.some(t => t.category === c);
-            const apiCat = apiCategories.find(ac => ac.categoryName === c);
-            const hasKws = (customCats[c] || []).length > 0 || (apiCat?.keywords || []).length > 0;
-            return hasTxns || hasKws;
-          });
-
-          return (
-          <div>
-            <div style={{ marginBottom: 20 }}>
-              <SectionTitle sub="Customize how transactions are categorized">Manage Categories</SectionTitle>
-            </div>
-
-            {/* New Category Modal */}
-            {newCatModal && (
-              <div style={{
-                position: "fixed", inset: 0, background: "rgba(27,28,26,0.4)",
-                display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200,
-                backdropFilter: "blur(4px)",
-              }} onClick={() => { setNewCatModal(false); setNewCatForm({ name: "", icon: "🏷️", color: "#6f7a72" }); }}>
-                <div style={{
-                  background: theme.surface, borderRadius: 10, padding: isMobile ? 20 : 32, width: isMobile ? "calc(100% - 32px)" : 380, maxWidth: "100%",
-                  boxShadow: "0 24px 48px rgba(27,28,26,0.12)",
-                }} onClick={e => e.stopPropagation()}>
-                  <h3 style={{ margin: "0 0 20px", fontSize: 20, fontWeight: 400, fontFamily: fontHeadline }}>New Category</h3>
-                  <div style={{ marginBottom: 14 }}>
-                    <label style={{ fontSize: 11, color: theme.textSubtle, display: "block", marginBottom: 6, fontFamily: fontMono, textTransform: "uppercase", letterSpacing: "0.08em" }}>Name</label>
-                    <input
-                      value={newCatForm.name}
-                      onChange={e => setNewCatForm(p => ({ ...p, name: e.target.value }))}
-                      placeholder="e.g. Pet Care, Education..."
-                      autoFocus
-                      style={{ width: "100%", padding: "10px 12px", boxSizing: "border-box", background: theme.surfaceContainerLow, border: `1px solid ${theme.border}`, borderRadius: 6, color: theme.text, fontFamily: font, fontSize: 14, outline: "none" }}
-                    />
-                  </div>
-                  <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
-                    <div style={{ flex: 1 }}>
-                      <label style={{ fontSize: 11, color: theme.textSubtle, display: "block", marginBottom: 6, fontFamily: fontMono, textTransform: "uppercase", letterSpacing: "0.08em" }}>Icon / Emoji</label>
-                      <input
-                        value={newCatForm.icon}
-                        onChange={e => setNewCatForm(p => ({ ...p, icon: e.target.value }))}
-                        placeholder="🏷️"
-                        style={{ width: "100%", padding: "10px 12px", boxSizing: "border-box", background: theme.surfaceContainerLow, border: `1px solid ${theme.border}`, borderRadius: 6, color: theme.text, fontFamily: font, fontSize: 20, outline: "none", textAlign: "center" }}
-                      />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <label style={{ fontSize: 11, color: theme.textSubtle, display: "block", marginBottom: 6, fontFamily: fontMono, textTransform: "uppercase", letterSpacing: "0.08em" }}>Color</label>
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                        {["#005235","#b02d21","#6f7a72","#3f4943","#a07040","#1a6b4a","#7a3f8a","#3a6aa0"].map(c => (
-                          <div key={c} onClick={() => setNewCatForm(p => ({ ...p, color: c }))} style={{
-                            width: 24, height: 24, borderRadius: "50%", background: c, cursor: "pointer",
-                            border: newCatForm.color === c ? `3px solid ${theme.text}` : "2px solid transparent",
-                            boxSizing: "border-box", transition: "transform 0.1s",
-                          }} />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", gap: 10 }}>
-                    <button onClick={() => { setNewCatModal(false); setNewCatForm({ name: "", icon: "🏷️", color: "#6f7a72" }); }} style={{
-                      flex: 1, padding: "10px", background: "none", border: `1px solid ${theme.border}`,
-                      borderRadius: 6, cursor: "pointer", fontFamily: font, fontSize: 13, color: theme.textSubtle,
-                    }}>Cancel</button>
-                    <button onClick={async () => {
-                      if (!newCatForm.name.trim()) return;
-                      const name = newCatForm.name.trim();
-                      setCustomCats(prev => ({ ...prev, [name]: [] }));
-                      setNewCatModal(false);
-                      setNewCatForm({ name: "", icon: "🏷️", color: "#6f7a72" });
-                      authFetch("/api/categories", {
-                        method: "POST",
-                        body: JSON.stringify({ categoryName: name, icon: newCatForm.icon, color: newCatForm.color }),
-                      }).then(cat => { if (cat?._id) setApiCategories(prev => [...prev, cat]); }).catch(() => {});
-                    }} style={{
-                      flex: 2, padding: "10px",
-                      background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryContainer} 100%)`,
-                      border: "none", borderRadius: 6, cursor: "pointer",
-                      fontFamily: font, fontSize: 13, fontWeight: 600, color: "#fff",
-                    }}>Create Category</button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Summary bar */}
-            <div style={{
-              background: theme.surface,
-              borderRadius: 8, padding: "20px 28px", marginBottom: 24,
-              display: "flex", alignItems: "center", gap: 32, flexWrap: "wrap",
-              boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
-            }}>
-              <div>
-                <div style={{ fontSize: 10, color: theme.textSubtle, fontFamily: fontMono, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Categorized</div>
-                <div style={{ fontSize: 30, fontWeight: 600, color: theme.green, fontFamily: fontMono, fontFeatureSettings: '"tnum"' }}>{categorizedPct}%</div>
-                <div style={{ fontSize: 12, color: theme.textSubtle, marginTop: 4 }}>{categorizedTxns.length} of {expenses.length} transactions</div>
-              </div>
-              <div style={{ flex: 1, minWidth: 200 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: theme.textSubtle, marginBottom: 8, fontFamily: fontMono }}>
-                  <span>Categorized</span>
-                  <span>{otherTxns.length} uncategorized</span>
-                </div>
-                <div style={{ height: 4, background: theme.surfaceContainerLow, borderRadius: 2, overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${categorizedPct}%`, background: theme.green, borderRadius: 2, transition: "width 0.4s" }} />
-                </div>
-              </div>
-              {otherTxns.length > 0 && (
-                <div style={{
-                  padding: "6px 14px", background: "rgba(176,45,33,0.06)", border: `1px solid rgba(176,45,33,0.2)`,
-                  borderRadius: 4, fontSize: 12, color: theme.accent, fontWeight: 600, fontFamily: fontMono,
-                  textTransform: "uppercase", letterSpacing: "0.06em",
-                }}>
-                  {otherTxns.length} need attention
-                </div>
-              )}
-            </div>
-
-            {/* Spending breakdown bars */}
-            <div style={{
-              background: theme.surface,
-              borderRadius: 8, padding: "24px 28px", marginBottom: 24,
-              boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
-            }}>
-              <SectionTitle sub="by category">Category breakdown</SectionTitle>
-              {allCategories.filter(c => c !== "Other" && c !== "Income").map((cat, ci) => {
-                const catTotal = Math.abs(_.sumBy(expenses.filter(t => t.category === cat), "amount"));
-                const pct = totalExpenses > 0 ? (catTotal / totalExpenses) * 100 : 0;
-                if (catTotal === 0) return null;
-                return (
-                  <div key={cat} style={{ marginBottom: 20 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                      <span style={{ fontWeight: 600, fontSize: 14, color: theme.text }}>{cat}</span>
-                      <span style={{ fontFamily: fontMono, color: theme.textSubtle, fontSize: 13, fontFeatureSettings: '"tnum"' }}>
-                        {fmt(catTotal)}
-                      </span>
-                    </div>
-                    <div style={{ height: 3, background: theme.surfaceContainerLow, borderRadius: 2, overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: `${pct}%`, background: PALETTE[ci % PALETTE.length], borderRadius: 2, transition: "width 0.4s" }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Category cards */}
-            <div style={{ fontSize: 11, fontFamily: fontMono, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em", color: theme.textSubtle, marginBottom: 16 }}>Categories</div>
-            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 32 }}>
-              {allCategories.filter(cat => {
-                const hasTransactions = expenses.some(t => t.category === cat);
-                const apiCat = apiCategories.find(c => c.categoryName === cat);
-                const hasKeywords = (customCats[cat] || []).length > 0 || (apiCat?.keywords || []).length > 0;
-                return hasTransactions || hasKeywords;
-              }).map((cat, ci) => {
-                const customKws = customCats[cat] || [];
-                const isEditing = editingCat === cat;
-                const catTxns = expenses.filter(t => t.category === cat);
-                const catTotal = Math.abs(_.sumBy(catTxns, "amount"));
-                const pct = totalExpenses > 0 ? (catTotal / totalExpenses) * 100 : 0;
-                const apiCat = apiCategories.find(c => c.categoryName === cat);
-                const isCustom = !!customCats[cat] || !!apiCat;
-                const catColor = apiCat?.color || PALETTE[ci % PALETTE.length];
-                const catIcon = apiCat?.icon;
-
-                return (
-                  <div key={cat} style={{
-                    flex: "1 1 220px", maxWidth: 300, background: theme.surface,
-                    borderLeft: `3px solid ${isEditing ? theme.primary : catColor}`,
-                    borderRadius: 8, padding: "16px 20px",
-                    boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
-                    transition: "box-shadow 0.2s",
-                  }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                      {catIcon && <span style={{ fontSize: 16 }}>{catIcon}</span>}
-                      <span style={{ fontSize: 14, fontWeight: 600, flex: 1, minWidth: 0, color: theme.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cat}</span>
-                      <span style={{ fontFamily: fontMono, fontSize: 11, color: theme.textSubtle }}>{catTxns.length}</span>
-                      {apiCat && (
-                        <button onClick={async () => {
-                          if (!confirm(`Delete category "${cat}"?`)) return;
-                          setCustomCats(prev => { const n = { ...prev }; delete n[cat]; return n; });
-                          setApiCategories(prev => prev.filter(c => c.categoryName !== cat));
-                          authFetch(`/api/categories/${apiCat._id}`, { method: "DELETE" }).catch(() => {});
-                        }} style={{
-                          background: "none", border: "none", color: theme.accent, cursor: "pointer",
-                          fontSize: 15, padding: "0 2px", lineHeight: 1, opacity: 0.6,
-                        }} title="Delete category">×</button>
-                      )}
-                    </div>
-
-                    <div style={{ fontSize: 22, fontWeight: 600, fontFamily: fontMono, fontFeatureSettings: '"tnum"', color: theme.text, marginBottom: 10, letterSpacing: "-0.02em" }}>
-                      {fmt(catTotal)}
-                    </div>
-
-                    <div style={{ marginBottom: isEditing ? 12 : 0 }}>
-                      <div style={{ height: 2, background: theme.surfaceContainerLow, borderRadius: 1, overflow: "hidden", marginBottom: 4 }}>
-                        <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: PALETTE[ci % PALETTE.length], borderRadius: 1 }} />
-                      </div>
-                      <div style={{ fontSize: 11, color: theme.textSubtle, fontFamily: fontMono }}>{pct.toFixed(1)}% of spending</div>
-                    </div>
-
-                    {/* Show custom keywords only when editing */}
-                    {isEditing && (
-                      <div>
-                        {customKws.length > 0 && (
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: 5, margin: "10px 0 8px" }}>
-                            {customKws.map(kw => (
-                              <span key={kw} style={{
-                                fontSize: 11, padding: "3px 8px", borderRadius: 4,
-                                background: theme.greenSoft, color: theme.primary, border: `1px solid ${theme.primary}22`,
-                                display: "flex", alignItems: "center", gap: 5,
-                              }}>
-                                {kw}
-                                <button onClick={() => {
-                                  const newKws = (customCats[cat] || []).filter(k => k !== kw);
-                                  setCustomCats(prev => ({ ...prev, [cat]: newKws }));
-                                  const id = apiCategories.find(c => c.categoryName === cat)?._id;
-                                  if (id) authFetch(`/api/categories/${id}`, { method: "PUT", body: JSON.stringify({ keywords: newKws }) }).catch(() => {});
-                                }} style={{ background: "none", border: "none", color: theme.primary, cursor: "pointer", fontSize: 13, padding: 0, lineHeight: 1 }}>×</button>
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
-                          <input
-                            value={newKeyword}
-                            onChange={e => setNewKeyword(e.target.value)}
-                            onKeyDown={e => {
-                              if (e.key === "Enter" && newKeyword.trim()) {
-                                const kw = newKeyword.trim().toLowerCase();
-                                const newKws = [...(customCats[cat] || []), kw];
-                                setCustomCats(prev => ({ ...prev, [cat]: newKws }));
-                                const id = apiCategories.find(c => c.categoryName === cat)?._id;
-                                if (id) authFetch(`/api/categories/${id}`, { method: "PUT", body: JSON.stringify({ keywords: newKws }) }).catch(() => {});
-                                setNewKeyword("");
-                              }
-                            }}
-                            placeholder="Type merchant name..."
-                            style={{
-                              flex: 1, padding: "8px 12px", background: theme.surfaceContainerLow,
-                              border: `1px solid ${theme.border}`, borderRadius: 4,
-                              color: theme.text, fontFamily: font, fontSize: 13, outline: "none",
-                            }}
-                            autoFocus
-                          />
-                          <button onClick={() => { setEditingCat(null); setNewKeyword(""); }} style={{
-                            padding: "8px 14px", background: theme.primary, border: "none",
-                            borderRadius: 4, color: "#fff", cursor: "pointer", fontSize: 13, fontFamily: font,
-                          }}>Done</button>
-                        </div>
-                      </div>
-                    )}
-
-                    {!isEditing && (
-                      <button onClick={() => setEditingCat(cat)} style={{
-                        marginTop: 12, width: "100%", padding: "7px", background: "transparent",
-                        border: `1px dashed ${theme.outlineVariant || "#bfc9c0"}`, borderRadius: 4,
-                        color: theme.textSubtle, cursor: "pointer", fontSize: 12, fontFamily: font,
-                      }}>
-                        {customKws.length > 0 ? `+ ${customKws.length} custom keyword${customKws.length > 1 ? "s" : ""}` : "+ Add merchant"}
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Uncategorized transactions quick-fix */}
-            {otherTxns.length > 0 && (
-              <div id="unc7y2" style={{ background: theme.surface, borderRadius: 8, padding: "24px 28px", boxShadow: "0 1px 3px rgba(27,28,26,0.06)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 12, flexWrap: "wrap" }}>
-                  <div style={{ fontSize: 20, fontWeight: 400, fontFamily: fontHeadline, color: theme.text }}>Uncategorized Transactions</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <button id="catx9q" onClick={() => setNewCatModal(true)} style={{
-                      padding: "7px 14px", background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryContainer} 100%)`,
-                      border: "none", borderRadius: 6, color: "#fff",
-                      cursor: "pointer", fontFamily: font, fontSize: 12, fontWeight: 600,
-                      display: "flex", alignItems: "center", gap: 5,
-                    }}>
-                      <span style={{ fontSize: 14 }}>+</span> New Category
-                    </button>
-                    <span style={{ padding: "3px 10px", background: "rgba(176,45,33,0.08)", borderRadius: 4, fontSize: 10, fontFamily: fontMono, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: theme.accent }}>Action Required</span>
-                  </div>
-                </div>
-                <div style={{ fontSize: 13, color: theme.textSubtle, marginBottom: 20 }}>
-                  {otherTxns.length} transaction{otherTxns.length !== 1 ? "s" : ""} couldn't be auto-categorized. Click a category to assign, or create a new one.
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-                  {otherTxns.map(t => (
-                    <div key={t.id} style={{
-                      display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
-                      padding: "14px 0", borderBottom: `1px solid ${theme.surfaceContainer}`,
-                    }}>
-                      <div style={{ flex: 1, minWidth: 140 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: theme.text }}>{t.desc}</div>
-                        <div style={{ fontSize: 11, color: theme.textSubtle, marginTop: 2, fontFamily: fontMono }}>
-                          {t.date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                        </div>
-                      </div>
-                      <div style={{ fontFamily: fontMono, fontSize: 13, fontWeight: 600, color: theme.accent, minWidth: 70, textAlign: "right", fontFeatureSettings: '"tnum"' }}>
-                        {fmt(t.amount)}
-                      </div>
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                        {topCats.slice(0, 6).map(cat => (
-                          <button key={cat} onClick={() => {
-                            setTxnOverrides(prev => ({ ...prev, [t.id]: cat }));
-                          }} style={{
-                            padding: "4px 10px", background: theme.surfaceContainerLow, border: "none",
-                            borderRadius: 4, color: theme.textSubtle, cursor: "pointer", fontSize: 11,
-                            fontFamily: font, transition: "all 0.12s",
-                          }}
-                          onMouseEnter={e => { e.currentTarget.style.background = theme.surfaceContainer; e.currentTarget.style.color = theme.text; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = theme.surfaceContainerLow; e.currentTarget.style.color = theme.textSubtle; }}
-                          >{cat}</button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-          );
-        })()}
 
         {/* ─── SAVINGS TAB ─── */}
         {tab === "Savings" && (

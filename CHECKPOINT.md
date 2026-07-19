@@ -6,15 +6,26 @@ re-deriving context from the repo.
 
 ## Release status
 
-**Phase 8.7 (Analytics) verified and committed this session** — a continuation session that
+**Phase 8.8 (Categories + Merchant Rules) built and committed this session**, continuing straight
+on from Phase 8.7 in the same session (not a separate pickup). Found and fixed three real,
+evidenced bugs along the way — a categorization-accuracy bug in `cleanDesc`/`cleanTransaction`
+(long merchant names silently wiped by an over-aggressive "remove long codes" regex, affecting
+both the client-side categorizer and the real AI-categorization pipeline), a systemic
+`Content-Type` gap in the shared `apiFetch` helper that silently 400'd every new write call, and a
+stale-transaction-category design gap in the new data hook itself, caught before shipping. Also
+flipped three independent copies of drifted "coming in Phase X" staleness in the command
+palette/shortcuts sheet/keyboard-shortcut handler that had accumulated across Phases 8.5–8.7. See
+the Phase 8.8 completion note in `ROADMAP.md` for full detail; summarized in "Phase 8 — in
+progress" below.
+
+**Phase 8.7 (Analytics) verified and committed in a prior session** — a continuation session that
 picked up mid-flight: the previous session had already written the full Analytics implementation
 (`pages/AnalyticsPage.jsx`, `features/analytics/`, `tests/e2e/analytics.spec.js`) and left it
-uncommitted, with `ROADMAP.md`/`CHECKPOINT.md` still only reflecting Phase 8.6. This session's job
+uncommitted, with `ROADMAP.md`/`CHECKPOINT.md` still only reflecting Phase 8.6. That session's job
 was the same verification checkpoint the engineering rules require every time: read every
 changed/new file for correctness before trusting it, then run the full gate for real — which
 surfaced one dead-code cleanup and four real, evidenced bugs (two accessibility, two test-authoring)
-before anything was committed. See the Phase 8.7 completion note in `ROADMAP.md` for full detail;
-summarized in "Phase 8 — in progress" below.
+before anything was committed. See the Phase 8.7 completion note in `ROADMAP.md` for full detail.
 
 **Phase 8.1 through 8.6 verified and committed in a prior session**, plus two CI hotfixes along the
 way (see `git log` — `5d42cf8` Phase 8.1, `bd9241c` router hotfix, `bebb653` CI stability hotfix,
@@ -65,13 +76,13 @@ Phase 8.4 completion note below for the resulting design).
 
 ## Current status
 
-**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.7 of ~8.9 sub-steps done).** Phases 1–5
+**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.8 of ~8.9 sub-steps done).** Phases 1–5
 and 7 verified/landed in prior sessions; Phase 6 (testing infrastructure) completed several
-sessions ago; Phase 8.1 through 8.6 completed in a prior session; Phase 8.7 completed this session.
+sessions ago; Phase 8.1 through 8.7 completed in prior sessions; Phase 8.8 completed this session.
 Full writeup: `docs/engineering-lessons/
 phase-6-testing.md` (testing concepts), `docs/frontend/phase-8-*.md` (design system, component
-architecture, migration plan), `ROADMAP.md` ADR-019 through ADR-026. Full phase/ADR history:
-`ROADMAP.md`.
+architecture, migration plan), `ROADMAP.md` ADR-019 through ADR-026 plus the Phase 8.8 completion
+note. Full phase/ADR history: `ROADMAP.md`.
 
 ## CI stability (fixed this session, unrelated to Phase 8's own code)
 
@@ -325,9 +336,48 @@ GitHub Actions run for `bebb653` completed successfully in 10m56s.
   this phase's scope per ADR-016's precedent (don't retrofit a pre-existing, already-shipped design
   decision without a concrete trigger); flagged so it's found deliberately next time.
 
-- **8.8–8.9 not started**: Categories/Merchant Rules → Settings/Savings → remaining cleanup, per
-  `docs/frontend/phase-8-migration-plan.md` and the user's requested order. One page per phase,
-  full verification gate (lint/test/e2e/build) green before moving to the next — see that file's
+- **8.8 done** (this session): `pages/CategoriesPage.jsx` + `features/categories/` at `/categories`
+  and `pages/MerchantRulesPage.jsx` + `features/merchant-rules/` at `/merchant-rules`, both added
+  to `Sidebar`/`MobileNav`. The legacy `Dashboard`'s Categories tab is deleted (`TabBar` now reads
+  `["Overview", "Savings"]`), along with its `apiCategories` state, which went dead once nothing
+  outside the deleted tab read it. Backend: `DELETE /api/merchant-rules/:id` added.
+
+  **A deliberate improvement over the legacy version**: the Categories tab's "uncategorized
+  quick-fix" used to only set a non-persisted local override; the new page's quick-fix persists via
+  `POST /api/merchant-rules` (the same mechanism the Transactions tab's Reassign flow already uses)
+  instead of reproducing the exact cross-page state-divergence risk Phase 8.6 already declined for
+  Transactions.
+
+  **Three real, evidenced bugs found and fixed before shipping**:
+  1. `cleanDesc`'s (and the backend `transaction-cleaner.js`'s identical) "remove long codes" regex
+     stripped *any* bare 9+ character word, not just alphanumeric codes — so a plain merchant name
+     like "starbucks" (exactly 9 letters) got wiped to nothing and silently miscategorized as
+     "Other". Found via a real, reproduced e2e failure, confirmed via direct function calls before
+     concluding it was a bug. Fixed both copies (require a digit in the stripped token); regression
+     tests added (`tests/categorization.test.js`, new; `tests/transaction-cleaner.test.js`,
+     extended).
+  2. `src/api.js`'s shared `apiFetch` never set `Content-Type: application/json` — every existing
+     write call site (four auth forms) happened to set it manually, so the gap stayed invisible
+     until this phase's hooks became the first to POST/PUT a JSON body through it directly, and
+     every one silently 400'd. Fixed at the shared source, not per call site.
+  3. The new `useCategoriesData.js` hook's first draft left already-fetched transactions stale
+     after a category delete/keyword edit (no reactive recompute, unlike the legacy `useMemo`).
+     Fixed by refetching after each category write instead of hand-patching local state.
+
+  **Incidental but real**: three independent copies of "coming in Phase X" staleness in the command
+  palette, shortcuts sheet, and keyboard-shortcut handler — accumulated across Phases 8.5–8.7,
+  never updated as those phases actually shipped (`Cmd+U` still routed to `/dashboard`, `Cmd+A`
+  showed a "coming in 8.7" toast). All flipped to their real destinations.
+
+  **Verification gate**: `npm run lint` (0 errors, 43 warnings, down from 44 — one dead-state
+  warning removed), `npm test` (101/101), `npx playwright test` — 388 passed / 16 skipped / 0
+  failed (13 new tests, 2 new a11y cases). One visual baseline regenerated (`app-shell-empty`,
+  chromium-only) — expected, two more new nav items. One unrelated firefox a11y timeout on a
+  full-suite run — same already-diagnosed local CPU-contention noise as Phases 8.5–8.7; 8/8 clean
+  in isolation.
+
+- **8.9 not started**: Settings + Savings, per `docs/frontend/phase-8-migration-plan.md`'s Phase 9.
+  Full verification gate (lint/test/e2e/build) green before moving to the next — see that file's
   "keep the existing suite passing" section for the exact discipline.
 
 ### Remaining phases
@@ -435,34 +485,37 @@ That surfaced a real, blocking problem immediately — see below — before any 
 
 ## Test suite
 
-`npm test` — **88/88 passing** (unchanged this session — Phase 8 touched no `api/**` code).
-`npx playwright test` (all 5 browser projects) — **313 passed, 0 failed, 16 skipped** (visual
-regression except chromium, by design — see ADR-020; one new spec file, `analytics.spec.js`, 7 new
-tests, plus one new case in `a11y.spec.js`). `npm run lint` — 0 errors, **44** pre-existing
-warnings (unchanged since Phase 8.3). `npm run build` — succeeds. GitHub Actions CI on `main` —
-green as of the last push (confirmed via `gh run view`, not assumed; see each phase's commit for
-its own run); the separate "Deployment Verification" check has been failing since 2026-07-14 on a
-per-deployment preview URL requiring Vercel SSO (pre-existing, unrelated to any frontend work,
-tracked below).
+`npm test` — **101/101 passing** (up from 88 — 5 new merchant-rules DELETE integration tests, 3 new
+`cleanTransaction` regression tests, plus `tests/categorization.test.js`, new). `npx playwright
+test` (all 5 browser projects) — **388 passed, 0 failed, 16 skipped** (visual regression except
+chromium, by design — see ADR-020; two new spec files, `categories.spec.js` and
+`merchant-rules.spec.js`, 13 new tests, plus 2 new a11y cases). `npm run lint` — 0 errors, **43**
+pre-existing warnings (down from 44 — one dead-state warning removed along with `apiCategories`).
+`npm run build` — succeeds. GitHub Actions CI on `main` — green as of the last push (confirmed via
+`gh run view`, not assumed); the separate "Deployment Verification" check has been failing since
+2026-07-14 on a per-deployment preview URL requiring Vercel SSO (pre-existing, unrelated to any
+frontend work, tracked below).
 
-Real regressions found and fixed this session, all before commit, none left for a future session
-to discover: an orphaned, never-imported `ChartTooltip.jsx` primitive (deleted, not shipped as dead
-code); a pre-existing `scrollable-region-focusable` a11y bug in `RecentActivity.jsx` (Phase 8.4)
-that this phase's chart removal stopped masking rather than introduced; a browser-dependent
-(firefox-only) a11y finding from Recharts' hard-coded `role="img"` on pie-chart `<path>` elements;
-and two test-authoring bugs (seeding `/analytics` via non-persisted sample data instead of the
-`seedTransactions` fixture; a keyboard-nav test's selector not matching the component's actual DOM
-nesting). See ROADMAP.md's Phase 8.7 completion note for full detail on each. Carried forward from
-prior sessions, unchanged: Phase 8.1's nav shell a11y fixes (ADR-022), the password-reset routing
-hotfix (ADR-023), Phase 8.2's color-contrast token fix (ADR-024), and Phase 8.5's real,
-pre-existing upload-persistence data-loss bug (ADR-026) — see each ADR for full detail.
+Real bugs found and fixed this session, all before commit: a categorization-accuracy bug in
+`cleanDesc`/`cleanTransaction` (an over-aggressive regex silently wiped plain merchant names 9+
+letters long, e.g. "starbucks", down to nothing — affecting both the client-side categorizer and
+the real AI-categorization pipeline); a systemic `Content-Type` gap in the shared `apiFetch` helper
+that silently 400'd every new write call (invisible until this phase's hooks became the first to
+POST/PUT a JSON body through it directly); a stale-transaction-category design gap in the new
+`useCategoriesData` hook itself; and three independent, drifted copies of "coming in Phase X"
+staleness in the command palette/shortcuts sheet/keyboard-shortcut handler, accumulated across
+Phases 8.5–8.7 and never updated as those phases actually shipped. See ROADMAP.md's Phase 8.8
+completion note for full detail on each. Carried forward from prior sessions, unchanged: Phase
+8.1's nav shell a11y fixes (ADR-022), the password-reset routing hotfix (ADR-023), Phase 8.2's
+color-contrast token fix (ADR-024), Phase 8.5's real upload-persistence data-loss bug (ADR-026),
+and Phase 8.7's `RecentActivity`/Recharts a11y fixes.
 
 ## Deployment status (carried forward, unchanged this session)
 
-No new deployment happened this session — Phase 8.7 is frontend-only, no `api/**` code touched.
-Phase 8.5's upload-persistence fix (ADR-026) and the other application-code fixes from prior
-Phase 8 sessions still haven't reached production — see "Blockers/assumptions" below, unchanged
-from the prior checkpoint.
+No new deployment happened this session — Phase 8.8 touched `api/data.js` (one additive DELETE
+route) but nothing that changes existing route behavior. Phase 8.5's upload-persistence fix
+(ADR-026) and the other application-code fixes from prior Phase 8 sessions still haven't reached
+production — see "Blockers/assumptions" below, unchanged from the prior checkpoint.
 
 - **Production URL**: https://cash-canvas-sigma.vercel.app
 - **Commit deployed (last verified)**: `08ece44` (see prior checkpoint history for full detail,
@@ -472,59 +525,64 @@ from the prior checkpoint.
 
 ## Current production readiness estimate
 
-**~84%.** Up from ~83%. Phase 8.7 shipped no new production-facing regressions — the two real
-defects it found (the `RecentActivity.jsx` scroll-container a11y gap, the Recharts pie-slice
-`role="img"` finding) were both accessibility bugs caught and fixed *before* commit, not shipped
-and later discovered, matching the discipline that already caught Phase 8.5's more serious
-data-loss bug. Auth/session/security/data-integrity remain production-grade with real
-browser-level regression coverage across 5 browser engines, plus accessibility and visual
-regression baselines — `/analytics` is now the second page in the app (after Landing) whose a11y
-scan runs with a genuinely empty allowlist for its own content. Remaining gaps: the same ones
-Phase 7 already named (`VERCEL_TOKEN` secret, branch protection); visual regression not yet running
-in CI (Linux baseline gap, ADR-020); Categories/Merchant Rules/Settings/Savings still on the legacy
-`Dashboard` tab bar (Phase 8.8/8.9); and Phase 8.5's upload-persistence fix itself still hasn't
-reached production (see "Blockers/assumptions" below) — real users remain affected until the next
-deploy, now three phases of accumulated frontend work behind it.
+**~85%.** Up from ~84%. Phase 8.8's most significant find — the `cleanDesc`/`cleanTransaction`
+categorization bug — is a genuine, real accuracy improvement for **already-shipped, currently-in-
+production** categorization logic (both the client-side rule matcher and the backend AI-
+preprocessing pipeline share the fixed regex), not just new-feature scope; like Phase 8.5's
+upload-persistence fix, it won't help real users until the next deploy. The `apiFetch`
+`Content-Type` gap was caught entirely within this session (no prior phase's shipped write path
+used `apiFetch` directly for a JSON body), so it never reached production — a bug found and fixed
+before it could become a real regression. Auth/session/security/data-integrity remain
+production-grade with real browser-level regression coverage across 5 browser engines, plus
+accessibility and visual regression baselines — Categories and Merchant Rules are both new pages
+whose a11y scans pass against the same shell-level allowlist every other authenticated page
+carries. Remaining gaps: the same ones Phase 7 already named (`VERCEL_TOKEN` secret, branch
+protection); visual regression not yet running in CI (Linux baseline gap, ADR-020);
+Settings/Savings still on the legacy `Dashboard` tab bar (Phase 8.9); and both Phase 8.5's
+upload-persistence fix and this phase's categorization fix still haven't reached production (see
+"Blockers/assumptions" below) — real users remain affected until the next deploy.
 
 ## Remaining technical debt
 
 Full list with rationale lives in `ROADMAP.md`'s "Known technical debt" section — not duplicated
-here to avoid drift. New this session: `SpendingDonut.jsx`'s `--chart-1`/`--chart-2` tokens are
-identical hex values to `--positive`/`--negative` — a pre-existing, already-shipped design choice
-(byte-identical to the legacy `Dashboard`'s old `PALETTE`), not a new regression, deliberately not
-retrofitted this phase (see the Phase 8.7 completion note in ROADMAP.md). Carried forward,
-unchanged: `Header.jsx`'s topbar is `role="region"`, not a real `<header>`, until the last
-old-header page (`UploadScreen`/`Dashboard`) is migrated away (ADR-022); Material Symbols Outlined
-icon font stays CDN-hosted until every old screen using it migrates off (tracked to close alongside
-Phase 8.8) — the legacy `Dashboard`'s Categories/Savings/Transactions tabs and header still use it.
-The legacy `Dashboard` component (`App.jsx`) still owns Categories/Savings/Transactions/the tab
-bar/the header — each shrinks the legacy component further as its own phase (8.8–8.9) lands, until
-`Dashboard`/`App.jsx`'s `LegacyWorkspace` can be deleted entirely in Phase 10. Also carried forward:
-visual regression doesn't run in CI yet (ADR-020); the a11y allowlist in `tests/e2e/a11y.spec.js`
-is real, current, Phase-8-scoped debt for every page except Landing and now Analytics (ADR-019);
-`api/auth.js`'s OTP/email-verification branches remain untestable without real Gmail SMTP
-credentials (ADR-021); `logoutAllDevices()` has no UI caller; `deploy-verify.yml` needs its
-`VERCEL_TOKEN` secret; branch protection recommendations are unapplied; 44 pre-existing ESLint
-warnings remain (see "Test suite" above).
+here to avoid drift. New this session: `services/http.js`'s target architecture describes `api.js`
+as "kept nearly as-is, it's already good" — the `Content-Type` gap found this phase shows that
+wasn't quite true; worth a fresh look during Phase 10's final cleanup now that it's fixed, not
+reopened further here. Carried forward, unchanged: `SpendingDonut.jsx`'s `--chart-1`/`--chart-2`
+tokens are identical hex values to `--positive`/`--negative` — pre-existing, already shipped,
+deliberately not retrofitted (Phase 8.7's completion note); `Header.jsx`'s topbar is
+`role="region"`, not a real `<header>`, until the last old-header page (`UploadScreen`/`Dashboard`)
+is migrated away (ADR-022); Material Symbols Outlined icon font stays CDN-hosted until every old
+screen using it migrates off — the legacy `Dashboard`'s Savings tab and header still use it (now
+the only remaining consumer, since Categories moved off it this phase). The legacy `Dashboard`
+component (`App.jsx`) still owns Savings/the tab bar/the header — each shrinks the legacy component
+further as its own phase lands, until `Dashboard`/`App.jsx`'s `LegacyWorkspace` can be deleted
+entirely in Phase 10. Also carried forward: visual regression doesn't run in CI yet (ADR-020); the
+a11y allowlist in `tests/e2e/a11y.spec.js` is real, current, Phase-8-scoped debt for every page
+except Landing/Analytics/Categories/Merchant Rules (ADR-019); `api/auth.js`'s OTP/email-verification
+branches remain untestable without real Gmail SMTP credentials (ADR-021); `logoutAllDevices()` has
+no UI caller; `deploy-verify.yml` needs its `VERCEL_TOKEN` secret; branch protection
+recommendations are unapplied; 43 pre-existing ESLint warnings remain (see "Test suite" above).
 
 ## Next recommended step
 
-**Phase 8.8: Categories + Merchant Rules** — `pages/CategoriesPage.jsx` + `features/categories/`
-(category cards, keyword editing, uncategorized quick-fix, same logic rebuilt on tokens) at
-`/categories`; new `pages/MerchantRulesPage.jsx` + `features/merchant-rules/` at `/merchant-rules`
-(list + delete), per `docs/frontend/phase-8-migration-plan.md`'s Phase 8. Two-palette problem
-(audit §5) resolved: the New Category modal's color picker pulls from the same reconciled palette
-the charts use — worth reconciling against the `--chart-1`/`--positive` collision flagged as
-tracked debt above while touching this palette code, if in scope. Backend note: confirm whether
-`DELETE /api/merchant-rules/:id` exists yet (`GET`/`POST` do); if not, a small additive route
-following the existing `DELETE /api/categories/:id` pattern. New tests: Merchant Rules list shows a
-rule created via reassignment (cross-feature integration test — reassign in Transactions, verify
-it's listed at `/merchant-rules`), delete a rule, empty state. Then Phase 8.9, Settings + Savings.
-Same discipline as 8.1–8.7: full verification gate green before moving on, any bug found gets
-root-caused and fixed (with a regression test) before continuing, not deferred — prefer a real
-reproduction (curl/direct API call, isolated-vs-full-suite repro, or reading the library source as
-this phase did for Recharts) over inferring root cause from a single test failure, and flag a real
-finding explicitly rather than widening an allowlist to make it pass.
+**Phase 8.9: Settings + Savings** — `pages/SettingsPage.jsx` + `features/settings/` (account info
+read-only, theme toggle, delete account — rebuilt `Dialog`, same logic) and `pages/SavingsPage.jsx`
++ `features/savings/` at `/savings` (goal form/cut planner, now actually persisted — closes
+ADR-007), per `docs/frontend/phase-8-migration-plan.md`'s Phase 9. Backend note: savings
+persistence needs a genuinely new collection + route (`api/data.js`, following the existing
+categories/merchant-rules pattern) — the one place in the whole plan with real new backend surface,
+not just new query params on an existing route; add Vitest integration tests for it before the
+frontend consumes it, test-driven, same as this phase's own `DELETE /api/merchant-rules/:id`.
+Delete Account's existing e2e coverage (`auth.spec.js`) should need no changes — the confirm-dialog
+text and redirect it asserts on are preserved, just relocated. After 8.9, Phase 10 (final cleanup):
+`App.jsx` reduced to its ~30-line target shape, `Dashboard`/`LegacyWorkspace` deleted entirely,
+full a11y re-scan of every route, Linux-native visual baselines in CI. Same discipline as 8.1–8.8:
+full verification gate green before moving on, any bug found gets root-caused and fixed (with a
+regression test) before continuing, not deferred — prefer a real reproduction (network tracing,
+direct function calls, isolated-vs-full-suite repro, or reading a library's source, all used this
+phase) over inferring root cause from a single test failure, and flag a real finding explicitly
+rather than widening an allowlist or loosening an assertion to make it pass.
 
 ## Blockers / assumptions
 
@@ -548,3 +606,10 @@ finding explicitly rather than widening an allowlist to make it pass.
   phases to batch up, and worth a manual smoke check (upload a real file, reload, confirm it's
   still there) against production specifically once deployed, not just the e2e suite's coverage
   of it.
+- **Phase 8.8's `cleanDesc`/`cleanTransaction` categorization fix is also real user-impacting and
+  not yet in production** — until the next deploy, any real transaction whose merchant name is a
+  single bare word 9+ letters long (confirmed: "starbucks", "walgreens"; likely others not yet
+  enumerated) continues to silently miscategorize as "Other" on both the client-side categorizer
+  and the real AI-preprocessing pipeline (`api/_lib/transaction-cleaner.js`), exactly as it has
+  since this regex was introduced. Same class of "shipped, silent, user-impacting" bug as
+  ADR-026 — worth batching into the same next deploy rather than waiting further.

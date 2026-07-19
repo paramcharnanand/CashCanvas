@@ -101,4 +101,17 @@ test.describe("accessibility", () => {
     // introduced.
     await checkA11yAgainstBaseline(page, ["color-contrast", "landmark-one-main", "region"]);
   });
+
+  test("categories page has no unexpected a11y violations", async ({ authenticatedPage: page }) => {
+    await seedTransactions(page);
+    await page.goto("/categories");
+    await expect(page.getByRole("heading", { name: "Categories" })).toBeVisible();
+    await checkA11yAgainstBaseline(page, ["color-contrast", "landmark-one-main", "region"]);
+  });
+
+  test("merchant rules page has no unexpected a11y violations", async ({ authenticatedPage: page }) => {
+    await page.goto("/merchant-rules");
+    await expect(page.getByRole("heading", { name: "Merchant Rules" })).toBeVisible();
+    await checkA11yAgainstBaseline(page, ["color-contrast", "landmark-one-main", "region"]);
+  });
 });

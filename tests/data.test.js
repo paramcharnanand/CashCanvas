@@ -89,3 +89,55 @@ describe("/api/categorize — merchant-rule fuzzy match short-circuits Gemini", 
     expect(res.body.warning).toBe("GEMINI_API_KEY not configured"); // test env has no key set
   });
 });
+
+describe("DELETE /api/merchant-rules/:id (Phase 8.8, Merchant Rules management screen)", () => {
+  it("deletes a rule the caller owns, and it no longer appears in the list", async () => {
+    const { agent, csrf } = await signupUser(uniqueEmail());
+    await agent.post("/api/merchant-rules").set("X-CSRF-Token", csrf)
+      .send({ merchantName: "acme coffee", category: "Dining" });
+
+    const before = await agent.get("/api/merchant-rules");
+    expect(before.body).toHaveLength(1);
+    const id = before.body[0]._id;
+
+    const del = await agent.delete(`/api/merchant-rules/${id}`).set("X-CSRF-Token", csrf);
+    expect(del.status).toBe(200);
+    expect(del.body).toEqual({ ok: true });
+
+    const after = await agent.get("/api/merchant-rules");
+    expect(after.body).toHaveLength(0);
+  });
+
+  it("does not delete another user's rule (userId-scoped filter, not just a global ID lookup)", async () => {
+    const { agent: owner, csrf: ownerCsrf } = await signupUser(uniqueEmail());
+    await owner.post("/api/merchant-rules").set("X-CSRF-Token", ownerCsrf)
+      .send({ merchantName: "acme coffee", category: "Dining" });
+    const ownerId = (await owner.get("/api/merchant-rules")).body[0]._id;
+
+    const { agent: intruder, csrf: intruderCsrf } = await signupUser(uniqueEmail());
+    const del = await intruder.delete(`/api/merchant-rules/${ownerId}`).set("X-CSRF-Token", intruderCsrf);
+    // deleteOne on a non-matching filter succeeds with deletedCount: 0, not a 404 —
+    // same behavior categoryById's DELETE already has (no existence leak either way).
+    expect(del.status).toBe(200);
+
+    const stillThere = await owner.get("/api/merchant-rules");
+    expect(stillThere.body).toHaveLength(1);
+  });
+
+  it("rejects a malformed ID with 400, not a 500 from an invalid ObjectId cast", async () => {
+    const { agent, csrf } = await signupUser(uniqueEmail());
+    const res = await agent.delete("/api/merchant-rules/not-a-valid-id").set("X-CSRF-Token", csrf);
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects an unauthenticated request with 401", async () => {
+    const res = await request(app).delete("/api/merchant-rules/507f1f77bcf86cd799439011");
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects a request with no CSRF token with 403", async () => {
+    const { agent } = await signupUser(uniqueEmail());
+    const res = await agent.delete("/api/merchant-rules/507f1f77bcf86cd799439011");
+    expect(res.status).toBe(403);
+  });
+});

@@ -6,6 +6,7 @@
  *   GET/POST        /api/categories
  *   PUT/DELETE      /api/categories/:id
  *   GET/POST        /api/merchant-rules
+ *   DELETE          /api/merchant-rules/:id
  */
 import { getDb }             from "./_lib/db.js";
 import { getUser }           from "./_lib/jwt.js";
@@ -286,6 +287,26 @@ async function merchantRules(req, res) {
   res.status(405).end();
 }
 
+async function merchantRuleById(req, res) {
+  const user = getUser(req);
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+  const id = pathId(req);
+  if (!id || !ObjectId.isValid(id)) return res.status(400).json({ error: "Invalid ID" });
+
+  const db     = await getDb();
+  const filter = { _id: new ObjectId(id), userId: user.userId };
+
+  if (req.method === "DELETE") {
+    if (!requireCsrf(req, res)) return;
+    if (!rateLimited(res, user, "merchant-rules:delete", 15 * 60_000, 60)) return;
+    await db.collection("merchant_category_rules").deleteOne(filter);
+    return res.json({ ok: true });
+  }
+
+  res.status(405).end();
+}
+
 // ── router ────────────────────────────────────────────────────────────────────
 
 export default withErrorHandling(async function handler(req, res) {
@@ -300,7 +321,8 @@ export default withErrorHandling(async function handler(req, res) {
   if (path.startsWith("/api/categories/")) return categoryById(req, res);
 
   // merchant-rules
-  if (path === "/api/merchant-rules") return merchantRules(req, res);
+  if (path === "/api/merchant-rules")          return merchantRules(req, res);
+  if (path.startsWith("/api/merchant-rules/")) return merchantRuleById(req, res);
 
   res.status(404).json({ error: "Not found" });
 });

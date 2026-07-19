@@ -6,7 +6,7 @@ require re-deriving context that already existed once.
 
 ## Progress
 
-**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.7 of ~8.9 sub-steps done).**
+**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.8 of ~8.9 sub-steps done).**
 
 | # | Phase | Status | Docs |
 |---|---|---|---|
@@ -17,7 +17,7 @@ require re-deriving context that already existed once.
 | 5 | Dependency maintenance (`npm audit`, upgrades) | ✅ Done | `docs/security/threat-model.md` (Dependency posture) |
 | 6 | Testing infrastructure | ✅ Done | `docs/engineering-lessons/phase-6-testing.md` |
 | 7 | CI/CD (GitHub Actions) | ✅ Done | `docs/engineering-lessons/phase-7-ci-cd.md` |
-| 8 | Frontend redesign (design system, routing, navigation shell, a11y) | 🟨 In progress (8.1–8.7 done) | `docs/frontend/phase-8-*.md` |
+| 8 | Frontend redesign (design system, routing, navigation shell, a11y) | 🟨 In progress (8.1–8.8 done) | `docs/frontend/phase-8-*.md` |
 | 9 | Advanced AI features & product enhancements | ⬜ Not started | — |
 
 ### Phase 8.1 completion note (routing, navigation shell, design foundation)
@@ -358,6 +358,105 @@ concrete trigger). Flagged here so it's found deliberately next time, not redisc
 
 Next: Phase 8.8, Categories + Merchant Rules, per `docs/frontend/phase-8-migration-plan.md`'s
 Phase 8.
+
+### Phase 8.8 completion note (Categories + Merchant Rules)
+
+Delivered, per `docs/frontend/phase-8-migration-plan.md`'s Phase 8: `pages/CategoriesPage.jsx` +
+`features/categories/` at `/categories` (category cards, keyword editing, uncategorized quick-fix,
+a "New Category" dialog) and `pages/MerchantRulesPage.jsx` + `features/merchant-rules/` at
+`/merchant-rules` (list + delete — the management screen approved earlier), both added to
+`Sidebar`/`MobileNav`. The Categories tab is deleted from the legacy `Dashboard` (`App.jsx`) —
+`TabBar` now reads `["Overview", "Savings"]` — along with `apiCategories` state, which became
+write-only dead code once nothing outside the deleted tab ever read it. Two-palette problem (audit
+§5) resolved: `NewCategoryDialog`'s color picker now pulls from `--chart-1..6` (the same reconciled
+tokens `SpendingDonut.jsx` uses), replacing the legacy modal's own separate 8-color array. Backend:
+`DELETE /api/merchant-rules/:id` added (mirroring `categoryById`'s existing DELETE pattern exactly).
+
+**A deliberate behavior improvement over the legacy version, not a faithful port**: the legacy
+Categories tab's "uncategorized quick-fix" (click a category chip next to an unmatched transaction)
+only ever set an ephemeral, non-persisted local override (`txnOverrides`) — confirmed by reading
+`App.jsx` before porting, not assumed. Reproducing that as-is on a second, independent route would
+have recreated the exact cross-page state-divergence risk Phase 8.6 already flagged and declined
+for Transactions (see that phase's scope decision 2). Instead, `CategoriesPage`'s quick-fix persists
+via `POST /api/merchant-rules` — the same mechanism the legacy Transactions tab's "Reassign
+Category" flow already uses — closing the gap rather than reproducing it, and giving `/merchant-
+rules` (this phase's own new page) something real to manage from day one.
+
+**Three real, evidenced bugs found and fixed while building this phase, none pre-existing session
+regressions carried in unnoticed:**
+
+1. **A genuine categorization-accuracy bug, in code that predates this entire migration.**
+   `cleanDesc`'s (`App.jsx`) "remove long codes" step (`\b[a-z0-9]{9,}\b`, meant to strip
+   alphanumeric reference/transaction codes) stripped *any* bare 9+ character token — including
+   plain one-word merchant names like "starbucks" (exactly 9 letters) — down to nothing, so
+   `categorize()` had no text left to match a keyword list against and silently fell through to
+   "Other". Found via a real, reproduced failure while writing this phase's own e2e tests (a
+   seeded Starbucks transaction landed in "Other" instead of "Dining"), confirmed via a direct,
+   isolated `cleanDesc("STARBUCKS")` call returning `""` before concluding it was a real bug — not
+   inferred from the failing assertion alone. The identical regex, and identical bug, also existed
+   in `api/_lib/transaction-cleaner.js`'s `cleanTransaction` (the real AI-categorization
+   pipeline's preprocessing step) — usually masked there by its own `|| desc.toLowerCase().trim()`
+   fallback when the *whole* string emptied out, but not when a long merchant word was wiped while
+   other words in the same description survived (a silent partial mis-clean, not just a masked
+   one). Fixed both, identically: require at least one digit in the stripped token
+   (`\b(?=[a-z0-9]*\d)[a-z0-9]{9,}\b`), which still strips genuine alphanumeric codes but leaves
+   plain-word merchant names alone. Regression tests added: `tests/categorization.test.js` (new)
+   and `tests/transaction-cleaner.test.js` (extended).
+2. **A systemic gap in the shared `apiFetch` helper (`src/api.js`), invisible until this phase.**
+   `apiFetch`'s own docstring states its purpose is so `credentials`/the CSRF header are "never
+   forgotten on a call site" — but it never extended that same guarantee to `Content-Type`, so
+   every POST/PUT call site had to remember `headers: {"Content-Type": "application/json"}`
+   itself. This stayed invisible because every `apiFetch` write call site before this phase (the
+   four auth forms) happened to set it manually, Transactions/Analytics only ever used `apiFetch`
+   for GETs (no body), and the real file-upload POST goes through `App.jsx`'s separate `authFetch`
+   wrapper, which already adds the header. `useCategoriesData.js`'s `createCategory`/`setKeywords`/
+   `quickFix` were the first callers to POST/PUT a JSON body through `apiFetch` directly — every
+   one silently 400'd server-side (`express.json()` only parses a body when `Content-Type` says
+   so), reproduced directly via network tracing before concluding it was a real bug, not assumed
+   from the failing e2e test. Fixed at the shared source (`apiFetch`'s `buildHeaders`), the same
+   "fix once, close the gap for every caller" reasoning ADR-024 already used for a design-token
+   bug — not by teaching each new call site to remember the header itself.
+3. **A design gap in `useCategoriesData.js`'s own first draft**, found before it shipped: deleting
+   a category (or editing its keywords) only patched local `apiCategories` state, leaving already-
+   fetched `transactions` stale — a transaction categorized via a since-deleted category's keyword
+   would keep showing that category's now-gone name indefinitely (the legacy Dashboard avoided this
+   because its `transactions` was a `useMemo` reactively depending on `customCats`, recomputing on
+   every edit). Fixed by having `createCategory`/`deleteCategory`/`setKeywords` refetch
+   (`fetchAll()`) after their write completes rather than hand-patching state — always correct by
+   re-deriving from server truth, avoiding the need to duplicate `categorize()`'s reactive call
+   graph in a second place.
+
+**Also found and fixed, incidental to this phase but directly adjacent to code being touched**:
+the command palette (`features/command-palette/commands.js`) and its shortcuts sheet
+(`ShortcutsHelp.jsx`) had drifted out of sync with reality across three separate prior phases —
+"Search transactions" and "Create category"/"Merchant rules" still said `comingIn: "8.6"` after
+Phase 8.6 shipped search; "Go to Analytics" still said `comingIn: "8.7"` after this very migration's
+own Phase 8.7 shipped it; "Import PDF statement" still said `comingIn: "8.5"` after Phase 8.5
+shipped PDF import on `/upload`. A third, independent copy of the same staleness existed in
+`useKeyboardShortcuts.js`: `Cmd+U` still hard-navigated to `/dashboard` with a comment saying
+Upload had no real route "until Phase 8.5" (two phases ago), and `Cmd+A` showed a "coming in Phase
+8.7" toast instead of navigating. All flipped to their real, already-shipped destinations; `Cmd+,`
+and the Settings command corrected to `8.9` (not `8.8` — Settings was never this phase's scope,
+just mislabeled since Phase 8.1). None of this was silently patched over — each stale entry was a
+real, verifiable claim ("X isn't built yet") that had become false and was still being shown to
+users.
+
+**Verification gate**: `npm run lint` (0 errors, 43 warnings — down from 44: one dead-state
+`no-unused-vars` warning removed along with `apiCategories`), `npm test` (101/101 — 93 carried
+forward + 5 new merchant-rules-DELETE integration tests + 3 new `cleanTransaction` tests), `npx
+playwright test` — 388 passed / 16 skipped / 0 failed (13 new tests across `categories.spec.js`
+and `merchant-rules.spec.js`, 2 new a11y cases). One visual baseline regenerated
+(`app-shell-empty`, chromium-only) — expected, two more new nav items, same pattern as every prior
+phase. One unrelated firefox a11y-scan timeout appeared on a full-suite run — the same, already-
+diagnosed local CPU-contention noise as Phases 8.5–8.7; 8/8 clean on an isolated single-worker
+rerun.
+
+**Tracked, not addressed this phase**: `services/http.js`'s target architecture describes `api.js`
+as "kept nearly as-is, it's already good" — the `Content-Type` gap found above shows that wasn't
+quite true; worth a fresh look during Phase 10's final cleanup pass now that it's fixed, not
+reopened here beyond the fix itself.
+
+Next: Phase 8.9, Settings + Savings, per `docs/frontend/phase-8-migration-plan.md`'s Phase 9.
 
 ### ADR-026 — Real statement uploads never persisted: `Date.toISOString()` vs. the backend's bare-`YYYY-MM-DD` requirement, plus a silently-swallowed save failure
 

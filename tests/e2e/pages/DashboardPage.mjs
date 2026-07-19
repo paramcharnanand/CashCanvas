@@ -3,7 +3,6 @@ export class DashboardPage {
   constructor(page) {
     this.page = page;
     this.overviewTab = page.getByRole("button", { name: "Overview" });
-    this.categoriesTab = page.getByRole("button", { name: "Categories" });
     this.savingsTab = page.getByRole("button", { name: "Savings" });
     // "Transactions" isn't in the visible tab bar — it's only reachable by
     // clicking a stat card (see App.jsx's StatCard onClick), matching the

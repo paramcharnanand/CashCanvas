@@ -3,8 +3,25 @@
  *
  * Auth state lives entirely in HttpOnly cookies now — this file never reads,
  * stores, or decodes a JWT. Every request goes through here so that
- * `credentials: "include"` (send/receive cookies) and the CSRF header are
- * never forgotten on a call site.
+ * `credentials: "include"` (send/receive cookies), the CSRF header, and
+ * `Content-Type: application/json` (for any string `body`) are never
+ * forgotten on a call site.
+ *
+ * The `Content-Type` default was added in Phase 8.8, found via a real,
+ * reproduced failure: every existing `apiFetch` POST call site up to that
+ * point (the four auth forms) happened to set it manually, so the gap
+ * stayed invisible — Transactions/Analytics only ever used `apiFetch` for
+ * GETs (no body), and the real file-upload POST went through `App.jsx`'s
+ * separate `authFetch` wrapper, which already added this header itself.
+ * `features/categories/hooks/useCategoriesData.js` was the first caller to
+ * POST/PUT a JSON body through `apiFetch` directly without also setting the
+ * header — Express's `express.json()` body parser only parses a request
+ * body when `Content-Type` says so, so `req.body` came back empty server-
+ * side and every write silently 400'd. Fixed at the shared source (this
+ * file), not by teaching each new call site to remember the header itself
+ * — the same reasoning ADR-024 already used for a design-token bug: fixing
+ * the one shared place closes the gap for every caller, present and future,
+ * rather than leaving the same mistake available to make again.
  */
 
 // Endpoints that happen before a session exists (or the refresh endpoint
@@ -26,10 +43,16 @@ function getCsrfToken() {
   return match ? decodeURIComponent(match[1]) : "";
 }
 
-function buildHeaders(method, existing) {
+function buildHeaders(method, existing, body) {
   const headers = new Headers(existing || {});
   if (method !== "GET" && method !== "HEAD") {
     headers.set("X-CSRF-Token", getCsrfToken());
+  }
+  // Only for a plain string body (every call site here passes
+  // JSON.stringify(...)) — never for FormData, which needs the browser to
+  // set its own multipart boundary automatically.
+  if (typeof body === "string" && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
   }
   return headers;
 }
@@ -40,7 +63,7 @@ async function rawRequest(url, options = {}) {
     ...options,
     method,
     credentials: "include",
-    headers: buildHeaders(method, options.headers),
+    headers: buildHeaders(method, options.headers, options.body),
   });
 }
 
