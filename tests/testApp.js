@@ -15,7 +15,7 @@ export function buildTestApp() {
   app.use(express.json({ limit: "10mb" }));
   app.all("/api/auth/*", authHandler);
   app.all(
-    ["/api/files", "/api/files/*", "/api/categories", "/api/categories/*", "/api/merchant-rules", "/api/merchant-rules/*"],
+    ["/api/files", "/api/files/*", "/api/categories", "/api/categories/*", "/api/merchant-rules", "/api/merchant-rules/*", "/api/savings"],
     dataHandler
   );
   app.all(["/api/categorize", "/api/parse-pdf"], aiHandler);

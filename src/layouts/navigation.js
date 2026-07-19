@@ -20,8 +20,8 @@ export const NAV_ITEMS = [
   { id: "analytics", to: "/analytics", label: "Analytics", icon: BarChart3, enabled: true, phase: null },
   { id: "categories", to: "/categories", label: "Categories", icon: Tag, enabled: true, phase: null },
   { id: "merchant-rules", to: "/merchant-rules", label: "Merchant Rules", icon: Store, enabled: true, phase: null },
-  { id: "savings", to: "/savings", label: "Savings", icon: Target, enabled: false, phase: "8.9" },
-  { id: "settings", to: "/settings", label: "Settings", icon: Settings, enabled: false, phase: "8.9" },
+  { id: "savings", to: "/savings", label: "Savings", icon: Target, enabled: true, phase: null },
+  { id: "settings", to: "/settings", label: "Settings", icon: Settings, enabled: true, phase: null },
 ];
 
 export const SIDEBAR_ITEMS = NAV_ITEMS.filter((item) => item.enabled);

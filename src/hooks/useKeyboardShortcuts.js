@@ -1,16 +1,13 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useToast } from "../contexts/ToastContext.jsx";
 
 /**
  * Standardized global keyboard shortcuts. See
  * docs/frontend/phase-8-design-system.md § Motion System / Accessibility
- * and the Phase 8 implementation instructions this responds to.
- *
- * Every shortcut listed is bound now, even ones without a real destination
- * yet (Settings) — pressing them gives an honest "coming soon" toast
- * instead of either silently doing nothing (which reads as broken for a
- * *documented* shortcut) or navigating somewhere wrong.
+ * and the Phase 8 implementation instructions this responds to. As of
+ * Phase 8.9 every documented shortcut has a real destination — no more
+ * "coming soon" toast fallback (Settings, the last one, shipped this
+ * phase).
  *
  * Note: Ctrl/Cmd+U and Ctrl/Cmd+D are browser-reserved in some browsers
  * (view-source, bookmark) — preventDefault() is called regardless, but
@@ -19,7 +16,6 @@ import { useToast } from "../contexts/ToastContext.jsx";
  */
 export function useKeyboardShortcuts({ onOpenPalette, onShowShortcuts }) {
   const navigate = useNavigate();
-  const { show } = useToast();
 
   useEffect(() => {
     function isTypingTarget(el) {
@@ -53,7 +49,7 @@ export function useKeyboardShortcuts({ onOpenPalette, onShowShortcuts }) {
       }
       if (mod && e.key === ",") {
         e.preventDefault();
-        show("Settings is coming in Phase 8.9.", { variant: "info" });
+        navigate("/settings");
         return;
       }
       // "?" (Shift+/) opens the shortcuts sheet — but not while typing, so a
@@ -66,5 +62,5 @@ export function useKeyboardShortcuts({ onOpenPalette, onShowShortcuts }) {
 
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [navigate, show, onOpenPalette, onShowShortcuts]);
+  }, [navigate, onOpenPalette, onShowShortcuts]);
 }

@@ -1,6 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import * as Papa from "papaparse";
-import { XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend, LabelList } from "recharts";
 import _ from "lodash";
 import { apiFetch } from "./api.js";
 import { useAuth } from "./contexts/AuthContext.jsx";
@@ -393,27 +392,6 @@ function useIsMobile() {
 }
 
 // ─── COMPONENTS ───
-
-function StatCard({ label, value, sub, color = theme.primary, onClick }) {
-  return (
-    <div style={{
-      background: theme.surface,
-      borderRadius: 8, padding: "20px 24px", flex: "1 1 140px", minWidth: 0,
-      borderLeft: `3px solid ${color}`,
-      boxShadow: "0 1px 3px rgba(27,28,26,0.07)",
-      cursor: onClick ? "pointer" : "default", userSelect: "none",
-      transition: "box-shadow 0.2s",
-    }}
-    onClick={onClick}
-    onMouseEnter={e => { if (onClick) e.currentTarget.style.boxShadow = "0 3px 8px rgba(27,28,26,0.12)"; }}
-    onMouseLeave={e => { if (onClick) e.currentTarget.style.boxShadow = "0 1px 3px rgba(27,28,26,0.07)"; }}
-    >
-      <div style={{ fontSize: 11, fontFamily: fontMono, color: theme.textMuted, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 500, marginBottom: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</div>
-      <div style={{ fontSize: 30, fontWeight: 600, color: theme.text, fontFamily: fontMono, fontFeatureSettings: '"tnum"', letterSpacing: "-0.02em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: color, marginTop: 6, display: "flex", alignItems: "center", gap: 4, fontFamily: font, fontWeight: 500 }}>{sub}</div>}
-    </div>
-  );
-}
 
 function TabBar({ tabs, active, onChange }) {
   return (
@@ -896,71 +874,8 @@ export async function parsePDF(file, onProgress = () => {}) {
   return { txns: bestTxns, statementType };
 }
 
-// ─── DELETE ACCOUNT MODAL ───
-function DeleteAccountModal({ onLogout, onClose }) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState("");
-
-  async function handleDelete() {
-    setLoading(true);
-    setError("");
-    try {
-      const res = await apiFetch("/api/auth/delete-account", { method: "DELETE" });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        setError(d.error || "Something went wrong. Please try again.");
-        setLoading(false);
-        return;
-      }
-      onLogout();
-    } catch {
-      setError("Network error. Please try again.");
-      setLoading(false);
-    }
-  }
-
-  return (
-    <div style={{
-      position: "fixed", inset: 0, background: "rgba(27,28,26,0.4)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      zIndex: 9999, padding: 20,
-    }} onClick={onClose}>
-      <div style={{
-        background: theme.surface, borderRadius: 12, padding: "32px 28px",
-        maxWidth: 420, width: "100%", boxShadow: "0 8px 40px rgba(27,28,26,0.2)",
-      }} onClick={e => e.stopPropagation()}>
-        <div style={{ fontSize: 20, fontFamily: fontHeadline, fontWeight: 500, color: theme.text, marginBottom: 10 }}>
-          Delete your account?
-        </div>
-        <p style={{ fontSize: 14, color: theme.textMuted, lineHeight: 1.6, margin: "0 0 24px", fontFamily: font }}>
-          This will permanently delete your account and all your data — uploaded statements, categories, and saved rules.
-          <strong style={{ color: theme.text }}> This cannot be undone.</strong>
-        </p>
-        {error && (
-          <div style={{ fontSize: 13, color: "#b02d21", background: "rgba(176,45,33,0.07)", borderRadius: 6, padding: "10px 14px", marginBottom: 16, fontFamily: font }}>
-            {error}
-          </div>
-        )}
-        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-          <button onClick={onClose} disabled={loading} style={{
-            padding: "9px 18px", background: "none", border: `1px solid ${theme.border}`,
-            borderRadius: 7, color: theme.textSubtle, cursor: "pointer", fontFamily: font, fontSize: 13,
-          }}>Cancel</button>
-          <button onClick={handleDelete} disabled={loading} style={{
-            padding: "9px 18px", background: loading ? "#d97070" : "#b02d21",
-            border: "none", borderRadius: 7, color: "#fff", cursor: loading ? "default" : "pointer",
-            fontFamily: font, fontSize: 13, fontWeight: 600, transition: "background 0.15s",
-          }}>
-            {loading ? "Deleting…" : "Delete Account"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── UPLOAD SCREEN ───
-function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
+function UploadScreen({ onData, auth, onLoadFile }) {
   const isMobile = useIsMobile();
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState(null);
@@ -968,7 +883,6 @@ function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
   const [loadingMsg, setLoadingMsg] = useState("");
   const [fileHistory, setFileHistory] = useState([]);
   const [yearFilter, setYearFilter] = useState("all");
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const inputRef = useRef();
 
   useEffect(() => {
@@ -1068,23 +982,8 @@ function UploadScreen({ onData, auth, onLoadFile, onLogout }) {
       {/* Nav */}
       <header style={{ background: theme.bg, borderBottom: `1px solid ${theme.surfaceContainerLow}`, padding: isMobile ? "12px 16px" : "16px 48px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ fontSize: 22, fontFamily: fontHeadline, fontStyle: "italic", color: theme.text }}>CashCanvas</div>
-        {auth?.user && (
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {!isMobile && <span style={{ fontSize: 13, color: theme.textSubtle, fontFamily: fontMono }}>{auth.user.name}</span>}
-            <button onClick={() => setShowDeleteModal(true)} style={{
-              padding: "7px 12px", background: "none",
-              border: `1px solid rgba(176,45,33,0.3)`, borderRadius: 6,
-              color: "#b02d21", cursor: "pointer", fontFamily: font, fontSize: 12,
-            }}>Delete Account</button>
-            <button onClick={onLogout} style={{
-              padding: "7px 14px", background: "none",
-              border: `1px solid ${theme.border}`, borderRadius: 6,
-              color: theme.textSubtle, cursor: "pointer", fontFamily: font, fontSize: 12,
-            }}>Sign Out</button>
-          </div>
-        )}
-        {showDeleteModal && (
-          <DeleteAccountModal onLogout={onLogout} onClose={() => setShowDeleteModal(false)} />
+        {auth?.user && !isMobile && (
+          <span style={{ fontSize: 13, color: theme.textSubtle, fontFamily: fontMono }}>{auth.user.name}</span>
         )}
       </header>
 
@@ -1382,26 +1281,6 @@ export function generateSampleData() {
   return txns;
 }
 
-// ─── CUSTOM TOOLTIP ───
-function CustomTooltip({ active, payload, label }) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div style={{
-      background: theme.surface,
-      borderRadius: 6, padding: "10px 14px", fontSize: 13, fontFamily: font,
-      boxShadow: "0 8px 24px rgba(27,28,26,0.1)",
-      border: `1px solid ${theme.border}`,
-    }}>
-      <div style={{ color: theme.textSubtle, marginBottom: 6, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: fontMono }}>{label}</div>
-      {payload.map((p, i) => (
-        <div key={i} style={{ color: p.color || theme.text, fontWeight: 600, fontFamily: fontMono, fontFeatureSettings: '"tnum"' }}>
-          {p.name}: ${Math.abs(p.value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // ─── DOWNLOAD REPORT HELPERS ───
 function buildTransactionsCsv(transactions) {
   const header = "Date,Description,Category,Amount,Type";
@@ -1455,17 +1334,13 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
   const [tab, setTab] = useState("Overview");
   const [customCats, setCustomCats] = useState({});
   const [merchantRules, setMerchantRules] = useState(new Map());
-  const [savingsGoal, setSavingsGoal] = useState({ amount: "", deadline: "", name: "" });
   const [reassignTxn, setReassignTxn] = useState(null);
   const [txnOverrides, setTxnOverrides] = useState({});
   const [newCatName, setNewCatName] = useState("");
   const [selectedTxns, setSelectedTxns] = useState(new Set());
-  const [cutSelections, setCutSelections] = useState({});
-  const [showPlan, setShowPlan] = useState(false);
   const [aiDone, setAiDone] = useState(false);
   const [rulesLoaded, setRulesLoaded] = useState(false);
   const [showDownload, setShowDownload] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // ── API helper ──
   const authFetch = useCallback(async (url, options = {}) => {
@@ -1595,22 +1470,6 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
       .slice(0, 3);
   }, [transactions]);
 
-  // Savings calculation
-  const savingsSuggestion = useMemo(() => {
-    if (!savingsGoal.amount || !savingsGoal.deadline) return null;
-    const target = parseFloat(savingsGoal.amount);
-    const deadline = new Date(savingsGoal.deadline);
-    const today = new Date();
-    const monthsLeft = Math.max(1, (deadline.getFullYear() - today.getFullYear()) * 12 + deadline.getMonth() - today.getMonth());
-    const monthly = target / monthsLeft;
-    const avgMonthlyIncome = totalIncome / Math.max(1, monthlyData.length);
-    const avgMonthlyExpense = totalExpenses / Math.max(1, monthlyData.length);
-    const surplus = avgMonthlyIncome - avgMonthlyExpense;
-    const feasible = surplus >= monthly;
-    const suggestedBudget = avgMonthlyExpense - (monthly - Math.max(0, surplus));
-    return { target, monthsLeft, monthly, avgMonthlyIncome, avgMonthlyExpense, surplus, feasible, suggestedBudget, goalName: savingsGoal.name };
-  }, [savingsGoal, totalIncome, totalExpenses, monthlyData]);
-
   const allCategories = useMemo(() => {
     const cats = new Set(Object.keys(DEFAULT_CATEGORIES));
     Object.keys(customCats).forEach(c => cats.add(c));
@@ -1655,20 +1514,6 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
                 <span className="material-symbols-outlined" style={{ fontSize: 15, fontVariationSettings: "'FILL' 0, 'wght' 300" }}>download</span>
                 {!isMobile && "Download"}
               </button>
-              {auth?.user && !isMobile && (
-                <>
-                  <button onClick={() => setShowDeleteModal(true)} style={{
-                    padding: "8px 12px", background: "none",
-                    border: `1px solid rgba(176,45,33,0.3)`, borderRadius: 6,
-                    color: "#b02d21", cursor: "pointer", fontFamily: font, fontSize: 12,
-                  }}>Delete Account</button>
-                  <button onClick={onLogout} style={{
-                    padding: "8px 14px", background: "none",
-                    border: `1px solid ${theme.border}`, borderRadius: 6,
-                    color: theme.textSubtle, cursor: "pointer", fontFamily: font, fontSize: 12,
-                  }}>Sign Out</button>
-                </>
-              )}
               <button onClick={onReset} style={{
                 padding: isMobile ? "8px 12px" : "9px 18px",
                 background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryContainer} 100%)`,
@@ -1680,14 +1525,6 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
                 {!isMobile && "New Upload"}
               </button>
             </div>
-
-            {/* Delete account modal */}
-            {showDeleteModal && (
-              <DeleteAccountModal
-                onLogout={onLogout}
-                onClose={() => setShowDeleteModal(false)}
-              />
-            )}
 
             {/* Download modal */}
             {showDownload && (
@@ -1732,7 +1569,7 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
             )}
           </div>
           <nav style={{ marginTop: 12 }}>
-            <TabBar tabs={["Overview", "Savings"]} active={tab} onChange={setTab} />
+            <TabBar tabs={["Overview"]} active={tab} onChange={setTab} />
           </nav>
         </div>
         <div style={{ height: 1, background: theme.surfaceContainerLow }} />
@@ -1984,446 +1821,6 @@ function Dashboard({ auth, onLogout, transactions: rawTxns, fileName, statementT
             )}
           </div>
         )}
-
-        {/* ─── SAVINGS TAB ─── */}
-        {tab === "Savings" && (
-          <div style={{ maxWidth: 820, margin: "0 auto" }}>
-            <section style={{ marginBottom: 32, textAlign: "center" }}>
-              <h1 style={{ fontSize: isMobile ? 28 : 40, fontFamily: fontHeadline, fontWeight: 400, color: theme.text, margin: "0 0 8px" }}>
-                Savings <span style={{ fontStyle: "italic", color: theme.primary }}>Goals</span>
-              </h1>
-              <p style={{ fontSize: 14, color: theme.textSubtle, margin: 0 }}>Set a target and get personalized suggestions based on your spending patterns.</p>
-            </section>
-
-            <div style={{
-              background: theme.surface,
-              borderRadius: 8, padding: 28, marginBottom: 24,
-              boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
-            }}>
-              <h3 style={{ fontSize: 18, fontWeight: 400, fontFamily: fontHeadline, margin: "0 0 20px", color: theme.text }}>Set Your Goal</h3>
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                <div>
-                  <label style={{ fontSize: 11, color: theme.textSubtle, display: "block", marginBottom: 6, fontFamily: fontMono, textTransform: "uppercase", letterSpacing: "0.08em" }}>Goal Name</label>
-                  <input value={savingsGoal.name} onChange={e => setSavingsGoal(p => ({ ...p, name: e.target.value }))}
-                    placeholder="e.g., Emergency fund, Vacation, New car"
-                    style={{
-                      width: "100%", padding: "10px 14px", background: theme.surfaceContainerLow,
-                      border: `1px solid ${theme.border}`, borderRadius: 4,
-                      color: theme.text, fontFamily: font, fontSize: 14, outline: "none",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                </div>
-                <div style={{ display: "flex", gap: 12 }}>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: 11, color: theme.textSubtle, display: "block", marginBottom: 6, fontFamily: fontMono, textTransform: "uppercase", letterSpacing: "0.08em" }}>Target Amount ($)</label>
-                    <input value={savingsGoal.amount} onChange={e => setSavingsGoal(p => ({ ...p, amount: e.target.value }))}
-                      type="number" placeholder="5000"
-                      style={{
-                        width: "100%", padding: "10px 14px", background: theme.surfaceContainerLow,
-                        border: `1px solid ${theme.border}`, borderRadius: 4,
-                        color: theme.text, fontFamily: font, fontSize: 14, outline: "none",
-                        boxSizing: "border-box",
-                      }}
-                    />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: 11, color: theme.textSubtle, display: "block", marginBottom: 6, fontFamily: fontMono, textTransform: "uppercase", letterSpacing: "0.08em" }}>Target Date</label>
-                    <input value={savingsGoal.deadline} onChange={e => setSavingsGoal(p => ({ ...p, deadline: e.target.value }))}
-                      type="date"
-                      style={{
-                        width: "100%", padding: "10px 14px", background: theme.surfaceContainerLow,
-                        border: `1px solid ${theme.border}`, borderRadius: 4,
-                        color: theme.text, fontFamily: font, fontSize: 14, outline: "none",
-                        boxSizing: "border-box",
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {savingsSuggestion && (
-              <div>
-                <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 24 }}>
-                  <StatCard
-                    label="Monthly Target"
-                    value={fmt(savingsSuggestion.monthly)}
-                    color={theme.primary}
-                    sub={`${savingsSuggestion.monthsLeft} months to go`}
-                  />
-                  <StatCard
-                    label="Avg Monthly Surplus"
-                    value={(savingsSuggestion.surplus >= 0 ? "+" : "") + fmt(savingsSuggestion.surplus)}
-                    color={savingsSuggestion.surplus >= 0 ? theme.green : theme.accent}
-                    sub="Income minus expenses"
-                  />
-                  <StatCard
-                    label="Feasibility"
-                    value={savingsSuggestion.feasible ? "On Track" : "Needs Adjustment"}
-                    color={savingsSuggestion.feasible ? theme.green : theme.accent}
-                    sub={savingsSuggestion.feasible ? "Current spending supports this goal" : "You may need to reduce spending"}
-                  />
-                </div>
-
-                <div style={{
-                  background: theme.surface,
-                  borderRadius: 8, padding: 28,
-                  boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
-                }}>
-                  <h3 style={{ fontSize: 20, fontWeight: 400, fontFamily: fontHeadline, margin: "0 0 16px", color: theme.text }}>
-                    {savingsSuggestion.goalName ? `Plan: ${savingsSuggestion.goalName}` : "Savings Plan"}
-                  </h3>
-                  <div style={{ fontSize: 14, lineHeight: 1.8, color: theme.textSubtle }}>
-                    <p style={{ margin: "0 0 12px" }}>
-                      To save <strong style={{ color: theme.text, fontFamily: fontMono }}>{fmt(savingsSuggestion.target)}</strong> in{" "}
-                      <strong style={{ color: theme.text }}>{savingsSuggestion.monthsLeft} months</strong>, you need to set aside{" "}
-                      <strong style={{ color: theme.primary, fontFamily: fontMono }}>{fmt(savingsSuggestion.monthly)}/month</strong>.
-                    </p>
-                    <p style={{ margin: "0 0 12px" }}>
-                      Your average monthly income is <strong style={{ color: theme.green, fontFamily: fontMono }}>{fmt(savingsSuggestion.avgMonthlyIncome)}</strong> and
-                      average expenses are <strong style={{ color: theme.accent, fontFamily: fontMono }}>{fmt(savingsSuggestion.avgMonthlyExpense)}</strong>.
-                    </p>
-                    {savingsSuggestion.feasible ? (
-                      <p style={{ margin: 0 }}>
-                        Your current surplus of <strong style={{ color: theme.green, fontFamily: fontMono }}>{fmt(savingsSuggestion.surplus)}/month</strong> covers
-                        the savings target. Keep your spending under <strong style={{ color: theme.text, fontFamily: fontMono }}>{fmt(savingsSuggestion.avgMonthlyIncome - savingsSuggestion.monthly)}/month</strong> to stay on track.
-                      </p>
-                    ) : (
-                      <p style={{ margin: 0 }}>
-                        You'd need to reduce monthly expenses by about{" "}
-                        <strong style={{ color: theme.accent, fontFamily: fontMono }}>{fmt(savingsSuggestion.monthly - Math.max(0, savingsSuggestion.surplus))}</strong> to meet this goal.
-                        Use the planner below to choose where to cut.
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* ─── INTERACTIVE CUT PLANNER ─── */}
-                {(() => {
-                  const numMonths = Math.max(1, monthlyData.length);
-                  const cuttable = catBreakdown.filter(c => c.name !== "Income" && c.name !== "Housing");
-                  const totalCutPerMonth = cuttable.reduce((sum, c) => {
-                    const sel = cutSelections[c.name];
-                    if (!sel?.selected) return sum;
-                    const monthlyAvg = c.value / numMonths;
-                    return sum + (monthlyAvg * (sel.percent || 25) / 100);
-                  }, 0);
-                  const selectedCount = cuttable.filter(c => cutSelections[c.name]?.selected).length;
-                  const newMonthlyExpense = savingsSuggestion.avgMonthlyExpense - totalCutPerMonth;
-                  const newSurplus = savingsSuggestion.avgMonthlyIncome - newMonthlyExpense;
-                  const planFeasible = newSurplus >= savingsSuggestion.monthly;
-
-                  return (
-                    <div style={{
-                      background: theme.surface,
-                      borderRadius: 8, padding: 28, marginTop: 20,
-                      boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
-                    }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                        <h3 style={{ fontSize: 20, fontWeight: 400, fontFamily: fontHeadline, margin: 0, color: theme.text }}>Where can you cut back?</h3>
-                        {selectedCount > 0 && (
-                          <span style={{
-                            fontSize: 12, padding: "4px 12px", borderRadius: 4, fontFamily: fontMono,
-                            background: planFeasible ? theme.greenSoft : theme.yellowSoft,
-                            color: planFeasible ? theme.green : theme.primary, fontWeight: 600,
-                          }}>
-                            {planFeasible ? "Goal achievable!" : `Saving ${fmt(totalCutPerMonth)}/mo so far`}
-                          </span>
-                        )}
-                      </div>
-                      <p style={{ fontSize: 13, color: theme.textSubtle, margin: "0 0 20px", lineHeight: 1.6 }}>
-                        Pick 2–3 categories you're willing to reduce. Adjust the slider to set how much you can cut from each.
-                      </p>
-
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
-                        {cuttable.map((c, i) => {
-                          const monthlyAvg = c.value / numMonths;
-                          const sel = cutSelections[c.name] || { selected: false, percent: 25 };
-                          const saving = monthlyAvg * sel.percent / 100;
-
-                          return (
-                            <div key={c.name} style={{
-                              background: sel.selected ? theme.greenSoft : theme.surfaceContainerLow,
-                              borderLeft: `3px solid ${sel.selected ? theme.green : theme.outlineVariant || "#bfc9c0"}`,
-                              borderRadius: 4, padding: "12px 16px",
-                              transition: "all 0.2s",
-                            }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                                {/* Checkbox */}
-                                <div
-                                  onClick={() => {
-                                    setCutSelections(prev => ({
-                                      ...prev,
-                                      [c.name]: { ...sel, selected: !sel.selected, percent: sel.percent || 25 }
-                                    }));
-                                    setShowPlan(false);
-                                  }}
-                                  style={{
-                                    width: 20, height: 20, borderRadius: 4, flexShrink: 0, cursor: "pointer",
-                                    border: `2px solid ${sel.selected ? theme.green : theme.outlineVariant || "#bfc9c0"}`,
-                                    background: sel.selected ? theme.green : "transparent",
-                                    display: "flex", alignItems: "center", justifyContent: "center",
-                                    transition: "all 0.2s",
-                                  }}
-                                >
-                                  {sel.selected && <span style={{ color: "#fff", fontSize: 12, fontWeight: 700, lineHeight: 1 }}>✓</span>}
-                                </div>
-
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                    <span style={{ fontSize: 14, fontWeight: 600, color: theme.text }}>{c.name}</span>
-                                    <span style={{ fontSize: 13, fontFamily: fontMono, color: theme.textSubtle, fontFeatureSettings: '"tnum"' }}>
-                                      {fmt(monthlyAvg)}<span style={{ fontSize: 11 }}>/mo</span>
-                                    </span>
-                                  </div>
-
-                                  {sel.selected && (
-                                    <div style={{ marginTop: 10 }}>
-                                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                                        <span style={{ fontSize: 11, color: theme.textSubtle, minWidth: 30, fontFamily: fontMono }}>Cut</span>
-                                        <input
-                                          type="range" min="10" max="80" step="5"
-                                          value={sel.percent}
-                                          onChange={e => {
-                                            setCutSelections(prev => ({
-                                              ...prev,
-                                              [c.name]: { ...sel, percent: parseInt(e.target.value) }
-                                            }));
-                                            setShowPlan(false);
-                                          }}
-                                          style={{ flex: 1, accentColor: theme.green, cursor: "pointer" }}
-                                        />
-                                        <span style={{
-                                          fontSize: 14, fontWeight: 700, color: theme.green,
-                                          fontFamily: fontMono, minWidth: 40, textAlign: "right",
-                                        }}>{sel.percent}%</span>
-                                      </div>
-                                      <div style={{ fontSize: 13, color: theme.green, marginTop: 6, fontWeight: 500 }}>
-                                        Save {fmt(saving)}/mo → keep {fmt(monthlyAvg - saving)}/mo for {c.name.toLowerCase()}
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {/* Summary + Generate Plan */}
-                      {selectedCount > 0 && (
-                        <div>
-                          <div style={{
-                            background: theme.surfaceContainerLow, borderRadius: 6, padding: "16px 20px",
-                            marginBottom: 16,
-                          }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                              <span style={{ fontSize: 13, color: theme.textSubtle }}>Monthly savings from cuts</span>
-                              <span style={{ fontSize: 15, fontWeight: 600, fontFamily: fontMono, color: theme.green, fontFeatureSettings: '"tnum"' }}>+{fmt(totalCutPerMonth)}</span>
-                            </div>
-                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                              <span style={{ fontSize: 13, color: theme.textSubtle }}>New monthly expense</span>
-                              <span style={{ fontSize: 13, fontFamily: fontMono, color: theme.text, fontFeatureSettings: '"tnum"' }}>{fmt(newMonthlyExpense)}</span>
-                            </div>
-                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                              <span style={{ fontSize: 13, color: theme.textSubtle }}>New monthly surplus</span>
-                              <span style={{ fontSize: 13, fontFamily: fontMono, color: newSurplus >= savingsSuggestion.monthly ? theme.green : theme.primary, fontFeatureSettings: '"tnum"' }}>
-                                {newSurplus >= 0 ? "+" : ""}{fmt(newSurplus)}
-                              </span>
-                            </div>
-                            <div style={{
-                              height: 3, borderRadius: 2, background: theme.surfaceContainer, marginTop: 12, overflow: "hidden",
-                            }}>
-                              <div style={{
-                                height: "100%", borderRadius: 2, transition: "width 0.4s ease",
-                                width: `${Math.min(100, (newSurplus / savingsSuggestion.monthly) * 100)}%`,
-                                background: planFeasible ? theme.green : theme.primary,
-                              }} />
-                            </div>
-                            <div style={{ fontSize: 11, color: theme.textSubtle, marginTop: 6, textAlign: "right", fontFamily: fontMono }}>
-                              {planFeasible
-                                ? `Surplus covers your ${fmt(savingsSuggestion.monthly)}/mo target`
-                                : `Need ${fmt(savingsSuggestion.monthly - Math.max(0, newSurplus))} more/mo`
-                              }
-                            </div>
-                          </div>
-
-                          <button onClick={() => setShowPlan(true)} style={{
-                            width: "100%", padding: "12px 20px", borderRadius: 6,
-                            background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryContainer} 100%)`,
-                            border: "none", color: "#fff",
-                            fontSize: 14, fontWeight: 600, fontFamily: font, cursor: "pointer",
-                            transition: "opacity 0.2s",
-                          }}
-                          onMouseEnter={e => e.currentTarget.style.opacity = "0.88"}
-                          onMouseLeave={e => e.currentTarget.style.opacity = "1"}
-                          >
-                            Generate My Savings Plan
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Generated Plan */}
-                      {showPlan && selectedCount > 0 && (() => {
-                        const selectedCats = cuttable.filter(c => cutSelections[c.name]?.selected);
-                        const tips = {
-                          "Groceries": ["Try meal prepping on Sundays to reduce impulse buys", "Switch to store-brand items for staples", "Use a grocery list and stick to it — avoid shopping hungry"],
-                          "Dining": ["Cook at home 2 extra nights a week", "Limit food delivery to once a week as a treat", "Bring lunch to work — saves ~$10-15/day"],
-                          "Transport": ["Combine errands into fewer trips", "Use public transit or carpool 2-3 days/week", "Walk or bike for trips under 2 miles"],
-                          "Subscriptions": ["Audit and cancel unused subscriptions", "Share family plans with friends or roommates", "Rotate streaming services monthly instead of paying for all"],
-                          "Utilities": ["Switch to LED bulbs and smart power strips", "Adjust thermostat by 2°F — saves ~5-10% on bills", "Use off-peak hours for laundry and dishwasher"],
-                          "Shopping": ["Implement a 48-hour rule before non-essential purchases", "Unsubscribe from store marketing emails", "Set a monthly 'fun money' budget and stick to it"],
-                          "Health": ["Ask your doctor about generic medication alternatives", "Use in-network providers and preventive care", "Compare pharmacy prices — they vary widely"],
-                          "Entertainment": ["Look for free local events and activities", "Host game nights instead of going out", "Use your library for books, movies, and more"],
-                          "Other": ["Review each 'Other' expense — some might be unnecessary", "Set up automatic transfers to savings on payday", "Track daily spending for a week to find hidden leaks"],
-                        };
-
-                        return (
-                          <div style={{
-                            marginTop: 20, background: theme.surfaceContainerLow, borderRadius: 6,
-                            overflow: "hidden",
-                          }}>
-                            <div style={{
-                              padding: "16px 20px", borderBottom: `1px solid ${theme.surfaceContainer}`,
-                              background: planFeasible ? theme.greenSoft : theme.yellowSoft,
-                            }}>
-                              <div style={{ fontSize: 15, fontWeight: 600, fontFamily: fontHeadline, color: theme.text, marginBottom: 4 }}>
-                                {planFeasible ? "Your plan is on track" : "Your Action Plan"}
-                              </div>
-                              <div style={{ fontSize: 13, color: theme.textSubtle }}>
-                                {planFeasible
-                                  ? `By cutting ${fmt(totalCutPerMonth)}/mo across ${selectedCount} categories, you'll save ${fmt(savingsSuggestion.target)} in ${savingsSuggestion.monthsLeft} months with ${fmt(newSurplus - savingsSuggestion.monthly)}/mo to spare.`
-                                  : `These cuts save ${fmt(totalCutPerMonth)}/mo. You'll need to find ${fmt(savingsSuggestion.monthly - Math.max(0, newSurplus))} more or adjust your timeline.`
-                                }
-                              </div>
-                            </div>
-
-                            {selectedCats.map((c, idx) => {
-                              const sel = cutSelections[c.name];
-                              const monthlyAvg = c.value / numMonths;
-                              const saving = monthlyAvg * sel.percent / 100;
-                              const catTips = tips[c.name] || tips["Other"];
-
-                              return (
-                                <div key={c.name} style={{
-                                  padding: "16px 20px",
-                                  borderBottom: idx < selectedCats.length - 1 ? `1px solid ${theme.surfaceContainer}` : "none",
-                                }}>
-                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                                    <div>
-                                      <span style={{ fontSize: 14, fontWeight: 600, color: theme.text }}>{c.name}</span>
-                                      <span style={{ fontSize: 12, color: theme.textSubtle, marginLeft: 8, fontFamily: fontMono }}>
-                                        {fmt(monthlyAvg)}/mo → {fmt(monthlyAvg - saving)}/mo
-                                      </span>
-                                    </div>
-                                    <span style={{
-                                      fontSize: 13, fontWeight: 600, fontFamily: fontMono,
-                                      color: theme.green, background: theme.greenSoft,
-                                      padding: "3px 8px", borderRadius: 4, fontFeatureSettings: '"tnum"',
-                                    }}>-{fmt(saving)}/mo</span>
-                                  </div>
-                                  <div style={{ fontSize: 13, color: theme.textSubtle, lineHeight: 1.7 }}>
-                                    <div style={{ fontWeight: 600, color: theme.text, fontSize: 10, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.1em", fontFamily: fontMono }}>How to do it:</div>
-                                    {catTips.map((tip, ti) => (
-                                      <div key={ti} style={{ display: "flex", gap: 10, marginBottom: 6 }}>
-                                        <span style={{ color: theme.primary, flexShrink: 0, fontWeight: 700 }}>→</span>
-                                        <span>{tip}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              );
-                            })}
-
-                            {/* Weekly breakdown */}
-                            <div style={{
-                              padding: "16px 20px", borderTop: `1px solid ${theme.surfaceContainer}`,
-                              background: theme.surface,
-                            }}>
-                              <div style={{ fontSize: 10, color: theme.textSubtle, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12, fontFamily: fontMono, fontWeight: 600 }}>
-                                Your new weekly budget
-                              </div>
-                              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                                {selectedCats.map(c => {
-                                  const sel = cutSelections[c.name];
-                                  const monthlyAvg = c.value / numMonths;
-                                  const newMonthly = monthlyAvg * (1 - sel.percent / 100);
-                                  const weekly = newMonthly / 4.33;
-                                  return (
-                                    <div key={c.name} style={{
-                                      flex: "1 1 120px", background: theme.surfaceContainerLow, borderRadius: 4,
-                                      padding: "12px 14px",
-                                      textAlign: "center",
-                                    }}>
-                                      <div style={{ fontSize: 11, color: theme.textSubtle, marginBottom: 4, fontFamily: fontMono }}>{c.name}</div>
-                                      <div style={{ fontSize: 17, fontWeight: 600, fontFamily: fontMono, color: theme.text, fontFeatureSettings: '"tnum"' }}>
-                                        {fmt(weekly)}<span style={{ fontSize: 10, color: theme.textSubtle }}>/wk</span>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                                <div style={{
-                                  flex: "1 1 120px", background: theme.greenSoft, borderRadius: 4,
-                                  padding: "12px 14px",
-                                  textAlign: "center",
-                                }}>
-                                  <div style={{ fontSize: 11, color: theme.green, marginBottom: 4, fontFamily: fontMono }}>To Savings</div>
-                                  <div style={{ fontSize: 17, fontWeight: 600, fontFamily: fontMono, color: theme.green, fontFeatureSettings: '"tnum"' }}>
-                                    {fmt(savingsSuggestion.monthly / 4.33)}<span style={{ fontSize: 10, opacity: 0.7 }}>/wk</span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  );
-                })()}
-
-                {/* Projection chart */}
-                {(() => {
-                  const numMonths2 = Math.max(1, monthlyData.length);
-                  const totalCut2 = catBreakdown.filter(c => c.name !== "Income" && c.name !== "Housing").reduce((sum, c) => {
-                    const sel = cutSelections[c.name];
-                    if (!sel?.selected) return sum;
-                    return sum + ((c.value / numMonths2) * (sel.percent || 25) / 100);
-                  }, 0);
-                  const adjustedMonthly = Math.min(savingsSuggestion.monthly, savingsSuggestion.surplus + totalCut2);
-                  const effectiveMonthly = Math.max(0, adjustedMonthly);
-
-                  return (
-                    <div style={{
-                      background: theme.surface,
-                      borderRadius: 8, padding: "28px 32px", marginTop: 20,
-                      boxShadow: "0 1px 3px rgba(27,28,26,0.06)",
-                    }}>
-                      <SectionTitle sub="Projected savings over time">Savings Projection</SectionTitle>
-                      <ResponsiveContainer width="100%" height={220}>
-                        <LineChart data={Array.from({ length: savingsSuggestion.monthsLeft + 1 }, (_, i) => ({
-                          month: `Mo ${i}`,
-                          "With Cuts": Math.round(effectiveMonthly * i),
-                          "No Changes": Math.round(Math.max(0, savingsSuggestion.surplus) * i),
-                          Goal: savingsSuggestion.target,
-                        }))}>
-                          <CartesianGrid stroke={theme.surfaceContainerLow} strokeDasharray="0" vertical={false} />
-                          <XAxis dataKey="month" tick={{ fill: theme.textSubtle, fontSize: 11, fontFamily: fontMono }} axisLine={false} tickLine={false} interval={Math.max(0, Math.floor(savingsSuggestion.monthsLeft / 8))} />
-                          <YAxis tick={{ fill: theme.textSubtle, fontSize: 11, fontFamily: fontMono }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v / 1000).toFixed(1)}k`} />
-                          <Tooltip content={<CustomTooltip />} />
-                          <Line type="monotone" dataKey="With Cuts" stroke={theme.green} strokeWidth={2.5} dot={false} />
-                          <Line type="monotone" dataKey="No Changes" stroke={theme.outlineVariant || "#bfc9c0"} strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
-                          <Line type="monotone" dataKey="Goal" stroke={theme.accent} strokeWidth={1.5} strokeDasharray="6 3" dot={false} />
-                          <Legend wrapperStyle={{ fontSize: 11, color: theme.textSubtle, fontFamily: fontMono }} />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Footer */}
@@ -2531,7 +1928,6 @@ export function LegacyWorkspace() {
         onData={handleData}
         auth={auth}
         onLoadFile={handleLoadFile}
-        onLogout={logout}
       />
     );
   }

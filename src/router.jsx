@@ -12,6 +12,8 @@ import TransactionsPage from "./pages/TransactionsPage.jsx";
 import AnalyticsPage from "./pages/AnalyticsPage.jsx";
 import CategoriesPage from "./pages/CategoriesPage.jsx";
 import MerchantRulesPage from "./pages/MerchantRulesPage.jsx";
+import SavingsPage from "./pages/SavingsPage.jsx";
+import SettingsPage from "./pages/SettingsPage.jsx";
 import NotFoundPage from "./pages/NotFoundPage.jsx";
 
 /**
@@ -44,6 +46,8 @@ export const router = createBrowserRouter([
       { path: "/analytics", element: <AnalyticsPage /> },
       { path: "/categories", element: <CategoriesPage /> },
       { path: "/merchant-rules", element: <MerchantRulesPage /> },
+      { path: "/savings", element: <SavingsPage /> },
+      { path: "/settings", element: <SettingsPage /> },
     ],
   },
   { path: "*", element: <NotFoundPage /> },

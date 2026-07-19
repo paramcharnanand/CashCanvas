@@ -9,15 +9,12 @@ import { useAuth } from "../contexts/AuthContext.jsx";
  * unlike the pre-Phase-8 TabBar's `tab === "X"` comparison, this survives a
  * page refresh.
  *
- * Deliberately no sign-out control here yet: the old, not-yet-migrated
- * UploadScreen/Dashboard header (still rendered inside this shell in Phase
- * 8.1) already has one, and showing both at once is a real duplicate
- * control, not just a cosmetic issue — confirmed the hard way, Playwright's
- * role query for "Sign Out" matched both. Account actions move here
- * (replacing the old header's) only when Settings (Phase 8.8/8.9, see
- * phase-8-migration-plan.md) actually removes the old one — identity
- * display (avatar + name) is fine to show in both places meanwhile since
- * it's not an actionable duplicate.
+ * The identity block links to /settings (Phase 8.9) — the account-actions
+ * "user menu" this comment used to describe as deferred. Sign Out/Delete
+ * Account live on that page now, not as controls here directly, since the
+ * legacy Dashboard header's own copies of both were removed the same phase
+ * (see ROADMAP.md's Phase 8.9 completion note) — no more duplicate-control
+ * risk from having both live at once.
  */
 export function Sidebar() {
   const { auth } = useAuth();
@@ -78,7 +75,8 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div
+      <Link
+        to="/settings"
         style={{
           marginTop: "auto",
           borderTop: "1px solid var(--border)",
@@ -86,6 +84,8 @@ export function Sidebar() {
           display: "flex",
           alignItems: "center",
           gap: 10,
+          textDecoration: "none",
+          color: "inherit",
         }}
       >
         <div
@@ -119,7 +119,7 @@ export function Sidebar() {
             {auth?.user?.name}
           </div>
         </div>
-      </div>
+      </Link>
     </aside>
   );
 }

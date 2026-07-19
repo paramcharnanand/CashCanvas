@@ -8,7 +8,7 @@ const SHORTCUTS = [
   { keys: `${MOD}U`, label: "Upload a statement", available: true },
   { keys: `${MOD}D`, label: "Go to Dashboard", available: true },
   { keys: `${MOD}A`, label: "Go to Analytics", available: true },
-  { keys: `${MOD},`, label: "Go to Settings", available: false, comingIn: "8.9" },
+  { keys: `${MOD},`, label: "Go to Settings", available: true },
   { keys: "Esc", label: "Close dialogs", available: true },
   { keys: "?", label: "Open this shortcuts sheet", available: true },
 ];

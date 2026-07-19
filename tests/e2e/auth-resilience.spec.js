@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import { test, expect, uniqueEmail } from "./fixtures/index.mjs";
 import { AuthPage } from "./pages/AuthPage.mjs";
 import { UploadPage } from "./pages/UploadPage.mjs";
+import { SettingsPage } from "./pages/SettingsPage.mjs";
 
 // Matches tests/e2e/e2e-server.mjs's hardcoded test secret exactly — this
 // lets us forge validly-signed tokens with a controlled expiry, the only
@@ -101,7 +102,9 @@ test.describe("multi-tab logout", () => {
     await tab2.goto("/");
     await expect(tab2.getByRole("button", { name: /try with sample data/i })).toBeVisible();
 
-    await new UploadPage(page).signOut();
+    const settingsPage = new SettingsPage(page);
+    await settingsPage.goto();
+    await settingsPage.signOut();
     await expect(page.getByRole("button", { name: "Sign In" }).first()).toBeVisible();
 
     // Cookies are shared per browser context, not per tab — tab2's *next*
@@ -207,22 +210,29 @@ test.describe("concurrent login race", () => {
 
 test.describe("back button after logout", () => {
   test("navigating back after logout does not resurrect an authenticated view", async ({ page, context }) => {
-    // A real history entry to go back to — post-logout, ProtectedRoute's
-    // <Navigate replace> means /dashboard's entry itself becomes /login
-    // (replace never pushes a new entry), so going back from there lands
-    // on this about:blank, not a phantom authenticated view either way.
+    // A real history entry to go back to. Since Phase 8.9, Sign Out lives on
+    // /settings (a real, pushed navigation from /dashboard, unlike the old
+    // same-URL header button) — post-logout, ProtectedRoute's
+    // <Navigate replace> means /settings's entry itself becomes /login, so
+    // going back from there lands on the bfcache-restored /dashboard, which
+    // ProtectedRoute's own mount-time auth check immediately redirects to
+    // /login too (the cleared session is real, not just a stale client
+    // guard) — never a phantom authenticated view either way.
     await page.goto("about:blank");
     const user = { name: "Back Button", email: uniqueEmail(), password: "TestPass123!" };
     await page.request.post("/api/auth/signup", { data: user });
     await page.goto("/");
     await expect(page.getByRole("button", { name: /try with sample data/i })).toBeVisible();
 
-    await new UploadPage(page).signOut();
+    const settingsPage = new SettingsPage(page);
+    await settingsPage.goto();
+    await settingsPage.signOut();
     await expect(page.getByRole("button", { name: "Sign In" }).first()).toBeVisible();
 
     await page.goBack();
-    // Whatever page.goBack() lands on (about:blank, or bfcache-restored "/"),
-    // it must never show authenticated content with cleared cookies.
+    // Whatever page.goBack() lands on (bfcache-restored /dashboard, which
+    // redirects again, or /login directly), it must never show authenticated
+    // content with cleared cookies.
     const sampleDataVisible = await page.getByRole("button", { name: /try with sample data/i }).isVisible().catch(() => false);
     expect(sampleDataVisible).toBe(false);
   });

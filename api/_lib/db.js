@@ -85,6 +85,12 @@ function ensureIndexes(db) {
   db.collection("merchant_category_rules")
     .createIndex({ userId: 1, merchantName: 1 }, { unique: true })
     .catch(() => {});
+
+  // ── savings_goals ─────────────────────────────────────────────────────────
+  // Unique per userId — one active goal per user (Phase 8.9, closes ADR-007:
+  // "savings goal" was unsaved client-side React state until this phase).
+  // Upserted by userId alone, matching the merchant-rules upsert pattern.
+  db.collection("savings_goals").createIndex({ userId: 1 }, { unique: true }).catch(() => {});
 }
 
 export async function getDb() {

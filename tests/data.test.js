@@ -141,3 +141,87 @@ describe("DELETE /api/merchant-rules/:id (Phase 8.8, Merchant Rules management s
     expect(res.status).toBe(403);
   });
 });
+
+describe("GET/PUT/DELETE /api/savings (Phase 8.9, savings goal persistence — closes ADR-007)", () => {
+  it("returns null when the user has no goal yet", async () => {
+    const { agent } = await signupUser(uniqueEmail());
+    const res = await agent.get("/api/savings");
+    expect(res.status).toBe(200);
+    expect(res.body).toBeNull();
+  });
+
+  it("sets a goal, then GET returns it — proving persistence, not just a 200", async () => {
+    const { agent, csrf } = await signupUser(uniqueEmail());
+    const put = await agent.put("/api/savings").set("X-CSRF-Token", csrf)
+      .send({ name: "Emergency fund", amount: 5000, deadline: "2026-12-31" });
+    expect(put.status).toBe(200);
+
+    const res = await agent.get("/api/savings");
+    expect(res.body).toMatchObject({ name: "Emergency fund", amount: 5000, deadline: "2026-12-31" });
+  });
+
+  it("setting a goal again replaces the previous one (upsert, one goal per user)", async () => {
+    const { agent, csrf } = await signupUser(uniqueEmail());
+    await agent.put("/api/savings").set("X-CSRF-Token", csrf)
+      .send({ name: "Vacation", amount: 2000, deadline: "2026-06-01" });
+    await agent.put("/api/savings").set("X-CSRF-Token", csrf)
+      .send({ name: "New car", amount: 15000, deadline: "2027-01-01" });
+
+    const res = await agent.get("/api/savings");
+    expect(res.body).toMatchObject({ name: "New car", amount: 15000, deadline: "2027-01-01" });
+  });
+
+  it("rejects a non-positive amount", async () => {
+    const { agent, csrf } = await signupUser(uniqueEmail());
+    const res = await agent.put("/api/savings").set("X-CSRF-Token", csrf)
+      .send({ name: "Test", amount: -100, deadline: "2026-12-31" });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a malformed deadline", async () => {
+    const { agent, csrf } = await signupUser(uniqueEmail());
+    const res = await agent.put("/api/savings").set("X-CSRF-Token", csrf)
+      .send({ name: "Test", amount: 100, deadline: "not-a-date" });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects an empty goal name", async () => {
+    const { agent, csrf } = await signupUser(uniqueEmail());
+    const res = await agent.put("/api/savings").set("X-CSRF-Token", csrf)
+      .send({ name: "  ", amount: 100, deadline: "2026-12-31" });
+    expect(res.status).toBe(400);
+  });
+
+  it("does not leak another user's goal", async () => {
+    const { agent: owner, csrf: ownerCsrf } = await signupUser(uniqueEmail());
+    await owner.put("/api/savings").set("X-CSRF-Token", ownerCsrf)
+      .send({ name: "Owner's goal", amount: 100, deadline: "2026-12-31" });
+
+    const { agent: intruder } = await signupUser(uniqueEmail());
+    const res = await intruder.get("/api/savings");
+    expect(res.body).toBeNull();
+  });
+
+  it("deletes a goal", async () => {
+    const { agent, csrf } = await signupUser(uniqueEmail());
+    await agent.put("/api/savings").set("X-CSRF-Token", csrf)
+      .send({ name: "Test", amount: 100, deadline: "2026-12-31" });
+
+    const del = await agent.delete("/api/savings").set("X-CSRF-Token", csrf);
+    expect(del.status).toBe(200);
+
+    const res = await agent.get("/api/savings");
+    expect(res.body).toBeNull();
+  });
+
+  it("rejects an unauthenticated GET with 401", async () => {
+    const res = await request(app).get("/api/savings");
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects a PUT with no CSRF token with 403", async () => {
+    const { agent } = await signupUser(uniqueEmail());
+    const res = await agent.put("/api/savings").send({ name: "Test", amount: 100, deadline: "2026-12-31" });
+    expect(res.status).toBe(403);
+  });
+});

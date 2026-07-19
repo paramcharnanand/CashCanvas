@@ -1,6 +1,7 @@
 import { test, expect, FILES } from "./fixtures/index.mjs";
 import { AuthPage } from "./pages/AuthPage.mjs";
 import { UploadPage } from "./pages/UploadPage.mjs";
+import { SettingsPage } from "./pages/SettingsPage.mjs";
 
 function cookieByName(cookies, name) {
   return cookies.find((c) => c.name === name);
@@ -41,8 +42,10 @@ test.describe("signup", () => {
     await authPage.signup(testUser);
     await expect(page.getByRole("button", { name: /try with sample data/i })).toBeVisible();
 
-    // Sign out, then try to sign up again with the same email.
-    await new UploadPage(page).signOut();
+    // Sign out (Settings, Phase 8.9), then try to sign up again with the same email.
+    const settingsPage = new SettingsPage(page);
+    await settingsPage.goto();
+    await settingsPage.signOut();
     await authPage.gotoSignup();
     await authPage.fillSignupForm({ name: "Someone Else", email: testUser.email, password: "AnotherPass123!" });
     const [response] = await Promise.all([
@@ -108,10 +111,11 @@ test.describe("invalid credentials", () => {
 
 test.describe("logout", () => {
   test("clears cookies and returns to the auth screen", async ({ authenticatedPage: page }) => {
-    const uploadPage = new UploadPage(page);
-    await expect(uploadPage.signOutButton).toBeVisible();
+    const settingsPage = new SettingsPage(page);
+    await settingsPage.goto();
+    await expect(settingsPage.signOutButton).toBeVisible();
 
-    const response = await uploadPage.signOut();
+    const response = await settingsPage.signOut();
     expect(response.status()).toBe(200);
 
     await expect(page.getByRole("button", { name: "Sign In" }).first()).toBeVisible();
@@ -302,6 +306,12 @@ test.describe("unknown routes", () => {
 
 test.describe("account deletion", () => {
   test("deletes the account, clears the session, and frees the email up for a new signup", async ({ authenticatedPage: page, testUser }) => {
+    // Delete Account moved off the legacy Dashboard/UploadScreen header onto
+    // /settings in Phase 8.9 (see ROADMAP.md's Phase 8.9 completion note) —
+    // navigate there first instead of assuming it's on whatever page
+    // authenticatedPage happened to land on.
+    await page.goto("/settings");
+    await expect(page.getByRole("heading", { name: "Danger Zone" })).toBeVisible();
     await page.getByRole("button", { name: "Delete Account" }).first().click();
     await expect(page.getByText("Delete your account?")).toBeVisible();
 

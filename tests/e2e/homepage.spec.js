@@ -37,8 +37,13 @@ test.describe("homepage", () => {
     // authenticatedPage already navigated to "/" post-signup — proves the
     // fixture itself (Playwright config + e2e-server.mjs + real signup +
     // cookie persistence) works end-to-end, not just that this one
-    // assertion passes.
+    // assertion passes. (This used to also assert the header's own Sign Out
+    // button was visible — that control moved to /settings in Phase 8.9,
+    // see ROADMAP.md's Phase 8.9 completion note, and its replacement,
+    // identity-only display, is conditionally hidden below the --bp-md
+    // breakpoint, so it isn't a reliable assertion across all 5 browser
+    // projects here; "logout"/tests/e2e/auth.spec.js covers Sign Out
+    // itself.)
     await expect(authenticatedPage.getByRole("button", { name: /try with sample data/i })).toBeVisible();
-    await expect(authenticatedPage.getByRole("button", { name: "Sign Out" })).toBeVisible();
   });
 });

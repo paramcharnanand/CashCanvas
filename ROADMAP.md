@@ -6,7 +6,8 @@ require re-deriving context that already existed once.
 
 ## Progress
 
-**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.8 of ~8.9 sub-steps done).**
+**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.9 of ~8.9 sub-steps done, final
+cleanup — the migration plan's own Phase 10 — remaining).**
 
 | # | Phase | Status | Docs |
 |---|---|---|---|
@@ -17,7 +18,7 @@ require re-deriving context that already existed once.
 | 5 | Dependency maintenance (`npm audit`, upgrades) | ✅ Done | `docs/security/threat-model.md` (Dependency posture) |
 | 6 | Testing infrastructure | ✅ Done | `docs/engineering-lessons/phase-6-testing.md` |
 | 7 | CI/CD (GitHub Actions) | ✅ Done | `docs/engineering-lessons/phase-7-ci-cd.md` |
-| 8 | Frontend redesign (design system, routing, navigation shell, a11y) | 🟨 In progress (8.1–8.8 done) | `docs/frontend/phase-8-*.md` |
+| 8 | Frontend redesign (design system, routing, navigation shell, a11y) | 🟨 In progress (8.1–8.9 done, final cleanup remaining) | `docs/frontend/phase-8-*.md` |
 | 9 | Advanced AI features & product enhancements | ⬜ Not started | — |
 
 ### Phase 8.1 completion note (routing, navigation shell, design foundation)
@@ -456,7 +457,125 @@ as "kept nearly as-is, it's already good" — the `Content-Type` gap found above
 quite true; worth a fresh look during Phase 10's final cleanup pass now that it's fixed, not
 reopened here beyond the fix itself.
 
-Next: Phase 8.9, Settings + Savings, per `docs/frontend/phase-8-migration-plan.md`'s Phase 9.
+### Phase 8.9 completion note (Settings + Savings, closes ADR-007)
+
+Delivered, per `docs/frontend/phase-8-migration-plan.md`'s Phase 9: `pages/SettingsPage.jsx` +
+`features/settings/` at `/settings` (read-only account info, a real tri-state Light/Dark/System
+theme control — `Header.jsx`'s single cycling button was the only way to change theme before this,
+now a real choice with `aria-pressed` per option — Sign Out, and Delete Account, rebuilt on
+`Dialog`) and `pages/SavingsPage.jsx` + `features/savings/` at `/savings` (the same goal-form/
+cut-planner logic the audit called "the app's best client-side logic," kept, not rewritten — now
+actually persisted via `GET/PUT/DELETE /api/savings`, a genuinely new `savings_goals` collection
+following the categories/merchant-rules upsert-by-key pattern, closing ADR-007). Both routes added
+to `Sidebar`/`MobileNav` (`navigation.js`'s `enabled: false, phase: "8.9"` placeholders flipped
+live) and to the command palette/shortcuts sheet/`Cmd+,` handler, closing out the "coming in 8.9"
+staleness Phase 8.8 had already flagged in advance.
+
+**This session picked up mid-flight, same discipline as Phases 8.3/8.7**: a prior pass had already
+built the new pages, the backend route, and its Vitest integration tests (10 cases — empty-state,
+persistence-across-GET, upsert-replaces, three validation-rejection cases, cross-user isolation,
+delete, and the two auth/CSRF-gate cases — matching this phase's own "test-driven, before the
+frontend consumes it" instruction), but left it uncommitted with the "old implementation removed"
+half of the plan's own scope note not yet done. This session's job was the same verification
+checkpoint the engineering rules require every time — read every file, then finish the scope, then
+run the full gate for real — not re-deriving the persistence layer from scratch.
+
+**Old implementation removed, the half of this phase's scope that was still outstanding**: the
+legacy `Dashboard`'s Savings tab (`App.jsx`) — ~440 lines of JSX, its `savingsGoal`/`cutSelections`/
+`showPlan` state, and the now-orphaned module-level `CustomTooltip` component and `recharts` import
+it was the last remaining consumer of — deleted outright (`TabBar` now reads `["Overview"]`, a
+single-tab bar left as-is rather than restructured further, matching every prior phase's "shrink by
+one tab, don't restructure ahead of Phase 10" discipline). The header's bare Delete-Account/Sign-Out
+buttons — already stripped from `UploadScreen`'s header by the prior pass, but *not* yet from
+`Dashboard`'s own header, a real gap this session found by reading the code rather than assuming
+the prior pass's diff was complete — are now gone from both, along with the now-fully-unused
+`DeleteAccountModal` component (verified via `grep` that nothing imports it, same "confirm before
+deleting" discipline Phase 8.7 used for `ChartTooltip.jsx`). `Sidebar.jsx`'s identity block — which
+had carried an explicit code comment since Phase 8.1 saying account actions move here "only when
+Settings actually removes the old one" — is now a real `<Link to="/settings">`, closing out that
+forward-referenced TODO rather than leaving it stale.
+
+**A real, pre-existing accessibility bug was found while writing this phase's own tests, not
+introduced by it**: `components/ui/Field.jsx`'s `<label>` had no `htmlFor`/`id` pairing with its
+`<input>` — a WCAG 4.1.2 violation present since the primitive was built in Phase 8.3, affecting
+every form on it (Login, Signup, Categories' "New Category" dialog, and now Savings' `GoalForm`).
+Invisible until now because no existing test asserted via `getByLabel()` — every prior form test
+used `getByPlaceholder()` instead. Found the moment this phase's own `savings.spec.js` tried
+`getByLabel("Goal Name")` and it resolved to nothing. Fixed at the source via React's `useId()`
+(one stable, unique id per `Field` instance, not a hardcoded string, so multiple `Field`s on one
+page never collide) — every existing caller benefits without any of them changing, the same
+"fix once at the shared primitive" reasoning Phase 8.8 used for the `apiFetch` `Content-Type` gap.
+Regression test: a real click on the "Goal Name" label text now moves focus to its input, asserted
+directly, not just relied upon implicitly via `getByLabel()` elsewhere continuing to resolve.
+
+**Three genuine test-authoring bugs found and fixed while building this phase's own suites, not
+application bugs**: (1) `getByRole("button", { name: "Dark" })` is a substring match by default —
+it resolved to both `ThemeToggle`'s own "Dark" button *and* `Header.jsx`'s theme-cycle button
+(`aria-label="Theme: Dark. Click to change."`, which contains "Dark" as a substring); fixed with
+`exact: true`, the same fix applied to the "Light" locator for consistency even though it doesn't
+collide today. (2) A `Ctrl+,` keyboard-shortcut test pressed the key immediately after
+`page.goto("/dashboard")`, before `AppShell`'s `useKeyboardShortcuts` effect had attached its
+`document`-level listener — the same class of fixture-mount race Phase 6 already found and fixed
+for `authenticatedPage` itself, confirmed via a direct repro (a captured-keydown-events script
+showed the event fires with the right `key`/`ctrlKey` values, so the app's own handler logic was
+never in question) before concluding it was a timing bug and not an app bug. Fixed by waiting for
+real mounted content first, matching the fixture's own established pattern; `.click()`-driven
+navigations elsewhere in this phase's tests didn't need the same fix since `.click()` auto-waits
+for its target to be actionable and `keyboard.press()` has no target to wait on. (3) A Tab-order
+test (theme buttons → Sign Out) failed on webkit/mobile-safari only — confirmed via direct repro
+(capturing `document.activeElement` after each `Tab` press) that WebKit's default Tab order skips
+plain `<button>` elements entirely, falling back to `<body>`, unless the user has "Full Keyboard
+Access" enabled system-wide (off by default; Playwright's bundled WebKit has no API to override
+it). Not an app bug — every button involved is a real, semantic, independently Enter/Space-operable
+`<button>` — skipped for those two projects with a comment explaining why, the same "flag a real,
+engine-level quirk explicitly rather than force a false pass" precedent as the WebKit cookie-value
+quirk (`bebb653`) and the Recharts `role="img"` firefox-only finding (Phase 8.7).
+
+**Existing tests updated to match the real relocation, not a hypothetical one**: the migration
+plan's own "Expected test changes: none" for Delete Account assumed the button stayed reachable
+from wherever `authenticatedPage` already was — once actually built, it lives only on `/settings`,
+so `auth.spec.js`'s account-deletion test, and its "logout" test, now `page.goto("/settings")`
+first. `UploadPage.mjs`'s `signOutButton`/`signOut()`/`deleteAccountButton` (describing controls
+that no longer exist on that screen) moved to a new `SettingsPage.mjs` page object, used by the
+three call sites across `auth.spec.js`/`auth-resilience.spec.js` that needed it.
+`homepage.spec.js`'s "Sign Out button visible" assertion — redundant with its own "try with sample
+data" assertion for proving the fixture works, and now also viewport-conditional (the header's
+identity-only replacement is hidden below `--bp-md`, unlike the old unconditional button) — was
+dropped rather than made viewport-conditional itself, with a comment pointing at where Sign Out is
+actually covered now. `pages/DashboardPage.mjs`, a page object confirmed unused by any spec
+(`grep`, not assumed) and already describing a "Savings" tab this phase deletes, was removed
+outright rather than left stale.
+
+**New tests**: `tests/e2e/savings.spec.js` (8 cases — auth gate, empty state, goal persists across
+a reload, upsert-replaces, the suggestion panel appearing once both a goal and real data exist, the
+Field label-association regression test above, and the nav-destination check) and
+`tests/e2e/settings.spec.js` (8 cases — auth gate, profile display, theme persistence across a
+reload, keyboard Tab order, the delete dialog's cancel path, nav destination, `Ctrl+,`, and the
+sidebar identity link), plus two new `a11y.spec.js` cases (both pages pass against the same
+shell-level baseline — `color-contrast`/`landmark-one-main`/`region` — every other authenticated
+page still carries, ADR-019).
+
+**Tracked, not built this phase**: `DELETE /api/savings` (and `useSavingsData.js`'s `deleteGoal`)
+has no UI caller — `GoalForm` only offers Save, matching the migration plan's own stated scope
+exactly ("now actually persisted," no "clear goal" affordance called for) — same class of tracked
+gap as `logoutAllDevices()` (Phase 6), built for symmetry with the categories/merchant-rules DELETE
+pattern and covered by its own Vitest tests, not left to bit-rot silently uncovered.
+
+**Verification gate**: `npm run lint` (0 errors, **41** warnings — down from 43, two dead-code
+warnings resolved: the legacy `StatCard` component orphaned by the Savings-tab deletion, and this
+phase's own accidental unused `SettingsPage.mjs` import), `npm test` (**111/111** — 101 carried
+forward + 10 new `/api/savings` integration tests), `npx playwright test` — **470 passed / 20
+skipped / 0 failed** (16 new functional tests across `savings.spec.js`/`settings.spec.js`, 2 new
+a11y cases, plus the 2 WebKit-only Tab-order skips and 2 narrow-viewport sidebar-link skips
+explained above). One visual baseline regenerated (`app-shell-empty`, chromium-only) — expected,
+two more real nav items, same pattern as every prior phase. `npm run build` succeeds.
+
+Next: Phase 10, final cleanup — `App.jsx` reduced to its ~30-line target shape (`Dashboard`/
+`LegacyWorkspace` deleted entirely, every tab now migrated out), a full a11y re-scan of every route
+(not just the states Phase 6 originally covered), Linux-native visual baselines in CI, and a fresh
+look at `services/http.js`'s `api.js` assessment now that this phase's `Field` fix joins Phase 8.8's
+`apiFetch` `Content-Type` fix — per `docs/frontend/phase-8-migration-plan.md`'s own Phase 10 scope
+and this file's "Known technical debt" section below.
 
 ### ADR-026 — Real statement uploads never persisted: `Date.toISOString()` vs. the backend's bare-`YYYY-MM-DD` requirement, plus a silently-swallowed save failure
 
@@ -970,7 +1089,13 @@ existed and asked for indexes on them. Neither exists — "savings goal" is unsa
 React state today. **Decision**: don't build persistence for either as part of a database
 *optimization* phase. **Rationale**: designing and shipping new persisted collections + API
 routes is a feature-scope decision, not an indexing task; confirmed directly with the user
-before proceeding. **Status**: open product decision — build when/if prioritized as a feature.
+before proceeding. **Status**: closed in Phase 8.9 — prioritized as part of the frontend
+migration's own Settings + Savings phase (`docs/frontend/phase-8-migration-plan.md`'s Phase 9),
+not revisited as a standalone feature request. `savings_goals` (one document per user, upserted
+by `userId`, matching the existing categories/merchant-rules key-upsert pattern) plus
+`GET/PUT/DELETE /api/savings` now back `SavingsPage`'s goal form — see the Phase 8.9 completion
+note above for the full delivery. Budgets remains unbuilt/out of scope; nothing in Phase 8.9
+touched it.
 
 ### ADR-006 — Transactions stay embedded in `uploaded_files`, not normalized
 **Context**: the app caps uploads at 10,000 transactions/file, clearly already guarding
@@ -1040,7 +1165,8 @@ From `database.md`:
 - `passwordResetExpiry`/`verificationTokenExpiry`/`pendingOtpExpiry` on `users` can't be
   TTL-cleaned (would delete whole accounts) — inert-but-harmless field bloat if unused.
 - No MongoDB-level schema validation — see ADR-008.
-- Budgets / Savings Goals have no persistence layer — see ADR-007.
+- ~~Budgets / Savings Goals have no persistence layer~~ — closed in Phase 8.9 (`savings_goals`
+  collection, `GET/PUT/DELETE /api/savings`); see ADR-007 and the Phase 8.9 completion note above.
 
 From Phase 7 (CI/CD):
 - `.github/workflows/deploy-verify.yml`'s Serverless Function count check needs a `VERCEL_TOKEN`

@@ -7,6 +7,7 @@
  *   PUT/DELETE      /api/categories/:id
  *   GET/POST        /api/merchant-rules
  *   DELETE          /api/merchant-rules/:id
+ *   GET/PUT/DELETE  /api/savings
  */
 import { getDb }             from "./_lib/db.js";
 import { getUser }           from "./_lib/jwt.js";
@@ -19,6 +20,9 @@ import {
   isValidStatementType,
   isValidCategoryName,
   isValidMerchantName,
+  isValidSavingsAmount,
+  isValidSavingsGoalName,
+  isValidTransactionDate,
   sanitizeCsvField,
 } from "./_lib/validation.js";
 import { ObjectId }          from "mongodb";
@@ -307,6 +311,55 @@ async function merchantRuleById(req, res) {
   res.status(405).end();
 }
 
+// ── savings ───────────────────────────────────────────────────────────────────
+// One goal document per user (Phase 8.9, closes ADR-007 — "savings goal" was
+// unsaved client-side React state until this phase). Upserted by userId
+// alone, same pattern as merchant-rules' upsert-by-key.
+
+async function savings(req, res) {
+  const user = getUser(req);
+  if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+  const db = await getDb();
+
+  if (req.method === "GET") {
+    if (!rateLimited(res, user, "savings:get", 15 * 60_000, 120)) return;
+    const goal = await db.collection("savings_goals").findOne({ userId: user.userId });
+    return res.json(goal || null);
+  }
+
+  if (req.method === "PUT") {
+    if (!requireCsrf(req, res)) return;
+    if (!rateLimited(res, user, "savings:set", 15 * 60_000, 60)) return;
+    const { name, amount, deadline } = req.body || {};
+    if (!isValidSavingsGoalName(name))
+      return res.status(400).json({ error: "Goal name is required and must be under 100 characters." });
+    if (!isValidSavingsAmount(amount))
+      return res.status(400).json({ error: "Target amount must be a positive number." });
+    if (!isValidTransactionDate(deadline))
+      return res.status(400).json({ error: "Target date must be a valid date (YYYY-MM-DD)." });
+
+    await db.collection("savings_goals").updateOne(
+      { userId: user.userId },
+      {
+        $set:         { name: sanitizeCsvField(name.trim()), amount, deadline, updatedAt: new Date() },
+        $setOnInsert: { createdAt: new Date() },
+      },
+      { upsert: true }
+    );
+    return res.json({ ok: true });
+  }
+
+  if (req.method === "DELETE") {
+    if (!requireCsrf(req, res)) return;
+    if (!rateLimited(res, user, "savings:delete", 15 * 60_000, 60)) return;
+    await db.collection("savings_goals").deleteOne({ userId: user.userId });
+    return res.json({ ok: true });
+  }
+
+  res.status(405).end();
+}
+
 // ── router ────────────────────────────────────────────────────────────────────
 
 export default withErrorHandling(async function handler(req, res) {
@@ -323,6 +376,9 @@ export default withErrorHandling(async function handler(req, res) {
   // merchant-rules
   if (path === "/api/merchant-rules")          return merchantRules(req, res);
   if (path.startsWith("/api/merchant-rules/")) return merchantRuleById(req, res);
+
+  // savings
+  if (path === "/api/savings") return savings(req, res);
 
   res.status(404).json({ error: "Not found" });
 });

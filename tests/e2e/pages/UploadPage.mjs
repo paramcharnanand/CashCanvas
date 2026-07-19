@@ -8,8 +8,8 @@ export class UploadPage {
     // capability for file inputs specifically).
     this.fileInput = page.locator('input[type="file"]');
     this.sampleDataButton = page.getByRole("button", { name: /try with sample data/i });
-    this.signOutButton = page.getByRole("button", { name: "Sign Out" });
-    this.deleteAccountButton = page.getByRole("button", { name: "Delete Account" });
+    // Sign Out/Delete Account moved off this screen's header onto /settings
+    // in Phase 8.9 — see SettingsPage.mjs.
     this.errorBanner = (substring) => page.getByText(substring, { exact: false });
     this.fileHistoryCard = (fileName) => page.locator("div").filter({ hasText: fileName }).last();
   }
@@ -20,24 +20,6 @@ export class UploadPage {
 
   async loadSampleData() {
     await this.sampleDataButton.click();
-  }
-
-  /**
-   * Signs out and waits for the actual server round-trip to finish, not
-   * just the click event — App.jsx's handleLogout does
-   * `await apiLogout(); setAuth(null);` (the network call completes before
-   * local UI state updates), so any code that clicks Sign Out and
-   * immediately navigates/asserts without waiting for this response races
-   * against still-authenticated state. This is the deterministic-wait
-   * equivalent of an arbitrary sleep() — wait for the thing that actually
-   * has to finish, not a fixed amount of time.
-   */
-  async signOut() {
-    const [response] = await Promise.all([
-      this.page.waitForResponse((r) => r.url().includes("/api/auth/logout") && r.request().method() === "POST"),
-      this.signOutButton.click(),
-    ]);
-    return response;
   }
 
   /** Clicks a file's "Remove" (×) button and accepts the native confirm() dialog. */

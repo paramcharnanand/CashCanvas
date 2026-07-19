@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
 /**
@@ -21,14 +21,16 @@ export function Field({
 }) {
   const [visible, setVisible] = useState(false);
   const ToggleIcon = visible ? EyeOff : Eye;
+  const inputId = useId();
 
   return (
     <div style={{ marginBottom: "var(--space-4)" }}>
-      <label style={{ display: "block", font: "var(--text-label)", color: "var(--text-subtle)", marginBottom: "var(--space-2)" }}>
+      <label htmlFor={inputId} style={{ display: "block", font: "var(--text-label)", color: "var(--text-subtle)", marginBottom: "var(--space-2)" }}>
         {label}
       </label>
       <div style={{ position: "relative" }}>
         <input
+          id={inputId}
           type={showToggle ? (visible ? "text" : "password") : type}
           value={value}
           onChange={onChange}

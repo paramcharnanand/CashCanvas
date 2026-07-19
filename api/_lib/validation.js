@@ -90,6 +90,20 @@ export function isValidMerchantName(name) {
   return typeof name === "string" && name.trim().length > 0 && name.trim().length <= MAX_MERCHANT_NAME_LENGTH;
 }
 
+/** A savings goal's target amount — unlike a transaction amount, must be positive (no debits/credits sign). */
+export function isValidSavingsAmount(amount) {
+  return (
+    typeof amount === "number" &&
+    Number.isFinite(amount) &&
+    amount > 0 &&
+    amount <= MAX_TRANSACTION_AMOUNT
+  );
+}
+
+export function isValidSavingsGoalName(name) {
+  return typeof name === "string" && name.trim().length > 0 && name.trim().length <= MAX_CATEGORY_NAME_LENGTH;
+}
+
 /**
  * Validates one transaction and, if valid, returns a sanitized copy with
  * formula-injection defenses applied to the description. Amount/date pass

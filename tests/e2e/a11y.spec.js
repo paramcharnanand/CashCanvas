@@ -114,4 +114,17 @@ test.describe("accessibility", () => {
     await expect(page.getByRole("heading", { name: "Merchant Rules" })).toBeVisible();
     await checkA11yAgainstBaseline(page, ["color-contrast", "landmark-one-main", "region"]);
   });
+
+  test("savings page has no unexpected a11y violations", async ({ authenticatedPage: page }) => {
+    await seedTransactions(page);
+    await page.goto("/savings");
+    await expect(page.getByRole("heading", { name: "Savings Goals" })).toBeVisible();
+    await checkA11yAgainstBaseline(page, ["color-contrast", "landmark-one-main", "region"]);
+  });
+
+  test("settings page has no unexpected a11y violations", async ({ authenticatedPage: page }) => {
+    await page.goto("/settings");
+    await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+    await checkA11yAgainstBaseline(page, ["color-contrast", "landmark-one-main", "region"]);
+  });
 });
