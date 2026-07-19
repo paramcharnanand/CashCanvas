@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useBreakpoint } from "../../hooks/useBreakpoint.js";
 
 /**
  * Design-system StatCard primitive — see docs/frontend/
@@ -16,8 +17,17 @@ import { useState } from "react";
  */
 export function StatCard({ label, value, sub, tone = "primary", onClick }) {
   const [hovered, setHovered] = useState(false);
+  const { breakpoint } = useBreakpoint();
   const color = `var(--${tone})`;
   const Tag = onClick ? "button" : "div";
+
+  // Found via a real screenshot audit at a 390px viewport: two cards per
+  // row (the "1 1 160px" flex-basis below) left too little width for the
+  // value text at its fixed 30px size, and the ellipsis silently clipped
+  // it ("$3,200.00" → "$3,20…") — the single most important number on the
+  // card, unreadable. Below the sm breakpoint (< 480px, where two cards
+  // per row can't fit comfortably) each card takes the full row instead.
+  const narrow = breakpoint === "xs";
 
   return (
     <Tag
@@ -29,7 +39,7 @@ export function StatCard({ label, value, sub, tone = "primary", onClick }) {
         background: "var(--surface)",
         borderRadius: "var(--radius-md)",
         padding: "var(--space-5) var(--space-6)",
-        flex: "1 1 160px",
+        flex: narrow ? "1 1 100%" : "1 1 160px",
         minWidth: 0,
         textAlign: "left",
         border: "none",

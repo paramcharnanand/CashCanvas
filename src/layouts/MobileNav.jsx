@@ -5,7 +5,11 @@ import { SIDEBAR_ITEMS } from "./navigation.js";
  * Bottom-anchored nav (< --bp-md), replacing the sidebar rather than hiding
  * behind a hamburger — see design-system.md § Responsive Grid "Navigation
  * collapse". Grows automatically as SIDEBAR_ITEMS gains entries each phase,
- * no changes needed here.
+ * no layout changes needed here — but a new item whose label is long
+ * ("Merchant Rules", added Phase 8.8) can still wrap to a second line in
+ * this bar's equal-width columns; give it a `mobileLabel` in
+ * navigation.js if that happens (see that file's docblock), not a change
+ * here.
  */
 export function MobileNav() {
   return (
@@ -29,6 +33,10 @@ export function MobileNav() {
           <NavLink
             key={item.id}
             to={item.to}
+            // Full label for the accessible name even when `mobileLabel`
+            // shortens the visible text — screen-reader users still get
+            // the unambiguous "Merchant Rules", not "Rules" alone.
+            aria-label={item.mobileLabel ? item.label : undefined}
             style={({ isActive }) => ({
               flex: 1,
               display: "flex",
@@ -43,7 +51,7 @@ export function MobileNav() {
             })}
           >
             <Icon size={19} strokeWidth={1.75} aria-hidden="true" />
-            {item.label}
+            <span style={{ whiteSpace: "nowrap" }}>{item.mobileLabel || item.label}</span>
           </NavLink>
         );
       })}
