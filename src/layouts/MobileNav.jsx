@@ -23,6 +23,7 @@ export function MobileNav() {
         background: "var(--surface)",
         borderTop: "1px solid var(--border)",
         display: "flex",
+        gap: 6,
         padding: "8px 4px calc(8px + env(safe-area-inset-bottom, 8px))",
         zIndex: 40,
       }}

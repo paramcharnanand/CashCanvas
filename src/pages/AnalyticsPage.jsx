@@ -51,15 +51,24 @@ export default function AnalyticsPage() {
         Analytics
       </h1>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-5)", marginBottom: "var(--space-5)" }}>
-        <Card>
+      {/*
+        flex + flexWrap, not a hardcoded 2-column grid — matches
+        RecentActivity.jsx's established two-panel pattern. A fixed
+        "1fr 1fr" grid had no narrow-viewport override, squeezing each
+        card to ~155px on a 390px screen; both charts' own internal
+        "space-between" readout rows then had no room for their two
+        spans on one line and visually overlapped (found via a real
+        screenshot audit, not hypothetical).
+      */}
+      <div style={{ display: "flex", gap: "var(--space-5)", flexWrap: "wrap", marginBottom: "var(--space-5)" }}>
+        <Card style={{ flex: "1 1 400px" }}>
           <h2 style={{ font: "var(--text-heading-sm)", color: "var(--text)", margin: "0 0 var(--space-4)" }}>
             Spending Composition
           </h2>
           <SpendingDonut catBreakdown={catBreakdown} />
         </Card>
 
-        <Card>
+        <Card style={{ flex: "1 1 400px" }}>
           <h2 style={{ font: "var(--text-heading-sm)", color: "var(--text)", margin: "0 0 var(--space-4)" }}>
             Monthly Overview
           </h2>

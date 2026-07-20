@@ -69,4 +69,55 @@ test.describe("responsive layout", () => {
       expect(height, "a nav label wrapped onto more than one line").toBeLessThan(shortest * 1.5);
     }
   });
+
+  test("adjacent bottom-nav labels never touch", async ({ authenticatedPage: page }) => {
+    const viewport = page.viewportSize();
+    test.skip(!viewport || viewport.width >= 768, "the sidebar, not the bottom nav, renders above the md breakpoint");
+
+    // Found via a real screenshot audit: "Transactions" and "Analytics"
+    // rendered with zero visible gap between them ("TransactionsAnalytics")
+    // — the nav's flex container had no `gap`, so two labels each sized
+    // close to their own column's width had no breathing room between them.
+    await page.goto("/dashboard");
+    const nav = page.getByRole("navigation", { name: "Primary navigation" });
+
+    const boxes = await nav.locator("a").evaluateAll((links) =>
+      links.map((a) => {
+        // eslint-disable-next-line no-undef -- runs in the browser page, not Node; tests/ is linted with Node-only globals.
+        const range = document.createRange();
+        range.selectNode(a.lastChild);
+        const r = range.getBoundingClientRect();
+        return { left: r.left, right: r.right };
+      })
+    );
+    for (let i = 1; i < boxes.length; i++) {
+      expect(boxes[i].left, "two adjacent nav labels touch or overlap").toBeGreaterThan(boxes[i - 1].right);
+    }
+  });
+
+  test("Analytics' two chart cards stack instead of squeezing side by side on a narrow viewport", async ({ authenticatedPage: page }) => {
+    const viewport = page.viewportSize();
+    test.skip(!viewport || viewport.width >= 768, "there's room for two columns above the md breakpoint");
+
+    // Found via a real screenshot audit: AnalyticsPage's chart row used a
+    // hardcoded `display: grid, gridTemplateColumns: "1fr 1fr"` with no
+    // narrow-viewport override, unlike every other two-panel layout in the
+    // app (e.g. RecentActivity.jsx's flex+flexWrap). At 390px each card was
+    // squeezed to ~155px, and inside it SpendingDonut's/MonthlyBarChart's
+    // "space-between" readout row had no room for its own two spans on one
+    // line — they wrapped and visually overlapped each other, rendering
+    // real dollar amounts illegible.
+    await seedTransactions(page, [
+      { date: "2025-01-03", desc: "PAYROLL DEPOSIT", amount: 3200.0 },
+      { date: "2025-01-05", desc: "WHOLE FOODS MARKET", amount: -87.32 },
+      { date: "2025-01-18", desc: "RENT PAYMENT", amount: -1800.0 },
+    ]);
+    await page.goto("/analytics");
+    await expect(page.getByText("Spending Composition")).toBeVisible();
+
+    const donutCard = page.getByText("Spending Composition").locator("xpath=ancestor::div[contains(@style,\"border-radius\")][1]");
+    const box = await donutCard.boundingBox();
+    const pageWidth = viewport.width;
+    expect(box.width, "chart card is squeezed into a side-by-side column instead of stacking").toBeGreaterThan(pageWidth * 0.7);
+  });
 });
