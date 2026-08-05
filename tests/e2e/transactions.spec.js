@@ -119,6 +119,25 @@ test.describe("transactions page", () => {
     await expect(firstRowAfterReload.getByRole("cell", { name: "PAYROLL DEPOSIT" })).toBeVisible();
   });
 
+  test("reassigning one transaction also updates other loaded transactions from the same merchant, without a reload", async ({ authenticatedPage: page }) => {
+    // "STARBUCKS STORE 123" and "STARBUCKS 04891" both clean to the same
+    // merchant name — reassigning the selected one should retroactively
+    // patch the unselected one too, since the merchant rule now covers both.
+    await seedTransactions(page, [
+      { date: "2025-01-05", desc: "STARBUCKS STORE 123", amount: -6.75 },
+      { date: "2025-01-12", desc: "STARBUCKS 04891", amount: -5.5 },
+    ]);
+    await page.goto("/transactions");
+
+    const starbucksRow = page.getByRole("row", { name: /STARBUCKS STORE 123/ });
+    await starbucksRow.getByRole("checkbox", { name: "Select transaction" }).check();
+    await page.getByRole("button", { name: "Reassign Category" }).click();
+    await page.getByRole("button", { name: "Housing", exact: true }).click();
+
+    await expect(page.getByRole("row", { name: /STARBUCKS STORE 123/ }).getByRole("cell", { name: "Housing" })).toBeVisible();
+    await expect(page.getByRole("row", { name: /STARBUCKS 04891/ }).getByRole("cell", { name: "Housing" })).toBeVisible();
+  });
+
   test("Transactions is a real, always-visible nav destination", async ({ authenticatedPage: page }) => {
     await page.goto("/dashboard");
     await page.getByRole("link", { name: "Transactions" }).click();

@@ -79,14 +79,12 @@ export function useTransactionsData() {
    * mechanism the legacy Dashboard's reassign modal and Categories'
    * quick-fix both already use) — applied locally immediately, not waiting
    * on a refetch, since the write is fire-and-forget from the UI's
-   * perspective (matching quickFix's own pattern).
+   * perspective (matching quickFix's own pattern). Also patches any other
+   * currently-loaded transaction sharing the same cleaned merchant name,
+   * not just the explicitly selected ids, so the rule's effect is visible
+   * immediately on unselected rows too (matching quickFix's own behavior).
    */
   const reassign = useCallback((ids, categoryName) => {
-    setTransactions((prev) => {
-      if (!prev) return prev;
-      const idSet = new Set(ids);
-      return prev.map((t) => (idSet.has(t.id) ? { ...t, category: categoryName } : t));
-    });
     const merchantNames = new Set();
     (transactions ?? [])
       .filter((t) => ids.includes(t.id))
@@ -94,6 +92,15 @@ export function useTransactionsData() {
         const merchantName = cleanDesc(t.desc);
         if (merchantName) merchantNames.add(merchantName);
       });
+    setTransactions((prev) => {
+      if (!prev) return prev;
+      const idSet = new Set(ids);
+      return prev.map((t) =>
+        idSet.has(t.id) || merchantNames.has(cleanDesc(t.desc))
+          ? { ...t, category: categoryName }
+          : t
+      );
+    });
     return Promise.all(
       Array.from(merchantNames).map((merchantName) =>
         apiFetch("/api/merchant-rules", {

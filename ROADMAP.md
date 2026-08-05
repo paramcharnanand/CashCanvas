@@ -701,6 +701,26 @@ a real, separate optimization project, not "final cleanup."
 Phase 8 (frontend redesign) is complete. Remaining project scope: Phase 9 (Advanced AI features &
 product enhancements) — not started, no concrete plan exists yet.
 
+### ADR-028 — Accept the `react-router` CSRF-bypass finding (GHSA-qwww-vcr4-c8h2) as risk, don't force a breaking downgrade hours before launch
+
+**Context**: `npm audit --audit-level=high` (Security workflow) flags `react-router` 7.12.0–8.2.0 for
+a CSRF bypass that lets an action execute before its expected 400 response, but only in RSC (React
+Server Components) mode. The installed `react-router-dom@7.18.1` — the current latest published
+7.x release at the time — sits inside the vulnerable range; every published 7.x version does.
+`npm audit fix --force` only offers `react-router-dom@7.11.0`, a downgrade of 7 minor versions from
+what Phase 8's routing migration is built on, and no unaffected 7.x or stable 8.x release exists yet.
+**Decision**: leave `react-router-dom` at `7.18.1`, don't force the downgrade. **Rationale**: (1)
+this is a client-rendered SPA that never uses RSC mode — grepped the codebase for any RSC surface
+(`react-server`, `createFromReadableStream`, etc.) and found none, so the vulnerable action-execution
+path is unreachable here regardless of the installed version; (2) downgrading 7 minor versions on the
+library every route in the app depends on, hours before a public launch, trades a real regression
+risk for a theoretical, unreachable one; (3) matches ADR-013's precedent that breaking dependency
+bumps need a human verifying actual usage, not a blind `--force`. **Status**: accepted risk, tracked
+here. Revisit when a patched 7.x or stable 8.x release ships — re-run `npm audit` after any future
+`react-router-dom` bump to confirm it clears. The other 3 findings from the same audit run
+(`body-parser`, `brace-expansion`, `postcss`) were fixed via plain `npm audit fix` (lockfile-only,
+non-breaking).
+
 ### ADR-027 — `deploy-verify.yml` checked Vercel's per-deployment alias, not the production domain — a real workflow bug, not an application bug
 
 **Context**: `.github/workflows/deploy-verify.yml`'s "Homepage returns 200" check had been failing
