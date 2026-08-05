@@ -4,6 +4,82 @@ Session handoff doc — read this first, then `ROADMAP.md` for full phase histor
 debt. Update this file at the end of every session so the next one can start here instead of
 re-deriving context from the repo.
 
+## Pre-launch verification pass (this session)
+
+Ground-truthed a batch of assumed-complete/assumed-broken items against real evidence rather than
+taking either claim at face value, ahead of a planned public launch.
+
+**Security**: `npm audit --audit-level=high` (the "Security" GitHub Actions job) was failing on 4
+findings, not secret leakage. `body-parser`, `brace-expansion`, `postcss` fixed via plain
+`npm audit fix` (lockfile-only, non-breaking). `react-router`'s CSRF-bypass finding
+(GHSA-qwww-vcr4-c8h2) has no non-breaking fix — every published 7.x release including the
+installed `7.18.1` is in the vulnerable range, and no 8.x exists yet. Documented as ADR-028:
+accepted risk, not fixed, because this app never uses RSC mode (grepped and confirmed), the only
+surface the CVE affects. **The Security Actions check will keep showing red until react-router
+ships a real fix** — that's the workflow correctly reporting a known, understood, accepted-risk
+finding, not an unknown regression.
+
+**CI "Lint, test, build" flakiness**: the failing run was 16 days stale (no pushes since), and its
+one failure was 4 Playwright tests timing out simultaneously across browsers in the same run —
+re-ran the exact same specs in isolation locally, 22/22 passed. Runner resource contention, not a
+regression; no code change made for it.
+
+**reCAPTCHA in production**: ran a real signup attempt against `cashcanvas.dev`. Rejected — but
+specifically via the *score* gate (`api/_lib/recaptcha.js`'s `data.score < MIN_SCORE` branch),
+which only executes after Google's `siteverify` call already returned `success: true`. That proves
+the site key / secret key / domain pairing is correctly wired in production; the rejection itself
+is reCAPTCHA v3 correctly flagging headless automation, exactly as designed. No test account was
+created (the check gates account creation).
+
+**Merchant learning**: confirmed genuinely implemented, not aspirational. `api/ai.js` applies
+normalized matching (`cleanDesc`/`fuzzyMatchMerchant`) against a persisted
+`merchant_category_rules` collection *before* any Gemini call. Added
+`tests/e2e/merchant-learning.spec.js` as a permanent live proof: teach "STARBUCKS #0142" → a new
+"Coffee" category, then a completely independent second upload containing "STARBUCKS STORE 532"
+and "STARBUCKS 1234" auto-classifies both as Coffee (an unrelated control transaction does not),
+and the mapping survives a real logout/login — not just in-memory state. Found and fixed one real
+gap along the way: `useTransactionsData.js`'s `reassign` only patched the explicitly-selected
+transaction ids, not other already-loaded transactions from the same merchant, unlike
+`useCategoriesData.js`'s `quickFix`, which already did this correctly. Fixed to match, with a
+regression test (`tests/e2e/transactions.spec.js`).
+
+**Category sync**: no shared cache exists across Dashboard/Transactions/Analytics/Merchant
+Rules/Categories — each does its own fetch-on-mount. In practice this satisfies "no refresh
+needed" because the router fully remounts each page on navigation (confirmed in `router.jsx`), so
+a category created on one page is fresh by the time you navigate to the next. The real gap is two
+simultaneously-mounted views (e.g. two open tabs) not syncing live — an edge case, not a launch
+blocker, not fixed this session.
+
+**AI categorization**: read `api/ai.js` in full rather than assuming it needs replacing. It's
+already a hybrid rule-based + AI architecture — merchant rules the user has taught are checked
+first (fast, free, no external call), Gemini 1.5 Flash (cheap, low-latency, temperature 0) only
+runs on the remainder, with a constrained category output space and confidence scores. Prompt
+injection blast radius is inherently limited: output is regex-parsed and validated against
+`VALID_CATEGORIES`, so a malicious transaction description can at worst cause a
+misclassification, not leak data or execute anything. No evidence (bug reports, failed tests, user
+complaints) that accuracy is actually deficient, so no provider swap and no speculative
+provider-abstraction layer were built — matches this project's standing "don't build ahead of a
+real requirement" discipline. Found and fixed one stale comment: `src/utils/pdf.js`'s "Anthropic
+API key" note was wrong — the actual backend uses `GEMINI_API_KEY`. There's also an orphaned
+`ANTHROPIC_API_KEY` and a duplicate-cased `Gemini_Api_Key` sitting unused in Vercel's production
+env, left over from an earlier provider switch — flagged for the repository owner to remove, not
+touched here (modifying deployed secrets wasn't this session's call to make unilaterally).
+
+**Full local behavioral verification**: ran the complete Playwright e2e suite (chromium project,
+single worker) as real behavioral proof, not code review — 109 passed, 0 failed, 4 skipped
+(mobile-viewport-only responsive specs, correctly not applicable to the desktop chromium project).
+Covers auth (including CSRF-gated logout, multi-tab logout, session persistence across simulated
+browser restart), OTP/forgot-password UI and error-handling paths, upload, dashboard, categories,
+merchant rules, transactions, analytics, savings, settings, dark mode, and axe-core accessibility
+scans across every real route including empty states and the 404 page.
+
+**Still open, carried forward**: real Gmail SMTP delivery for OTP/password-reset emails remains
+unverified (ADR-013/ADR-021's long-standing gap — this session's e2e run explicitly confirmed the
+test environment shows the "email service not configured" error path, not a real send). A literal
+human click-through of signup on `cashcanvas.dev` itself is still open — reCAPTCHA correctly
+blocks automated verification of that exact path by design; the score-gate proof above is the
+closest automated substitute available.
+
 ## Release status
 
 **Phase 10 (final cleanup) shipped this session — Phase 8 (frontend redesign) is fully done.**

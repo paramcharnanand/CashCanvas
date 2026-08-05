@@ -361,7 +361,7 @@ function strategyMultiLine(lines, inferredYear = null) {
 }
 
 // Strategy 3: AI-powered extraction via secure backend proxy (/api/parse-pdf).
-// The Anthropic API key lives only on the server — never in the browser bundle.
+// The Gemini API key lives only on the server — never in the browser bundle.
 async function strategyAI(file, statementType = "unknown") {
   try {
     const base64 = await new Promise((res, rej) => {
