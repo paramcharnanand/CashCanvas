@@ -701,6 +701,39 @@ a real, separate optimization project, not "final cleanup."
 Phase 8 (frontend redesign) is complete. Remaining project scope: Phase 9 (Advanced AI features &
 product enhancements) — not started, no concrete plan exists yet.
 
+### ADR-029 — Transactional email is provider-swappable (Gmail default, Resend added), not a Gmail-only mailer
+
+**Context**: OTP/password-reset email worked correctly end-to-end (verified live this session —
+Gmail's SMTP server accepted and delivered every message), but consistently landed in spam:
+`cashcanvas26@gmail.com` is a plain personal Gmail account, not a domain-authenticated
+transactional sender, so it gets Gmail's standard automated-mail spam heuristics applied to it.
+Not an application bug — an infrastructure/deliverability gap. **Decision**: add Resend as a
+second transport behind the existing `api/_lib/mailer.js` interface, selected via a new
+`EMAIL_PROVIDER` var (`gmail`, the default, or `resend`), rather than replacing Gmail outright or
+scattering provider-specific code across the file. **Architecture**: `createTransporter()` is the
+only place that knows which provider is active; it returns an object shaped like nodemailer's own
+`{ sendMail({from,to,subject,html,text}) }`, whether that's a real Nodemailer Gmail transport or a
+`createResendTransporter()` adapter backed by a single `fetch()` call to Resend's HTTP API (no SDK
+dependency added — this project already prefers raw `fetch` for external APIs, see `api/ai.js`,
+`api/_lib/recaptcha.js`). The three send functions (`sendOtpEmail`/`sendVerificationEmail`/
+`sendPasswordResetEmail`) and every caller in `api/auth.js` are unchanged — they only ever call
+`transporter.sendMail(...)`, oblivious to which provider is behind it. A new `getFromAddress()`
+helper (driven by `EMAIL_FROM`/`EMAIL_FROM_NAME`, falling back to `GMAIL_USER` under the gmail
+provider since Gmail SMTP requires "from" to match the authenticated account) replaced three
+previously-duplicated hardcoded `from:` lines. **Backward compatible by construction**: with no
+`EMAIL_PROVIDER` var set at all, behavior is byte-for-byte identical to before this ADR — an
+existing deployment needs zero config changes to keep working; switching to Resend is opt-in.
+**Verification**: 6 new unit tests (`tests/mailer.test.js`) cover provider-selection gating, the
+Resend adapter's request shape (Bearer auth header, from/to/html body), its throw-on-failure
+behavior with Resend's own error body (never the API key) surfacing the same way Nodemailer's
+throw already did, and the Gmail from-address fallback — all via mocked `fetch`/`nodemailer`,
+since neither `mongodb-memory-server`-style infrastructure nor a real API key exists for this in
+CI. **Status**: code shipped and tested; **not yet live** — no `RESEND_API_KEY` exists yet.
+Activating it requires: sign up at resend.com, verify a sending domain (DNS records at the
+registrar), generate an API key, then set `EMAIL_PROVIDER=resend`, `RESEND_API_KEY`, and
+`EMAIL_FROM` (an address on that verified domain) in Vercel. Until then, production continues
+sending via Gmail exactly as before.
+
 ### ADR-028 — Accept the `react-router` CSRF-bypass finding (GHSA-qwww-vcr4-c8h2) as risk, don't force a breaking downgrade hours before launch
 
 **Context**: `npm audit --audit-level=high` (Security workflow) flags `react-router` 7.12.0–8.2.0 for

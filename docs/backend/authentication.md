@@ -251,18 +251,26 @@ OTPs are generated with `crypto.randomInt(100000, 999999)` — cryptographically
 
 ### Dev mode without email configured
 
-If `GMAIL_USER` / `GMAIL_APP_PASSWORD` are not set (`isEmailVerificationEnabled()` returns
-`false`), signup and login skip the OTP step entirely and establish a session immediately.
-This lets you develop locally without setting up Gmail SMTP, and is exactly the mode the
-automated test suite runs in (see Testing, below).
+If the active provider's required vars aren't set (`isEmailVerificationEnabled()` returns
+`false` — no `GMAIL_USER`/`GMAIL_APP_PASSWORD` under the default `gmail` provider, or no
+`RESEND_API_KEY` under `EMAIL_PROVIDER=resend`), signup and login skip the OTP step entirely
+and establish a session immediately. This lets you develop locally without setting up an email
+provider, and is exactly the mode the automated test suite runs in (see Testing, below).
 
 ## Email flow
 
-`api/_lib/mailer.js` owns the Nodemailer transporter (Gmail SMTP, created lazily and only if
-credentials are present) and three send functions: OTP codes, the legacy email-verification
-link, and password-reset (link + OTP). All email sends from `api/auth.js` are wrapped in
-try/catch — a failed send returns a `502` to the client rather than silently succeeding with
-no code ever delivered.
+`api/_lib/mailer.js` owns transport selection and three send functions: OTP codes, the legacy
+email-verification link, and password-reset (link + OTP). `EMAIL_PROVIDER` selects Gmail SMTP
+(via Nodemailer, the default) or Resend (via its plain HTTP API, no SDK dependency) — both are
+constructed lazily behind the same `sendMail({from, to, subject, html, text})` shape, so the
+three send functions and every caller in `api/auth.js` are provider-agnostic; adding a future
+provider only means one more branch in `createTransporter()`. All email sends from
+`api/auth.js` are wrapped in try/catch — a failed send returns a `502` to the client rather
+than silently succeeding with no code ever delivered.
+
+Gmail's own account (a personal address, not a dedicated transactional domain) has weaker
+inbox-placement/deliverability than a real transactional provider — Resend is the recommended
+production choice once a sending domain is verified there; see ROADMAP.md's migration ADR.
 
 ## reCAPTCHA flow
 

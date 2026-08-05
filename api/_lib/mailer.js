@@ -1,25 +1,51 @@
 /**
- * Email sending utility using Nodemailer + Gmail SMTP.
+ * Email sending utility. Every caller (sendOtpEmail/sendVerificationEmail/
+ * sendPasswordResetEmail below) only ever calls transporter.sendMail({from,
+ * to, subject, html, text}) — createTransporter() is the single place that
+ * picks and constructs a provider, so adding a future provider only ever
+ * means adding one more branch here, not touching the send* functions.
  *
- * Required env vars:
- *   GMAIL_USER          – your Gmail address (e.g. you@gmail.com)
- *   GMAIL_APP_PASSWORD  – 16-char App Password (Google Account → Security → App Passwords)
- *   APP_URL             – public base URL of the app (for verification links)
+ * EMAIL_PROVIDER selects the transport ("gmail" | "resend"), defaulting to
+ * "gmail" so an existing deployment with only GMAIL_USER/GMAIL_APP_PASSWORD
+ * set (no EMAIL_PROVIDER var at all) keeps working exactly as before —
+ * switching providers is opt-in, not a breaking change.
  *
- * When these vars are not set the mailer is disabled and logs a warning.
- * The app still works — users are auto-verified in that mode.
+ * Env vars:
+ *   EMAIL_PROVIDER       – "gmail" (default) or "resend"
+ *   EMAIL_FROM           – sender address, e.g. noreply@cashcanvas.dev
+ *                           (falls back to GMAIL_USER under the gmail
+ *                           provider, since Gmail SMTP requires the "from"
+ *                           to match the authenticated account anyway)
+ *   EMAIL_FROM_NAME       – sender display name (default "CashCanvas")
+ *   APP_URL               – public base URL of the app (for verification links)
+ *
+ *   gmail provider:
+ *     GMAIL_USER          – your Gmail address (e.g. you@gmail.com)
+ *     GMAIL_APP_PASSWORD  – 16-char App Password (Google Account → Security → App Passwords)
+ *
+ *   resend provider:
+ *     RESEND_API_KEY      – from resend.com's dashboard; EMAIL_FROM must be
+ *                            an address on a domain verified with Resend
+ *
+ * When the selected provider's required vars aren't set, the mailer is
+ * disabled and logs a warning. The app still works — users are
+ * auto-verified in that mode.
  */
 
 import nodemailer from "nodemailer";
 import crypto from "crypto";
 import { logger } from "./logger.js";
 
+const getProvider = () => (process.env.EMAIL_PROVIDER || "gmail").toLowerCase();
+
 /**
  * Checked at call time (not import time) so env vars loaded via --env-file
  * or Vercel's runtime are always reflected correctly.
  */
 export const isEmailVerificationEnabled = () =>
-  !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD);
+  getProvider() === "resend"
+    ? !!process.env.RESEND_API_KEY
+    : !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD);
 
 // Keep the old name as an alias so any code that imported the const still compiles.
 // Deprecated — prefer isEmailVerificationEnabled().
@@ -27,8 +53,13 @@ export const EMAIL_VERIFICATION_ENABLED = isEmailVerificationEnabled;
 
 const getAppUrl = () => process.env.APP_URL || "http://localhost:5173";
 
-function createTransporter() {
-  if (!isEmailVerificationEnabled()) return null;
+function getFromAddress() {
+  const name    = process.env.EMAIL_FROM_NAME || "CashCanvas";
+  const address = process.env.EMAIL_FROM || process.env.GMAIL_USER;
+  return `"${name}" <${address}>`;
+}
+
+function createGmailTransporter() {
   return nodemailer.createTransport({
     service: "gmail",
     auth: {
@@ -36,6 +67,39 @@ function createTransporter() {
       pass: process.env.GMAIL_APP_PASSWORD,
     },
   });
+}
+
+/**
+ * A minimal adapter matching the same sendMail({from,to,subject,html,text})
+ * shape nodemailer's transporter exposes — call sites don't know or care
+ * which provider they're talking to. Uses Resend's plain HTTP API directly
+ * rather than adding their SDK as a dependency: it's a single POST request,
+ * and this project already prefers raw fetch for external APIs (see
+ * api/ai.js, api/_lib/recaptcha.js) over pulling in a client library for it.
+ */
+function createResendTransporter() {
+  return {
+    async sendMail({ from, to, subject, html, text }) {
+      const response = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ from, to, subject, html, text }),
+      });
+      if (!response.ok) {
+        // Resend's own error body only — never include the API key itself.
+        const body = await response.text().catch(() => "");
+        throw new Error(`Resend API error (${response.status}): ${body.slice(0, 300)}`);
+      }
+    },
+  };
+}
+
+function createTransporter() {
+  if (!isEmailVerificationEnabled()) return null;
+  return getProvider() === "resend" ? createResendTransporter() : createGmailTransporter();
 }
 
 /** Generate a cryptographically secure 32-byte hex token. */
@@ -72,7 +136,7 @@ export async function sendOtpEmail(toEmail, otp, purpose = "login") {
   ).join("");
 
   await transporter.sendMail({
-    from: `"CashCanvas" <${process.env.GMAIL_USER}>`,
+    from: getFromAddress(),
     to:   toEmail,
     subject,
     html: `<!DOCTYPE html>
@@ -182,7 +246,7 @@ export async function sendVerificationEmail(toEmail, token) {
   const verifyUrl = `${getAppUrl()}/verify?token=${token}`;
 
   await transporter.sendMail({
-    from: `"CashCanvas" <${process.env.GMAIL_USER}>`,
+    from: getFromAddress(),
     to: toEmail,
     subject: "Verify your CashCanvas account",
     html: `
@@ -256,7 +320,7 @@ export async function sendPasswordResetEmail(toEmail, token, otp) {
   ).join("");
 
   await transporter.sendMail({
-    from: `"CashCanvas" <${process.env.GMAIL_USER}>`,
+    from: getFromAddress(),
     to:   toEmail,
     subject: "Reset your CashCanvas password",
     html: `<!DOCTYPE html>

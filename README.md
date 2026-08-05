@@ -97,6 +97,10 @@ Set these environment variables in your Vercel project:
 - `MONGODB_URI`
 - `JWT_SECRET`
 - `GEMINI_API_KEY` (optional — enables AI categorization via Gemini 1.5 Flash)
+- Transactional email (optional — enables OTP sign-in/sign-up codes and password reset; omit entirely to skip OTP in dev mode). `EMAIL_PROVIDER` selects `gmail` (default) or `resend`:
+  - `gmail`: `GMAIL_USER`, `GMAIL_APP_PASSWORD`
+  - `resend`: `RESEND_API_KEY`, `EMAIL_FROM` (an address on a domain verified with Resend)
+  - either provider: `EMAIL_FROM_NAME` (optional, defaults to "CashCanvas"), `APP_URL`
 
 ## API Routes
 

@@ -4,7 +4,23 @@ Session handoff doc — read this first, then `ROADMAP.md` for full phase histor
 debt. Update this file at the end of every session so the next one can start here instead of
 re-deriving context from the repo.
 
-## Pre-launch verification pass (this session)
+## SMTP provider migration (this session, ADR-029)
+
+Added Resend as a second transport in `api/_lib/mailer.js`, selectable via `EMAIL_PROVIDER`
+(`gmail` default, or `resend`), behind the existing `sendMail({from,to,subject,html,text})`
+interface — no SDK dependency, a single `fetch()` to Resend's HTTP API. `sendOtpEmail`/
+`sendVerificationEmail`/`sendPasswordResetEmail` and every caller in `api/auth.js` are
+byte-for-byte unchanged. A new `getFromAddress()` helper (EMAIL_FROM/EMAIL_FROM_NAME) replaced
+three duplicated hardcoded Gmail `from:` lines. 6 new unit tests in `tests/mailer.test.js`
+(provider gating, Resend request shape, throw-on-failure without leaking the API key, Gmail
+from-address fallback) — all passing, plus the full existing suite (132 unit / 27 auth e2e)
+re-verified with no regressions. **Not yet live**: no `RESEND_API_KEY` exists anywhere yet — this
+is code + tests only. To activate: sign up at resend.com, verify a sending domain via DNS,
+generate an API key, then set `EMAIL_PROVIDER=resend`, `RESEND_API_KEY`, and `EMAIL_FROM` in
+Vercel. Until that's done, production keeps sending via Gmail exactly as it does today — this
+change is zero-risk to deploy on its own. See ADR-029 for full rationale.
+
+## Pre-launch verification pass (earlier this session)
 
 Ground-truthed a batch of assumed-complete/assumed-broken items against real evidence rather than
 taking either claim at face value, ahead of a planned public launch.
