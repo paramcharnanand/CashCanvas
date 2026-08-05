@@ -73,12 +73,34 @@ browser restart), OTP/forgot-password UI and error-handling paths, upload, dashb
 merchant rules, transactions, analytics, savings, settings, dark mode, and axe-core accessibility
 scans across every real route including empty states and the 404 page.
 
-**Still open, carried forward**: real Gmail SMTP delivery for OTP/password-reset emails remains
-unverified (ADR-013/ADR-021's long-standing gap — this session's e2e run explicitly confirmed the
-test environment shows the "email service not configured" error path, not a real send). A literal
-human click-through of signup on `cashcanvas.dev` itself is still open — reCAPTCHA correctly
-blocks automated verification of that exact path by design; the score-gate proof above is the
-closest automated substitute available.
+**Real Gmail SMTP delivery — verified live, and a real production bug found and fixed along the
+way.** Triggered a genuine `/api/auth/forgot-password` request against `cashcanvas.dev` for the
+repository owner's real account. First attempt: HTTP 500. Root-caused via live Vercel log
+streaming (`vercel logs --since`/`--status-code 500`), not guessed: a real
+`MongoServerSelectionError: Server selection timed out after 30000 ms` on the cold container's
+first Mongo connection. Found the actual bug in `api/_lib/db.js`: the production branch cached
+`client.connect()`'s promise at module scope and never reset it on failure — a rejected promise
+stays rejected forever, so *every* later request in that same warm container would have replayed
+the identical failure, not just the unlucky first one. Fixed: `getDb()` now resets the cached
+promise on failure so the next call gets a fresh `MongoClient` to retry with (`tests/db.test.js`
+reproduces the failure via a mocked driver and proves the second call recovers — mongodb-memory-
+server, used by every other test, always connects successfully, so this class of failure can only
+be reproduced by mocking `mongodb` directly). A second `forgot-password` attempt then returned
+`200 {ok:true}` — but the email still didn't arrive. Rather than guess between "code bug" and
+"delivery issue," pulled real production credentials locally (`vercel env pull`, gitignored,
+deleted immediately after use — never committed) and ran `nodemailer` directly against Gmail's
+SMTP server outside the app entirely: login succeeded, `sendMail()` returned a genuine `250 2.0.0
+OK` from Gmail with the message accepted, zero rejected. The mailer code, credentials, and Vercel
+env vars are all correct. The repository owner then found the diagnostic email — in spam. Real,
+confirmed root cause: `cashcanvas26@gmail.com`'s sender reputation (a plain Gmail account, not a
+dedicated transactional-email provider with its own SPF/DKIM/DMARC-authenticated sending domain)
+gets Gmail's standard automated-mail spam heuristics applied to it. Not a launch blocker — mail
+genuinely delivers — but worth a post-launch move to a dedicated transactional provider
+(SendGrid/Resend/Postmark/SES) if inbox placement matters for real users' OTP/reset emails.
+
+A literal human click-through of signup on `cashcanvas.dev` itself is still open — reCAPTCHA
+correctly blocks automated verification of that exact path by design; the score-gate proof
+earlier in this section is the closest automated substitute available.
 
 ## Release status
 
