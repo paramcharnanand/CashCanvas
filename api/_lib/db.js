@@ -3,19 +3,20 @@ import { MongoClient } from "mongodb";
 const uri = process.env.MONGODB_URI;
 if (!uri) throw new Error("MONGODB_URI environment variable is not set");
 
-let client;
+function connect() {
+  return new MongoClient(uri).connect();
+}
+
 let clientPromise;
 
 if (process.env.NODE_ENV !== "production") {
   // In dev, reuse connection across hot reloads
   if (!global._mongoClientPromise) {
-    client = new MongoClient(uri);
-    global._mongoClientPromise = client.connect();
+    global._mongoClientPromise = connect();
   }
   clientPromise = global._mongoClientPromise;
 } else {
-  client = new MongoClient(uri);
-  clientPromise = client.connect();
+  clientPromise = connect();
 }
 
 /**
@@ -94,8 +95,22 @@ function ensureIndexes(db) {
 }
 
 export async function getDb() {
-  const c  = await clientPromise;
-  const db = c.db("cashcanvas");
-  ensureIndexes(db);
-  return db;
+  try {
+    const c  = await clientPromise;
+    const db = c.db("cashcanvas");
+    ensureIndexes(db);
+    return db;
+  } catch (err) {
+    // A failed connection attempt (e.g. Atlas server selection timing out on
+    // a cold serverless container's very first request) must not stay
+    // cached — clientPromise/global._mongoClientPromise would otherwise
+    // remain a permanently-rejected promise for the rest of that warm
+    // container's or dev process's lifetime, so *every* later request would
+    // replay this same failure forever instead of just the unlucky first
+    // one. Reset so the next call gets a fresh MongoClient to retry with;
+    // this request still fails, since it genuinely has no connection now.
+    clientPromise = connect();
+    if (process.env.NODE_ENV !== "production") global._mongoClientPromise = clientPromise;
+    throw err;
+  }
 }
