@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { evaluateReport, ACCEPTED_RISKS } from "../scripts/check-audit.js";
+import { evaluateReport, ACCEPTED_RISKS, assertUsableReport } from "../scripts/check-audit.js";
 
 function advisory({ severity, url, viaPackage }) {
   return {
@@ -97,5 +97,29 @@ describe("evaluateReport", () => {
 
     expect(result.blocking).toHaveLength(1);
     expect(result.blocking[0].advisories).toEqual(["GHSA-different-id-0000"]);
+  });
+});
+
+describe("assertUsableReport", () => {
+  it("does not throw on a clean report shape (vulnerabilities: {})", () => {
+    expect(() => assertUsableReport({ vulnerabilities: {} })).not.toThrow();
+  });
+
+  it("does not throw on a report with real findings", () => {
+    expect(() =>
+      assertUsableReport({
+        vulnerabilities: { "react-router": { severity: "high", via: [] } },
+      })
+    ).not.toThrow();
+  });
+
+  it("throws on the shape npm audit emits for a registry/network failure (no vulnerabilities key)", () => {
+    const registryFailure = {
+      message:
+        "request to https://registry.npmjs.org/react-router failed, reason: getaddrinfo ENOTFOUND registry.npmjs.org",
+      error: { code: "ENOTFOUND" },
+    };
+
+    expect(() => assertUsableReport(registryFailure)).toThrow(/vulnerabilities/i);
   });
 });

@@ -31,9 +31,11 @@ findings, not secret leakage. `body-parser`, `brace-expansion`, `postcss` fixed 
 (GHSA-qwww-vcr4-c8h2) has no non-breaking fix — every published 7.x release including the
 installed `7.18.1` is in the vulnerable range, and no 8.x exists yet. Documented as ADR-028:
 accepted risk, not fixed, because this app never uses RSC mode (grepped and confirmed), the only
-surface the CVE affects. **The Security Actions check will keep showing red until react-router
-ships a real fix** — that's the workflow correctly reporting a known, understood, accepted-risk
-finding, not an unknown regression.
+surface the CVE affects. **Since resolved**: the Security workflow now runs
+`scripts/check-audit.js` in place of a bare `--audit-level=high` gate, so it can accept exactly
+this one documented, reviewed advisory (GHSA-qwww-vcr4-c8h2, ADR-028) by exact ID while still
+failing CI on any other high/critical finding, including a future advisory against react-router
+itself. The check is green again, not permanently red.
 
 **CI "Lint, test, build" flakiness**: the failing run was 16 days stale (no pushes since), and its
 one failure was 4 Playwright tests timing out simultaneously across browsers in the same run —

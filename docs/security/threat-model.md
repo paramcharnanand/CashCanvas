@@ -111,8 +111,10 @@ devDependency-only build tooling (`vite`/`vitest` transitive deps) except `lodas
   transports/defaults this app never touches (SES, OAuth2 token handling, direct transport).
   Verified: `npm run build`, the full test suite, and a live `createTransport()` call all pass
   post-upgrade with zero code changes required.
-- Result: **0 vulnerabilities** (`npm audit` clean). All 12 direct dependencies confirmed
-  actually imported somewhere in the codebase — none unused, nothing removed.
+- Result, as of Phase 4: **0 vulnerabilities** (`npm audit` clean). All 12 direct dependencies
+  confirmed actually imported somewhere in the codebase — none unused, nothing removed. (Not a
+  live claim — see the accepted-risk exception below for the current state, where one
+  high-severity advisory is present and formally accepted rather than fixed.)
 
 **Accepted-risk exceptions (this phase):** the Security workflow's `npm
 audit` step runs `scripts/check-audit.js` instead of gating purely on

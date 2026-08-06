@@ -8,6 +8,7 @@
 // explicit, and keyed by advisory ID (never by package name), so a *new*
 // advisory against an already-allowlisted package still fails CI.
 import { execSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 
 // --- Accepted-risk allowlist --------------------------------------------
 // Add an entry here ONLY after the advisory has been reviewed and formally
@@ -64,6 +65,13 @@ export function evaluateReport(report, acceptedRisks = ACCEPTED_RISKS) {
     const unaccepted = ghsaIds.filter((id) => !(id in acceptedRisks));
 
     if (ghsaIds.length > 0 && unaccepted.length === 0) {
+      // Only reached when every GHSA ID on this node is accepted (unaccepted
+      // is empty). If a single node's `via` mixes one accepted ID with one
+      // new/unaccepted one, this branch is skipped entirely and the node
+      // falls through to `blocking` below — so the accepted ID is never
+      // added here in that case. Deliberate: printing a false "accepted"
+      // banner next to a node that's still blocking CI would be more
+      // confusing, not less.
       ghsaIds.forEach((id) => accepted.add(id));
       continue;
     }
@@ -78,7 +86,7 @@ export function evaluateReport(report, acceptedRisks = ACCEPTED_RISKS) {
   return { blocking, accepted: [...accepted] };
 }
 
-function runAudit() {
+function tryRunAudit() {
   try {
     const stdout = execSync("npm audit --json", {
       encoding: "utf8",
@@ -91,6 +99,29 @@ function runAudit() {
     if (err.stdout) return JSON.parse(err.stdout);
     throw err;
   }
+}
+
+// npm audit's non-zero exit isn't only used for "found vulnerabilities" — a
+// registry/network failure (can't reach registry.npmjs.org, DNS failure,
+// etc.) also exits non-zero, but its stdout JSON has a completely different
+// shape (e.g. `{ message, error }`) with no `vulnerabilities` key at all.
+// Without this check, `report.vulnerabilities || {}` downstream would
+// silently treat that as a clean audit and exit 0 — a security gate passing
+// with zero actual audit coverage, worse than the `--audit-level=high`
+// behavior this script replaced (which would exit 1 on infra failure too).
+// Pure function — no process access — so it's unit-testable directly.
+export function assertUsableReport(report) {
+  if (!report || typeof report.vulnerabilities !== "object" || report.vulnerabilities === null) {
+    throw new Error(
+      `npm audit did not return a usable report (no "vulnerabilities" key) — likely a registry/network failure, not a clean audit. Raw output: ${JSON.stringify(report).slice(0, 500)}`
+    );
+  }
+}
+
+function runAudit() {
+  const report = tryRunAudit();
+  assertUsableReport(report);
+  return report;
 }
 
 function printAccepted(id, acceptedRisks) {
@@ -126,6 +157,6 @@ function main() {
   console.log("\nnpm audit: no unaccepted high/critical vulnerabilities.");
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   main();
 }
