@@ -18,9 +18,9 @@ export default [
 
   js.configs.recommended,
 
-  // ── Backend: api/, server.js — Node, ESM ──────────────────────────────────
+  // ── Backend: api/, server.js, scripts/ — Node, ESM ────────────────────────
   {
-    files: ["api/**/*.js", "server.js"],
+    files: ["api/**/*.js", "server.js", "scripts/**/*.js"],
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: "module",
