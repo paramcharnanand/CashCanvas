@@ -26,20 +26,22 @@ jobs:
           node-version: "24.x"
           cache: "npm"
       - run: npm ci
-      # --audit-level=high: fails only on high/critical, actionable
-      # vulnerabilities. Low/moderate findings are often theoretical for
-      # this app's actual usage (e.g. a ReDoS in a devDependency's
-      # transitive build tooling that never touches user input) — informing,
-      # not gating. As of Phase 4/5 (see docs/security/threat-model.md,
-      # "Dependency posture"), `npm audit` is clean at every severity; this
-      # threshold is what keeps it that way going forward without being
-      # noisy about accepted-risk-tier findings. Any future accepted risk at
-      # high/critical severity that genuinely can't be fixed gets documented
-      # as an ADR in ROADMAP.md (see ADR-013 for the precedent — the
-      # nodemailer major-version evaluation) rather than silently
-      # suppressed here.
-      - name: Audit dependencies (fail on high/critical only)
-        run: npm audit --audit-level=high
+      # Still fails only on high/critical, actionable vulnerabilities —
+      # low/moderate findings are often theoretical for this app's actual
+      # usage and stay informing, not gating. Unlike a plain `npm audit
+      # --audit-level=high`, this parses the JSON report itself
+      # (scripts/check-audit.js) so it can carve out exactly one
+      # already-reviewed advisory — GHSA-qwww-vcr4-c8h2, the react-router
+      # RSC CSRF bypass documented as ADR-028 in ROADMAP.md (this app never
+      # uses RSC mode, and the only available fix is a breaking downgrade)
+      # — without silencing anything else. Every other high/critical
+      # finding, including any *future* advisory against react-router with
+      # a different GHSA ID, still fails the build. See
+      # scripts/check-audit.js for the allowlist and
+      # docs/security/threat-model.md ("Dependency posture") for how to add
+      # or remove an exception.
+      - name: Audit dependencies (fail on high/critical, except accepted risks)
+        run: node scripts/check-audit.js
 
   dependency-review:
     name: Dependency review
