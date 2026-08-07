@@ -111,8 +111,28 @@ devDependency-only build tooling (`vite`/`vitest` transitive deps) except `lodas
   transports/defaults this app never touches (SES, OAuth2 token handling, direct transport).
   Verified: `npm run build`, the full test suite, and a live `createTransport()` call all pass
   post-upgrade with zero code changes required.
-- Result: **0 vulnerabilities** (`npm audit` clean). All 12 direct dependencies confirmed
-  actually imported somewhere in the codebase — none unused, nothing removed.
+- Result, as of Phase 4: **0 vulnerabilities** (`npm audit` clean). All 12 direct dependencies
+  confirmed actually imported somewhere in the codebase — none unused, nothing removed. (Not a
+  live claim — see the accepted-risk exception below for the current state, where one
+  high-severity advisory is present and formally accepted rather than fixed.)
+
+**Accepted-risk exceptions (this phase):** the Security workflow's `npm
+audit` step runs `scripts/check-audit.js` instead of gating purely on
+npm's own `--audit-level` exit code, so one specific, already-reviewed
+advisory can be carved out without silencing the rest of the report. As of
+this writing the only exception is `GHSA-qwww-vcr4-c8h2` (react-router RSC
+CSRF bypass, ADR-028 in ROADMAP.md — this app never uses RSC mode, and the
+only available fix is a breaking downgrade). Every other high/critical
+finding still fails CI, including a *new* advisory against react-router
+with a different GHSA ID — the allowlist in `scripts/check-audit.js`'s
+`ACCEPTED_RISKS` map is keyed by exact advisory ID, never by package name.
+
+- **To add an exception:** get the risk formally reviewed and documented
+  as an ADR in ROADMAP.md first, then add an `ACCEPTED_RISKS` entry keyed
+  by its GHSA ID in `scripts/check-audit.js`.
+- **To remove one:** run `npm audit` (or `npm audit fix` without
+  `--force`) to check whether a non-breaking fix now exists; if so, apply
+  it and delete the corresponding `ACCEPTED_RISKS` entry.
 
 ## Remaining risks (accepted, not fixed this phase)
 
