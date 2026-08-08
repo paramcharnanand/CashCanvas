@@ -23,8 +23,8 @@ export function MobileNav() {
         background: "var(--surface)",
         borderTop: "1px solid var(--border)",
         display: "flex",
-        gap: 6,
-        padding: "8px 4px calc(8px + env(safe-area-inset-bottom, 8px))",
+        gap: 8,
+        padding: "10px 4px calc(10px + env(safe-area-inset-bottom, 10px))",
         zIndex: 40,
       }}
     >
@@ -43,15 +43,15 @@ export function MobileNav() {
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              gap: 3,
-              padding: "4px 0",
+              gap: 4,
+              padding: "6px 0",
               fontSize: 9,
               fontWeight: 600,
               textDecoration: "none",
               color: isActive ? "var(--primary)" : "var(--text-subtle)",
             })}
           >
-            <Icon size={19} strokeWidth={1.75} aria-hidden="true" />
+            <Icon size={20} strokeWidth={1.75} aria-hidden="true" />
             <span style={{ whiteSpace: "nowrap" }}>{item.mobileLabel || item.label}</span>
           </NavLink>
         );

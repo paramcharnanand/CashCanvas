@@ -42,7 +42,7 @@ export function AppShell() {
           correct fix is for this shell to stay landmark-neutral and let
           each page own its own semantics, exactly as before.
         */}
-        <div style={{ flex: 1, paddingBottom: showSidebar ? 0 : 70 }}>
+        <div style={{ flex: 1, paddingBottom: showSidebar ? 0 : "calc(70px + env(safe-area-inset-bottom, 0px))" }}>
           <Outlet />
         </div>
         {!showSidebar && <MobileNav />}

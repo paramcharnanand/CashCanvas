@@ -32,7 +32,7 @@ test.describe("responsive layout", () => {
 
   test("no bottom mobile-nav label wraps to a second line", async ({ authenticatedPage: page }) => {
     const viewport = page.viewportSize();
-    test.skip(!viewport || viewport.width >= 768, "the sidebar, not the bottom nav, renders above the md breakpoint");
+    test.skip(!viewport || viewport.width >= 1024, "the sidebar, not the bottom nav, renders above the lg breakpoint");
 
     // Found via a real screenshot audit: "Merchant Rules" wrapped to two
     // lines in the bottom nav while every other (shorter) label stayed on
@@ -72,7 +72,7 @@ test.describe("responsive layout", () => {
 
   test("adjacent bottom-nav labels never touch", async ({ authenticatedPage: page }) => {
     const viewport = page.viewportSize();
-    test.skip(!viewport || viewport.width >= 768, "the sidebar, not the bottom nav, renders above the md breakpoint");
+    test.skip(!viewport || viewport.width >= 1024, "the sidebar, not the bottom nav, renders above the lg breakpoint");
 
     // Found via a real screenshot audit: "Transactions" and "Analytics"
     // rendered with zero visible gap between them ("TransactionsAnalytics")
@@ -92,6 +92,20 @@ test.describe("responsive layout", () => {
     );
     for (let i = 1; i < boxes.length; i++) {
       expect(boxes[i].left, "two adjacent nav labels touch or overlap").toBeGreaterThan(boxes[i - 1].right);
+    }
+  });
+
+  test("bottom-nav items meet the 44px minimum touch-target height", async ({ authenticatedPage: page }) => {
+    const viewport = page.viewportSize();
+    test.skip(!viewport || viewport.width >= 1024, "the sidebar, not the bottom nav, renders above the lg breakpoint");
+
+    await page.goto("/dashboard");
+    const nav = page.getByRole("navigation", { name: "Primary navigation" });
+    await expect(nav).toBeVisible();
+
+    const heights = await nav.locator("a").evaluateAll((links) => links.map((a) => a.getBoundingClientRect().height));
+    for (const height of heights) {
+      expect(height, "a bottom-nav item is shorter than the 44px minimum touch target").toBeGreaterThanOrEqual(44);
     }
   });
 
