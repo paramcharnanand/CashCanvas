@@ -212,3 +212,18 @@ export function categorize(desc, customCats, merchantRules) {
 
   return "Other";
 }
+
+/**
+ * Resolves a transaction's displayed category with a single, explicit
+ * precedence order: an explicit merchant rule always wins (it's the one
+ * persisted, user-authored signal) — including over `override` (an
+ * ephemeral cached guess, e.g. Dashboard's AI-categorization pass) — which
+ * in turn wins over default keyword categorization.
+ */
+export function resolveCategory(desc, { customCats, merchantRules, override } = {}) {
+  const cleaned = cleanDesc(desc);
+  const ruleMatch = merchantRules?.size ? matchMerchant(cleaned, merchantRules) : null;
+  if (ruleMatch) return ruleMatch.category;
+  if (override) return override;
+  return categorize(desc, customCats, merchantRules);
+}

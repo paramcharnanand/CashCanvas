@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import _ from "lodash";
 import { apiFetch } from "../../../api.js";
 import { useAuth } from "../../../contexts/AuthContext.jsx";
-import { categorize } from "../../../utils/categorization.js";
+import { resolveCategory } from "../../../utils/categorization.js";
 import { generateSampleData } from "../../../utils/sampleData.js";
 
 /**
@@ -93,7 +93,7 @@ export function useDashboardData() {
   useEffect(() => {
     if (!auth?.user || isSample || aiDone || !rawTxns || rawTxns.length === 0) return;
     const otherTxns = rawTxns.filter(
-      (t) => t.amount < 0 && !txnOverrides[t.id] && categorize(t.desc, customCats, merchantRules) === "Other"
+      (t) => t.amount < 0 && !txnOverrides[t.id] && resolveCategory(t.desc, { customCats, merchantRules, override: txnOverrides[t.id] }) === "Other"
     );
     if (otherTxns.length === 0) { setAiDone(true); return; }
     setAiDone(true);
@@ -125,7 +125,7 @@ export function useDashboardData() {
 
   const transactions = (rawTxns ?? []).map((t) => ({
     ...t,
-    category: txnOverrides[t.id] || categorize(t.desc, customCats, merchantRules),
+    category: resolveCategory(t.desc, { customCats, merchantRules, override: txnOverrides[t.id] }),
   }));
 
   const expenses = transactions.filter((t) => t.amount < 0);
