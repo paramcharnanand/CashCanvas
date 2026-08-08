@@ -4,7 +4,7 @@ Your personal finance intelligence platform — upload a bank statement and inst
 
 ## Live Demo
 
-**[cash-canvas-sigma.vercel.app](https://cash-canvas-sigma.vercel.app)**
+**[cash-canvas-sigma.vercel.app](https://cashcanvas.dev/)**
 
 ## What It Does
 
