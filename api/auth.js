@@ -447,9 +447,11 @@ async function resendVerification(req, res) {
       { $set: { verificationToken: token, verificationTokenExpiry: expiry } }
     );
 
-    sendVerificationEmail(user.email, token).catch(err =>
-      logger.error("resend", err.message, { context: "Email error" })
-    );
+    try {
+      await sendVerificationEmail(user.email, token);
+    } catch (err) {
+      logger.error("resend", err.message, { context: "Email error" });
+    }
 
     res.json({ ok: true, message: "A new verification link has been sent to your inbox." });
   } catch (err) {
@@ -515,9 +517,11 @@ async function forgotPassword(req, res) {
         $set: { passwordResetToken: token, passwordResetOtp: otp, passwordResetExpiry: expiry },
       });
 
-      sendPasswordResetEmail(user.email, token, otp).catch(err =>
-        logger.error("forgot-password", err.message, { context: "Email error" })
-      );
+      try {
+        await sendPasswordResetEmail(user.email, token, otp);
+      } catch (err) {
+        logger.error("forgot-password", err.message, { context: "Email error" });
+      }
     }
 
     res.json({ ok: true });
