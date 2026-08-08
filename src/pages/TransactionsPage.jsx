@@ -163,7 +163,7 @@ export default function TransactionsPage() {
       <h1 style={{ font: "var(--text-display-lg)", color: "var(--text)", margin: "0 0 var(--space-1)" }}>
         Transactions
       </h1>
-      <p style={{ font: "var(--text-body-sm)", color: "var(--text-subtle)", margin: "0 0 var(--space-6)" }}>
+      <p style={{ font: "var(--text-body-sm)", color: "var(--text-muted)", margin: "0 0 var(--space-6)" }}>
         {filtered.length} of {transactions.length} transaction{transactions.length !== 1 ? "s" : ""}
       </p>
 

@@ -28,7 +28,7 @@ export function Table({ columns, rows, getRowKey = (row) => row.id, emptyMessage
                   textAlign: col.align || "left",
                   padding: "var(--space-3) var(--space-4)",
                   font: "var(--text-label)",
-                  color: "var(--text-subtle)",
+                  color: "var(--text-muted)",
                   borderBottom: "1px solid var(--border)",
                   whiteSpace: "nowrap",
                 }}
