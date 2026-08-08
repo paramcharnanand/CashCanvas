@@ -48,8 +48,7 @@ flowchart TD
 ```
 
 Authentication uses short-lived JWT access tokens plus rotating refresh-token sessions in
-HttpOnly cookies, with a CSRF token protecting state-changing requests. The app is tested with
-Vitest (unit/component) and Playwright (end-to-end).
+HttpOnly cookies, with a CSRF token protecting state-changing requests.
 
 ## Getting Started
 
@@ -65,12 +64,18 @@ npm run dev:full        # frontend on :5173, API on :3001
 
 Everything else in `.env.example` (Gemini, reCAPTCHA, email) is optional in development.
 
+## Testing
+
+```bash
+npm test          # unit/component tests (Vitest)
+npm run test:e2e  # end-to-end tests (Playwright)
+```
+
 ## Documentation
 
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — local setup, testing, and PR workflow
-- [`ROADMAP.md`](ROADMAP.md) — project history and architecture decisions
-- [`CHECKPOINT.md`](CHECKPOINT.md) — current development status and session handoff notes
-- [`docs/`](docs/) — architecture, security, and deployment documentation
+- [`docs/backend/authentication.md`](docs/backend/authentication.md) — authentication and session architecture
+- [`docs/backend/database.md`](docs/backend/database.md) — database schema and design
 
 ## Project Status
 
