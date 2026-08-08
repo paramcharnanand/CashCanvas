@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import _ from "lodash";
 import { apiFetch } from "../../../api.js";
 import { categorize, cleanDesc, DEFAULT_CATEGORIES } from "../../../utils/categorization.js";
+import { matchMerchant } from "../../../utils/merchantNormalization.js";
 
 /**
  * Fetches the most recent uploaded statement + merchant rules/custom
@@ -186,9 +187,14 @@ export function useCategoriesData() {
   const quickFix = useCallback((txn, categoryName) => {
     const merchantName = cleanDesc(txn.desc);
     if (!merchantName) return Promise.resolve();
+    const newRule = new Map([[merchantName, categoryName]]);
     setMerchantRules((prev) => new Map([...prev, [merchantName, categoryName]]));
     setTransactions((prev) =>
-      (prev ?? []).map((t) => (cleanDesc(t.desc) === merchantName ? { ...t, category: categoryName } : t))
+      (prev ?? []).map((t) => {
+        if (t.id === txn.id) return { ...t, category: categoryName };
+        const match = matchMerchant(cleanDesc(t.desc), newRule);
+        return match ? { ...t, category: match.category } : t;
+      })
     );
     return apiFetch("/api/merchant-rules", {
       method: "POST",

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../../../api.js";
 import { categorize, cleanDesc, DEFAULT_CATEGORIES } from "../../../utils/categorization.js";
+import { matchMerchant } from "../../../utils/merchantNormalization.js";
 
 /**
  * Fetches the most recent uploaded statement (same "latest file" auto-
@@ -85,21 +86,24 @@ export function useTransactionsData() {
    * immediately on unselected rows too (matching quickFix's own behavior).
    */
   const reassign = useCallback((ids, categoryName) => {
+    const idSet = new Set(ids);
     const merchantNames = new Set();
     (transactions ?? [])
-      .filter((t) => ids.includes(t.id))
+      .filter((t) => idSet.has(t.id))
       .forEach((t) => {
         const merchantName = cleanDesc(t.desc);
         if (merchantName) merchantNames.add(merchantName);
       });
+
+    const newRules = new Map(Array.from(merchantNames, (name) => [name, categoryName]));
+
     setTransactions((prev) => {
       if (!prev) return prev;
-      const idSet = new Set(ids);
-      return prev.map((t) =>
-        idSet.has(t.id) || merchantNames.has(cleanDesc(t.desc))
-          ? { ...t, category: categoryName }
-          : t
-      );
+      return prev.map((t) => {
+        if (idSet.has(t.id)) return { ...t, category: categoryName };
+        const match = matchMerchant(cleanDesc(t.desc), newRules);
+        return match ? { ...t, category: match.category } : t;
+      });
     });
     return Promise.all(
       Array.from(merchantNames).map((merchantName) =>

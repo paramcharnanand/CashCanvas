@@ -138,6 +138,26 @@ test.describe("transactions page", () => {
     await expect(page.getByRole("row", { name: /STARBUCKS 04891/ }).getByRole("cell", { name: "Housing" })).toBeVisible();
   });
 
+  test("reassigning one transaction recategorizes same-merchant transactions that only match via the fuzzy/prefix tier, without a reload", async ({ authenticatedPage: page }) => {
+    // Unlike the test above (both clean to the identical string
+    // "starbucks"), these two clean to different full strings ("acme
+    // coffee roasters downtown" vs. "...airport") — only the tiered match
+    // (2-word/token/prefix/fuzzy) bridges them, not strict equality.
+    await seedTransactions(page, [
+      { date: "2025-01-10", desc: "ACME COFFEE ROASTERS DOWNTOWN", amount: -6.5 },
+      { date: "2025-01-11", desc: "ACME COFFEE ROASTERS AIRPORT", amount: -7.25 },
+    ]);
+    await page.goto("/transactions");
+
+    const firstRow = page.getByRole("row", { name: /ACME COFFEE ROASTERS DOWNTOWN/ });
+    await firstRow.getByRole("checkbox", { name: "Select transaction" }).check();
+    await page.getByRole("button", { name: "Reassign Category" }).click();
+    await page.getByRole("button", { name: "Dining", exact: true }).click();
+
+    await expect(page.getByRole("row", { name: /ACME COFFEE ROASTERS DOWNTOWN/ }).getByRole("cell", { name: "Dining" })).toBeVisible();
+    await expect(page.getByRole("row", { name: /ACME COFFEE ROASTERS AIRPORT/ }).getByRole("cell", { name: "Dining" })).toBeVisible();
+  });
+
   test("Transactions is a real, always-visible nav destination", async ({ authenticatedPage: page }) => {
     await page.goto("/dashboard");
     await page.getByRole("link", { name: "Transactions" }).click();
