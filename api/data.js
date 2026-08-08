@@ -308,6 +308,21 @@ async function merchantRuleById(req, res) {
     return res.json({ ok: true });
   }
 
+  if (req.method === "PUT") {
+    if (!requireCsrf(req, res)) return;
+    if (!rateLimited(res, user, "merchant-rules:update", 15 * 60_000, 60)) return;
+    const { category } = req.body || {};
+    if (!isValidCategoryName(category))
+      return res.status(400).json({ error: "category is required and must be under 100 characters." });
+
+    const result = await db.collection("merchant_category_rules").updateOne(
+      filter,
+      { $set: { category: sanitizeCsvField(category), updatedAt: new Date() } }
+    );
+    if (result.matchedCount === 0) return res.status(404).json({ error: "Rule not found." });
+    return res.json({ ok: true });
+  }
+
   res.status(405).end();
 }
 

@@ -142,6 +142,67 @@ describe("DELETE /api/merchant-rules/:id (Phase 8.8, Merchant Rules management s
   });
 });
 
+describe("PUT /api/merchant-rules/:id (edit a rule's category)", () => {
+  it("updates the category of a rule the caller owns", async () => {
+    const { agent, csrf } = await signupUser(uniqueEmail());
+    await agent.post("/api/merchant-rules").set("X-CSRF-Token", csrf)
+      .send({ merchantName: "acme coffee", category: "Dining" });
+    const id = (await agent.get("/api/merchant-rules")).body[0]._id;
+
+    const put = await agent.put(`/api/merchant-rules/${id}`).set("X-CSRF-Token", csrf)
+      .send({ category: "Groceries" });
+    expect(put.status).toBe(200);
+    expect(put.body).toEqual({ ok: true });
+
+    const after = await agent.get("/api/merchant-rules");
+    expect(after.body[0].category).toBe("Groceries");
+    expect(after.body[0].merchantName).toBe("acme coffee");
+  });
+
+  it("does not update another user's rule and reports 404", async () => {
+    const { agent: owner, csrf: ownerCsrf } = await signupUser(uniqueEmail());
+    await owner.post("/api/merchant-rules").set("X-CSRF-Token", ownerCsrf)
+      .send({ merchantName: "acme coffee", category: "Dining" });
+    const ownerId = (await owner.get("/api/merchant-rules")).body[0]._id;
+
+    const { agent: intruder, csrf: intruderCsrf } = await signupUser(uniqueEmail());
+    const put = await intruder.put(`/api/merchant-rules/${ownerId}`).set("X-CSRF-Token", intruderCsrf)
+      .send({ category: "Shopping" });
+    expect(put.status).toBe(404);
+
+    const stillDining = await owner.get("/api/merchant-rules");
+    expect(stillDining.body[0].category).toBe("Dining");
+  });
+
+  it("rejects an invalid category with 400", async () => {
+    const { agent, csrf } = await signupUser(uniqueEmail());
+    await agent.post("/api/merchant-rules").set("X-CSRF-Token", csrf)
+      .send({ merchantName: "acme coffee", category: "Dining" });
+    const id = (await agent.get("/api/merchant-rules")).body[0]._id;
+
+    const put = await agent.put(`/api/merchant-rules/${id}`).set("X-CSRF-Token", csrf).send({ category: "" });
+    expect(put.status).toBe(400);
+  });
+
+  it("rejects a malformed ID with 400", async () => {
+    const { agent, csrf } = await signupUser(uniqueEmail());
+    const res = await agent.put("/api/merchant-rules/not-a-valid-id").set("X-CSRF-Token", csrf)
+      .send({ category: "Dining" });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a request with no CSRF token with 403", async () => {
+    const { agent } = await signupUser(uniqueEmail());
+    const res = await agent.put("/api/merchant-rules/507f1f77bcf86cd799439011").send({ category: "Dining" });
+    expect(res.status).toBe(403);
+  });
+
+  it("rejects an unauthenticated request with 401", async () => {
+    const res = await request(app).put("/api/merchant-rules/507f1f77bcf86cd799439011").send({ category: "Dining" });
+    expect(res.status).toBe(401);
+  });
+});
+
 describe("GET/PUT/DELETE /api/savings (Phase 8.9, savings goal persistence — closes ADR-007)", () => {
   it("returns null when the user has no goal yet", async () => {
     const { agent } = await signupUser(uniqueEmail());
