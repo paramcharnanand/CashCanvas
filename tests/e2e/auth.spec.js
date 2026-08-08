@@ -311,7 +311,7 @@ test.describe("account deletion", () => {
     // navigate there first instead of assuming it's on whatever page
     // authenticatedPage happened to land on.
     await page.goto("/settings");
-    await expect(page.getByRole("heading", { name: "Danger Zone" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Delete Account" })).toBeVisible();
     await page.getByRole("button", { name: "Delete Account" }).first().click();
     await expect(page.getByText("Delete your account?")).toBeVisible();
 

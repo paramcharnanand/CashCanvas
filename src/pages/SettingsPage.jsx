@@ -37,7 +37,7 @@ export default function SettingsPage() {
       </Card>
 
       <Card>
-        <h2 style={{ font: "var(--text-heading-sm)", color: "var(--text)", margin: "0 0 var(--space-2)" }}>Danger Zone</h2>
+        <h2 style={{ font: "var(--text-heading-sm)", color: "var(--text)", margin: "0 0 var(--space-2)" }}>Delete Account</h2>
         <p style={{ font: "var(--text-body-sm)", color: "var(--text-subtle)", margin: "0 0 var(--space-4)" }}>
           Permanently delete your account and all associated data.
         </p>
