@@ -31,24 +31,25 @@ searchable transaction history with spending insights.
 
 ```mermaid
 flowchart TD
-    U[User]
-    F[React + Vite Frontend]
-    A[Vercel Serverless API]
-    DB[(MongoDB)]
-    AI[Google Gemini]
-    E[Email Provider]
-    R[reCAPTCHA]
+    U([User]) --> FE[React + Vite Frontend]
+    FE -->|HTTPS, cookies + CSRF| API[Vercel Serverless API]
 
-    U --> F
-    F --> A
-    A --> DB
-    A --> AI
-    A --> E
-    A --> R
+    API --> AUTH["auth.js<br/>Sessions · OTP · Password Reset"]
+    API --> DATA["data.js<br/>Transactions · Categories · Merchant Rules · Savings"]
+    API --> AI["ai.js<br/>AI Categorization · Statement Parsing"]
+
+    AUTH --> DB[(MongoDB)]
+    DATA --> DB
+    AUTH --> MAILSVC[Email Provider]
+    AUTH -.-> CAPTCHA[reCAPTCHA]
+    AI --> GEMINI[Google Gemini]
 ```
 
-Authentication uses short-lived JWT access tokens plus rotating refresh-token sessions in
-HttpOnly cookies, with a CSRF token protecting state-changing requests.
+The frontend only ever talks to the Vercel API — never directly to MongoDB, Gemini, or the
+email provider. Auth uses short-lived JWT access tokens plus rotating refresh-token sessions in
+HttpOnly cookies, with a CSRF token protecting state-changing requests. See
+[`docs/architecture.md`](docs/architecture.md) for how categorization, file processing, and
+each piece above actually work.
 
 ## Getting Started
 
@@ -74,6 +75,7 @@ npm run test:e2e  # end-to-end tests (Playwright)
 ## Documentation
 
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — local setup, testing, and PR workflow
+- [`docs/architecture.md`](docs/architecture.md) — how the frontend, API, and each service fit together
 - [`docs/backend/authentication.md`](docs/backend/authentication.md) — authentication and session architecture
 - [`docs/backend/database.md`](docs/backend/database.md) — database schema and design
 
