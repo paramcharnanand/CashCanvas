@@ -14,7 +14,7 @@ import { RuleList } from "../features/merchant-rules/components/RuleList.jsx";
  * was no longer wanted.
  */
 export default function MerchantRulesPage() {
-  const { rules, loading, deleteRule } = useMerchantRulesData();
+  const { rules, allCategories, loading, deleteRule, updateRule } = useMerchantRulesData();
 
   if (loading) return null;
 
@@ -35,7 +35,7 @@ export default function MerchantRulesPage() {
           body="Reassign a transaction's category — on Transactions or the Categories quick-fix — and the rule will show up here."
         />
       ) : (
-        <RuleList rules={rules} onDelete={deleteRule} />
+        <RuleList rules={rules} allCategories={allCategories} onDelete={deleteRule} onUpdate={updateRule} />
       )}
     </div>
   );

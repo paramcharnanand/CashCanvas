@@ -51,6 +51,68 @@ test.describe("merchant rules page", () => {
     await expect(page.getByText("No merchant rules yet")).toBeVisible();
   });
 
+  test("a deleted rule stays deleted after a page reload", async ({ authenticatedPage: page }) => {
+    const csrf = await getCsrfToken(page);
+    await page.request.post("/api/merchant-rules", {
+      headers: { "X-CSRF-Token": csrf },
+      data: { merchantName: "acme coffee", category: "Dining" },
+    });
+
+    await page.goto("/merchant-rules");
+    await expect(page.getByRole("cell", { name: "acme coffee", exact: true })).toBeVisible();
+
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.getByRole("button", { name: "Delete rule for acme coffee" }).click();
+    await expect(page.getByText("No merchant rules yet")).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByText("No merchant rules yet")).toBeVisible();
+    await expect(page.getByRole("cell", { name: "acme coffee", exact: true })).not.toBeVisible();
+  });
+
+  test("a failed delete rolls back and shows an error, instead of silently disappearing", async ({ authenticatedPage: page }) => {
+    const csrf = await getCsrfToken(page);
+    await page.request.post("/api/merchant-rules", {
+      headers: { "X-CSRF-Token": csrf },
+      data: { merchantName: "acme coffee", category: "Dining" },
+    });
+
+    await page.goto("/merchant-rules");
+    await expect(page.getByRole("cell", { name: "acme coffee", exact: true })).toBeVisible();
+
+    // Simulate a failing DELETE without touching the real backend.
+    await page.route("**/api/merchant-rules/*", (route) => {
+      if (route.request().method() === "DELETE") return route.fulfill({ status: 500, body: "{}" });
+      return route.continue();
+    });
+
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.getByRole("button", { name: "Delete rule for acme coffee" }).click();
+
+    await expect(page.getByText(/couldn't delete/i)).toBeVisible();
+    await expect(page.getByRole("cell", { name: "acme coffee", exact: true })).toBeVisible();
+  });
+
+  test("edits a rule's category and it persists after reload", async ({ authenticatedPage: page }) => {
+    const csrf = await getCsrfToken(page);
+    await page.request.post("/api/merchant-rules", {
+      headers: { "X-CSRF-Token": csrf },
+      data: { merchantName: "acme coffee", category: "Dining" },
+    });
+
+    await page.goto("/merchant-rules");
+    await expect(page.getByRole("cell", { name: "acme coffee", exact: true })).toBeVisible();
+
+    await page.getByRole("button", { name: "Edit category for acme coffee" }).click();
+    await page.getByRole("combobox").selectOption("Groceries");
+    await page.getByRole("button", { name: "Save" }).click();
+
+    await expect(page.getByRole("cell", { name: "Groceries" })).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByRole("cell", { name: "Groceries" })).toBeVisible();
+  });
+
   test("Merchant Rules is a real, always-visible nav destination", async ({ authenticatedPage: page }) => {
     await page.goto("/dashboard");
     await page.getByRole("link", { name: "Merchant Rules" }).click();
