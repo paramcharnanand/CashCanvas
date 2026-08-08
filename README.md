@@ -51,7 +51,3 @@ Everything else in `.env.example` (Gemini, reCAPTCHA, email) is optional in deve
 ## Project Status
 
 CashCanvas is actively developed and deployed at [cashcanvas.dev](https://cashcanvas.dev).
-
-## License
-
-No license file is currently included in this repository.
