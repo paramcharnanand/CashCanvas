@@ -29,12 +29,27 @@ searchable transaction history with spending insights.
 
 ## Architecture
 
-CashCanvas is a React + Vite single-page app that talks to a Vercel Serverless Functions
-backend (`api/`) through a shared `fetch` client, with MongoDB as the database. Authentication
-uses short-lived JWT access tokens plus rotating refresh-token sessions, both stored in
-HttpOnly cookies, with a separate CSRF token protecting state-changing requests. Transactions
-that don't match a keyword or merchant rule are categorized by Google Gemini as an AI fallback.
-The app is tested with Vitest (unit/component) and Playwright (end-to-end).
+```mermaid
+flowchart TD
+    U[User]
+    F[React + Vite Frontend]
+    A[Vercel Serverless API]
+    DB[(MongoDB)]
+    AI[Google Gemini]
+    E[Email Provider]
+    R[reCAPTCHA]
+
+    U --> F
+    F --> A
+    A --> DB
+    A --> AI
+    A --> E
+    A --> R
+```
+
+Authentication uses short-lived JWT access tokens plus rotating refresh-token sessions in
+HttpOnly cookies, with a CSRF token protecting state-changing requests. The app is tested with
+Vitest (unit/component) and Playwright (end-to-end).
 
 ## Getting Started
 
