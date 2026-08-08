@@ -73,7 +73,7 @@ export function Header({ onOpenPalette, showBrand = false }) {
         }}
       >
         <Search size={14} strokeWidth={1.75} aria-hidden="true" />
-        Jump to…
+        Go to…
         <kbd
           style={{
             marginLeft: "auto",

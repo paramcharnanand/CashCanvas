@@ -12,7 +12,6 @@ import {
   Sun,
   Moon,
   Monitor,
-  FileText,
   HelpCircle,
   LogOut,
 } from "lucide-react";
@@ -109,14 +108,6 @@ export function useCommands({ onShowShortcuts }) {
         keywords: "analytics charts spending",
         enabled: true,
         action: () => navigate("/analytics"),
-      },
-      {
-        id: "import-pdf",
-        label: "Import PDF statement",
-        icon: FileText,
-        keywords: "pdf import parse statement",
-        enabled: true,
-        action: () => navigate("/upload"),
       },
       {
         id: "settings",
