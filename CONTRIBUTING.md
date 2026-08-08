@@ -60,7 +60,7 @@ npm run lint
 ```
 
 ESLint (`eslint.config.js`) is scoped per part of the codebase — Node/ESM rules for
-`api/`/`server.js`, React rules for `src/`, both share a base ruleset. It currently reports ~45
+`api/`/`server.js`, React rules for `src/`, both share a base ruleset. It currently reports 41
 pre-existing style warnings (unescaped JSX apostrophes, unnecessary regex escapes) that were
 present when linting was first introduced — those don't fail CI, but **please don't add new
 ones**, and feel free to clean up a few incidentally if you're already editing a file that has

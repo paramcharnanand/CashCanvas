@@ -187,7 +187,7 @@ complexity in E2E tests, this project's Playwright harness (`tests/e2e/`) runs t
 **production build** and the backend **on the same origin**, using the exact same route
 handlers (`api/auth.js`/`api/data.js`/`api/ai.js`) `server.js` and Vercel both use — this is
 both simpler to reason about *and* more accurate, since real production also serves everything
-from one origin (`cash-canvas-sigma.vercel.app`).
+from one origin (`cashcanvas.dev`).
 
 ## Why flaky tests happen
 

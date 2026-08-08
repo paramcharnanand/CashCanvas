@@ -49,7 +49,7 @@ Since deployment is automatic on push, this is really a **post-deploy verificati
 checklist — either run `.github/workflows/deploy-verify.yml` manually (Actions tab →
 Deployment Verification → Run workflow), or do it by hand:
 
-1. **Homepage loads**: `curl -o /dev/null -w '%{http_code}' https://cash-canvas-sigma.vercel.app`
+1. **Homepage loads**: `curl -o /dev/null -w '%{http_code}' https://cashcanvas.dev`
    → expect `200`.
 2. **All 3 functions respond**: `/api/auth/profile`, `/api/files`, and a `POST` to
    `/api/categorize` should each return `401` unauthenticated (proves the function is alive and

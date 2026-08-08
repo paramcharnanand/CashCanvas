@@ -249,14 +249,14 @@ Phase 8.4 completion note below for the resulting design).
 
 ## Current status
 
-**7 of 9 phases complete (78%); Phase 8 in progress (8.1–8.9 of ~8.9 sub-steps done — the frontend
-migration's own final cleanup, Phase 10, is what's left).** Phases 1–5 and 7 verified/landed in
-prior sessions; Phase 6 (testing infrastructure) completed several sessions ago; Phase 8.1 through
-8.8 completed in prior sessions; Phase 8.9 completed this session. Full writeup:
-`docs/engineering-lessons/
+**8 of 9 phases complete (89%); Phase 8 (frontend redesign) is fully done, including its own
+Phase 10 final-cleanup step** — see "Release status" above. Phases 1–7 verified/landed in prior
+sessions; Phase 8.1 through 8.9 plus Phase 10 all completed (see "Phase 8 — complete" below for
+the full sub-step history). Only Phase 9 (advanced AI features & product enhancements) remains
+unstarted. Full writeup: `docs/engineering-lessons/
 phase-6-testing.md` (testing concepts), `docs/frontend/phase-8-*.md` (design system, component
-architecture, migration plan), `ROADMAP.md` ADR-007, ADR-019 through ADR-026 plus the Phase 8.9
-completion note. Full phase/ADR history: `ROADMAP.md`.
+architecture, migration plan), `ROADMAP.md` ADR-007, ADR-019 through ADR-029 plus the Phase 8.9
+and Phase 10 completion notes. Full phase/ADR history: `ROADMAP.md`.
 
 ## CI stability (fixed this session, unrelated to Phase 8's own code)
 
@@ -288,7 +288,7 @@ GitHub Actions run for `bebb653` completed successfully in 10m56s.
    performance, all wired into CI except visual regression — see below)
 7. CI/CD (GitHub Actions)
 
-### Phase 8 — in progress
+### Phase 8 — complete (frontend redesign, including its own Phase 10 final-cleanup sub-step)
 - **8.1 done**: `react-router-dom` routing, `AppShell`/`Sidebar`/`MobileNav`/`Header` responsive
   navigation shell, theme system + design tokens, self-hosted fonts, command palette. Old
   `AuthScreen`/`Dashboard`/`UploadScreen` unchanged, just mounted at real routes instead of
@@ -582,9 +582,13 @@ GitHub Actions run for `bebb653` completed successfully in 10m56s.
   (`app-shell-empty`, chromium-only) — expected, two more new nav items.
 
 ### Remaining phases
-- Phase 8's own Phase 10 (final cleanup): `App.jsx` reduced to its ~30-line target shape,
-  `Dashboard`/`LegacyWorkspace` deleted entirely, full a11y re-scan of every route, Linux-native
-  visual baselines in CI.
+Phase 8's own Phase 10 (final cleanup) is **done** — see the "Phase 10 completion note" in
+`ROADMAP.md` and "Release status" above (`App.jsx` reduced and then deleted outright, `Dashboard`/
+`LegacyWorkspace` removed, full a11y re-scan complete). Linux-native visual baselines exist as a
+manually-triggered artifact (`.github/workflows/generate-visual-baselines.yml`) but are not yet
+committed/wired back into `ci.yml`'s excluded visual-regression run — see ADR-020, still tracked
+debt, not a full phase.
+
 9. Advanced AI features & product enhancements — not started
 
 ## Phase 6 (Testing infrastructure) — what was completed this session
@@ -726,7 +730,9 @@ behavior. Phase 8.5's upload-persistence fix (ADR-026), Phase 8.8's categorizati
 other application-code fixes from prior Phase 8 sessions still haven't reached production — see
 "Blockers/assumptions" below, unchanged from the prior checkpoint.
 
-- **Production URL**: https://cash-canvas-sigma.vercel.app
+- **Production URL**: https://cashcanvas.dev (custom domain, configured 2026-08-07; the
+  underlying Vercel project/alias is `cash-canvas-sigma.vercel.app`, kept only as an internal
+  deployment detail — see the Production URL note in `README.md`)
 - **Commit deployed (last verified)**: `08ece44` (see prior checkpoint history for full detail,
   not duplicated here)
 - **Serverless Functions verified**: exactly 3 (`api/ai`, `api/auth`, `api/data`) as of the last
@@ -816,7 +822,7 @@ explicitly rather than widening an allowlist or loosening an assertion to make i
   above.
 - **Phase 8.5's upload-persistence fix (ADR-026) is real user-impacting and not yet in
   production** — until the next deploy, real (non-sample) statement uploads on
-  cash-canvas-sigma.vercel.app continue to silently fail to persist, exactly as they have since
+  cashcanvas.dev continue to silently fail to persist, exactly as they have since
   this validation rule existed. Worth prioritizing this deploy over waiting for more Phase 8
   phases to batch up, and worth a manual smoke check (upload a real file, reload, confirm it's
   still there) against production specifically once deployed, not just the e2e suite's coverage

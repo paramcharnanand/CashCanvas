@@ -323,21 +323,25 @@ tests exercise the direct login/signup → session path deterministically.
    flags this) — on Vercel, concurrent serverless instances don't share the in-memory store,
    so the "5 signups per 15 min" limit is really "5 per instance." Would need Upstash Redis
    (or similar) to be a real global limiter.
-2. **`/api/categorize` and `POST /api/files` have no rate limit** in production — noted in
-   Phase 1, still true. Worth adding in `api/_lib/`, so it applies to both environments.
-3. **No indexes** on `users.email` or the `userId` fields in `uploaded_files`,
-   `custom_categories`, `merchant_category_rules` — every query is a full collection scan.
-   (The new `sessions` collection *does* have proper indexes — see above.) Next roadmap item.
-4. **CSP `style-src` requires `'unsafe-inline'`** because the frontend is built entirely from
-   inline `style={{...}}` attributes. A stricter CSP requires moving to real stylesheets/CSS
-   modules/a design system first — tracked as frontend work, not a backend gap.
-5. **No refresh-token "family" reuse detection.** A reused (already-rotated) token is
+2. **CSP `style-src` requires `'unsafe-inline'`** because the frontend renders `style={{...}}`
+   attributes directly. A stricter CSP requires moving to real stylesheets/CSS modules first —
+   tracked as frontend work, not a backend gap.
+3. **No refresh-token "family" reuse detection.** A reused (already-rotated) token is
    rejected, but only that one session is affected — a more aggressive design would revoke
    every session descended from the same original login the moment reuse is detected, on the
    theory that reuse implies the whole chain may be compromised. Not implemented: it adds a
    parent/child session graph for a marginal benefit at this app's current threat level and
    traffic size.
-6. **No device-management UI.** Sessions store `userAgent`/`ip`/`createdAt`/`lastUsedAt`, but
+4. **No device-management UI.** Sessions store `userAgent`/`ip`/`createdAt`/`lastUsedAt`, but
    there's no "your active devices" screen for users to review or revoke individual sessions
    themselves (only "log out this device" and "log out everywhere" exist). The data needed
    for that UI already exists in the `sessions` collection.
+
+**Resolved since this section was first written** (kept here so the history isn't lost, per this
+project's "don't silently drop tracked debt" convention): rate limiting on `/api/categorize` and
+every route in `api/data.js` — every one is now covered (`checkRateLimit()`, keyed per-user; see
+`docs/security/threat-model.md`'s "Endpoint abuse" section for the full table). Indexes on
+`users.email` (unique) and the `userId` fields on `uploaded_files`, `custom_categories`, and
+`merchant_category_rules` — all added, plus one on `savings_goals.userId`; see
+`docs/backend/database.md`'s "Indexes added this phase" table. Neither is a full collection scan
+today.

@@ -17,7 +17,8 @@ CI's whole idea is: integrate constantly (every push, every PR), in small pieces
 show up in minutes, not weeks.
 
 **In this repo:** `.github/workflows/ci.yml` runs on every `push` and every `pull_request`. It
-lints the code, runs all 84 tests, and builds the production bundle. If any of those fail, you
+lints the code, runs the full Vitest suite (84 tests when Phase 7 shipped this workflow; run
+`npm test` for today's real count), and builds the production bundle. If any of those fail, you
 find out on the PR page — not after it's merged, not after it's deployed, not after a user hits
 it.
 
@@ -95,8 +96,9 @@ minute or more, on every single push.
 Order matters for a simple reason: **fail fast, and fail cheap first.**
 
 ESLint checking this whole codebase takes about a second. The full test suite — which spins up
-real in-memory MongoDB instances, hashes real passwords with bcrypt, and runs 84 tests — takes
-around 10-13 seconds. If a change has an obvious problem ESLint can catch (an unused variable,
+real in-memory MongoDB instances, hashes real passwords with bcrypt, and runs the entire Vitest
+suite — takes around 10-25 seconds depending on suite size. If a change has an obvious problem
+ESLint can catch (an unused variable,
 a duplicate object key, calling a hook conditionally), there's no reason to make the CI run wait
 through 13 seconds of test setup just to report something a 1-second check already knew.
 
@@ -123,9 +125,11 @@ Excel would interpret them as a formula. The fix was a few lines
 fix keeps working — not just today, but the next time anyone touches upload handling, six
 months from now, without necessarily remembering this specific threat existed.
 
-**84 tests currently protect this project** (`npm test`) — covering authentication, sessions,
-CSRF, rate limiting, input validation, CSV injection, duplicate uploads, and logging hygiene.
-Every one of them runs on every single push, automatically, forever, which is the entire point.
+**The Vitest suite protects this project on every single push** (`npm test` — run it to see
+today's real count; it was 84 tests when this workflow first shipped and has grown since) —
+covering authentication, sessions, CSRF, rate limiting, input validation, CSV injection,
+duplicate uploads, and logging hygiene. Every one of them runs automatically, forever, which is
+the entire point.
 
 ## Why branch protection matters
 

@@ -5,12 +5,11 @@ MongoDB Atlas, one database (`cashcanvas`), accessed through a single shared con
 across serverless invocations and the local Express dev server.
 
 **This document only describes collections that actually exist and are queried somewhere in
-the codebase.** An earlier version of the Phase 3 plan for this project assumed `Transactions`,
-`Budgets`, and `Savings Goals` collections — none of those exist. Transactions live embedded
-inside `uploaded_files` documents; budgets aren't persisted anywhere; "savings goal" is
-client-only React state in `Dashboard` that's lost on refresh. Those are noted as future
-product/architecture work below, not indexed here, because you can't productively index a
-query that doesn't exist.
+the codebase.** An earlier version of the Phase 3 plan for this project assumed a `Transactions`
+collection — that one doesn't exist; transactions live embedded inside `uploaded_files`
+documents. **Savings goals are persisted** (`savings_goals` collection, added in Phase 8.9 —
+`GET/PUT/DELETE /api/savings`), closing what was originally tracked as a Phase 3 gap; see
+ROADMAP.md's ADR-007 and its Phase 8.9 completion note.
 
 ## Collections
 
@@ -22,6 +21,7 @@ query that doesn't exist.
 | `uploaded_files` | One document per uploaded bank/credit-card statement, **including its full `transactions[]` array embedded inline** |
 | `custom_categories` | User-defined spending categories (name, icon, color, keyword list) |
 | `merchant_category_rules` | Learned merchant → category mappings, one per (user, merchant) — this is what the AI categorizer checks before ever calling Gemini |
+| `savings_goals` | One document per user: goal amount, target date, and category cut-plan selections — upserted via `PUT /api/savings`, unique on `userId` |
 
 ## Relationships
 
@@ -38,6 +38,7 @@ users (1) ──< uploaded_files (many)              [userId]
 users (1) ──< custom_categories (many)           [userId]
 users (1) ──< merchant_category_rules (many)     [userId]
 users (1) ──< sessions (many)                    [userId]
+users (1) ──< savings_goals (one, unique)        [userId]
 uploaded_files.transactions[]                     — embedded, not a separate collection
 ```
 
@@ -289,6 +290,8 @@ large the collections grow, not the (already-fast) millisecond timings at today'
    storage. Not worth a cleanup job at current volume.
 4. No MongoDB-level `$jsonSchema` validation — acceptable with a single trusted writer, worth
    revisiting if that ever changes.
-5. Budgets and Savings Goals have no persistence layer at all today — `savingsGoal` in
-   `Dashboard` is client-only state lost on every refresh. This is a product feature gap, not a
-   database optimization gap; flagged here so it doesn't get lost, not addressed in this phase.
+5. **Resolved since this document was first written**: savings goals are now persisted in the
+   `savings_goals` collection (see "Collections" above and ROADMAP.md's Phase 8.9 completion
+   note) — kept here, marked resolved, rather than silently deleted, since it was tracked debt
+   for several phases before it closed. Budgets (as a distinct concept from a single savings
+   goal) still have no persistence layer.

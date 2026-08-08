@@ -116,16 +116,28 @@ devDependency-only build tooling (`vite`/`vitest` transitive deps) except `lodas
   live claim — see the accepted-risk exception below for the current state, where one
   high-severity advisory is present and formally accepted rather than fixed.)
 
-**Accepted-risk exceptions (this phase):** the Security workflow's `npm
-audit` step runs `scripts/check-audit.js` instead of gating purely on
-npm's own `--audit-level` exit code, so one specific, already-reviewed
-advisory can be carved out without silencing the rest of the report. As of
-this writing the only exception is `GHSA-qwww-vcr4-c8h2` (react-router RSC
-CSRF bypass, ADR-028 in ROADMAP.md — this app never uses RSC mode, and the
-only available fix is a breaking downgrade). Every other high/critical
-finding still fails CI, including a *new* advisory against react-router
-with a different GHSA ID — the allowlist in `scripts/check-audit.js`'s
-`ACCEPTED_RISKS` map is keyed by exact advisory ID, never by package name.
+**Accepted-risk exceptions:** the Security workflow's `npm audit` step runs
+`scripts/check-audit.js` instead of gating purely on npm's own
+`--audit-level` exit code, so one specific, already-reviewed advisory can
+be carved out without silencing the rest of the report. The allowlist
+(`scripts/check-audit.js`'s `ACCEPTED_RISKS` map, keyed by exact GHSA ID,
+never by package name) currently has one entry: `GHSA-qwww-vcr4-c8h2`
+(react-router RSC CSRF bypass, ADR-028 in ROADMAP.md — this app never uses
+RSC mode, and the only available fix is a breaking downgrade). Every other
+high/critical finding still fails CI, including a *new* advisory against
+react-router with a different GHSA ID.
+
+As of the most recent verification, a live `npm audit` run against this
+repository's dependency tree reports **zero vulnerabilities of any
+severity** — the react-router advisory is not currently appearing in npm's
+report for the installed version, so the accepted-risk banner has nothing
+to print right now. This does not mean the carve-out mechanism is unused or
+should be removed: it stays in place so that if the advisory reappears (or
+npm's registry data catches up), or a *different* advisory is published
+against react-router, the workflow keeps distinguishing "known, reviewed
+risk" from "new, unreviewed, must fix." A clean current `npm audit` should
+not be read as "this dependency was ever fully clear of GHSA-qwww-vcr4-c8h2
+without a documented exception" — see ADR-028 for the original finding.
 
 - **To add an exception:** get the risk formally reviewed and documented
   as an ADR in ROADMAP.md first, then add an `ACCEPTED_RISKS` entry keyed

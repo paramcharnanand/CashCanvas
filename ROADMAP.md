@@ -1389,9 +1389,11 @@ From Phase 7 (CI/CD):
   GitHub repository *setting*, deliberately out of scope for this project's own files (Phase
   7.8 explicitly says not to modify GitHub settings). CI checks exist and pass; nothing yet
   requires them to pass before a merge is possible.
-- ~45 pre-existing ESLint warnings (unescaped JSX apostrophes, unnecessary regex escapes,
-  mostly in `App.jsx`) are visible but not blocking — see ADR-016 for why they weren't
-  retroactively fixed as part of introducing linting. Clean up incrementally.
+- 41 pre-existing ESLint warnings (unescaped JSX apostrophes, unnecessary regex escapes) are
+  visible but not blocking — see ADR-016 for why they weren't retroactively fixed as part of
+  introducing linting. Clean up incrementally. (`App.jsx`, the original source of most of these,
+  is deleted as of Phase 10 — the count reflects whatever remains today; run `npm run lint` for
+  the current number rather than trusting a hardcoded one here.)
 - No Codecov (or similar) integration — coverage reports are generated and uploaded as CI
   artifacts (lcov/html/json-summary), ready for that the day it's wired up, per Phase 7.4's
   explicit "don't add unnecessary external services" instruction.
@@ -1458,9 +1460,13 @@ From `docs/security/threat-model.md` (Phase 4):
   future work, not blocking.
 
 From the original Phase 1 audit:
-- Zero accessibility attributes (`aria-*`, `alt=`) across the frontend, no dark mode — scoped
-  to Phase 8. As of Phase 6, this is measured and regression-guarded rather than just written
-  down — see `tests/e2e/a11y.spec.js` and ADR-019's tracked allowlist above.
+- ~~Zero accessibility attributes (`aria-*`, `alt=`) across the frontend, no dark mode~~ — scoped
+  to Phase 8, now delivered: a Light/Dark/System theme system shipped in Phase 8.1 (design
+  tokens) and a real tri-state control in Phase 8.9 (`SettingsPage`); accessibility is measured
+  and regression-guarded (not "zero attributes") via `tests/e2e/a11y.spec.js` and ADR-019's
+  tracked per-page allowlist, with the critical-impact OTP-label and missing-`<h1>` findings
+  fixed outright in Phase 10 (see that phase's completion note). Remaining a11y debt is the
+  allowlist itself (real, tracked, per-page) — not the original "zero attributes" state.
 - ~~`npm audit`: 2 high-severity runtime deps (`lodash`, `nodemailer`) plus several
   devDependency-only vulnerabilities in the Vite toolchain~~ — **resolved in Phase 4**:
   `npm audit` is now clean (0 vulnerabilities). See ADR-013 for the `nodemailer` major-bump
