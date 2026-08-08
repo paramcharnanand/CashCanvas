@@ -27,6 +27,15 @@ searchable transaction history with spending insights.
 - Google Gemini (AI-assisted categorization)
 - Playwright + Vitest (testing)
 
+## Architecture
+
+CashCanvas is a React + Vite single-page app that talks to a Vercel Serverless Functions
+backend (`api/`) through a shared `fetch` client, with MongoDB as the database. Authentication
+uses short-lived JWT access tokens plus rotating refresh-token sessions, both stored in
+HttpOnly cookies, with a separate CSRF token protecting state-changing requests. Transactions
+that don't match a keyword or merchant rule are categorized by Google Gemini as an AI fallback.
+The app is tested with Vitest (unit/component) and Playwright (end-to-end).
+
 ## Getting Started
 
 Requires Node.js 22+ and a MongoDB connection string (local or [Atlas](https://www.mongodb.com/atlas)).
