@@ -8,7 +8,7 @@
  * flipping a flag in Mongo, with no JWT-blocklist needed.
  */
 import crypto from "crypto";
-import { REFRESH_TOKEN_TTL_MS } from "./cookies.js";
+import { IDLE_SESSION_TTL_MS, ABSOLUTE_SESSION_TTL_MS } from "./cookies.js";
 
 /** Generate a cryptographically secure opaque refresh token. */
 export function generateRefreshToken() {
@@ -29,7 +29,7 @@ export async function createSession(db, { userId, refreshToken, userAgent, ip })
     ip: ip || "unknown",
     createdAt: now,
     lastUsedAt: now,
-    expiresAt: new Date(now.getTime() + REFRESH_TOKEN_TTL_MS),
+    expiresAt: new Date(now.getTime() + IDLE_SESSION_TTL_MS),
     revoked: false,
     revokedAt: null,
   };
@@ -37,14 +37,25 @@ export async function createSession(db, { userId, refreshToken, userAgent, ip })
   return { ...doc, _id: result.insertedId };
 }
 
-/** Find the active (non-revoked, non-expired) session matching a raw refresh token, or null. */
+/**
+ * Find the active session matching a raw refresh token, or null if it's
+ * missing, revoked, idle-expired, or past the absolute lifetime cap.
+ *
+ * Two independent expiry checks, both required: `expiresAt` is the sliding
+ * idle window (resets on every rotation — see rotateSession), while
+ * `createdAt` is fixed at login and never moves, so it's what enforces
+ * ABSOLUTE_SESSION_TTL_MS as a hard ceiling an actively-refreshed session
+ * can't slide past.
+ */
 export async function findActiveSessionByToken(db, rawToken) {
   const session = await db.collection("sessions").findOne({
     refreshTokenHash: hashToken(rawToken),
     revoked: false,
   });
   if (!session) return null;
-  if (new Date() > new Date(session.expiresAt)) return null;
+  const now = new Date();
+  if (now > new Date(session.expiresAt)) return null;
+  if (now - new Date(session.createdAt) > ABSOLUTE_SESSION_TTL_MS) return null;
   return session;
 }
 
@@ -67,7 +78,7 @@ export async function rotateSession(db, session, newRefreshToken) {
       $set: {
         refreshTokenHash: hashToken(newRefreshToken),
         lastUsedAt: now,
-        expiresAt: new Date(now.getTime() + REFRESH_TOKEN_TTL_MS),
+        expiresAt: new Date(now.getTime() + IDLE_SESSION_TTL_MS),
       },
     },
     { returnDocument: "after" }

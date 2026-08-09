@@ -73,6 +73,60 @@ test.describe("expired access token", () => {
     const at = cookies.find((c) => c.name === "cc_at");
     expect(at.value).not.toBe(forgeExpiredAccessToken()); // got a genuinely new token, not the forged one
   });
+
+  test("concurrent requests against an expired access token share one refresh instead of racing it — the actual root cause of the too-frequent-logout bug", async ({ authenticatedPage: page }) => {
+    // Reproduces the real-world trigger directly: most pages here fire
+    // several apiFetch() calls in parallel on mount (e.g. Merchant Rules
+    // loads /api/merchant-rules and /api/categories together). Before this
+    // fix, each one independently 401'd on an expired access token and
+    // independently POSTed /api/auth/refresh — api/auth.js's refresh
+    // handler rotates the refresh token with an atomic compare-and-swap
+    // *by design* (real reuse-detection, still tested and unchanged in
+    // tests/auth.test.js), so only the first of those concurrent refresh
+    // calls could ever succeed; the rest were treated as reused/compromised
+    // tokens and cleared all three auth cookies — sometimes wiping out the
+    // session the winning call had just re-established, forcing a full
+    // logout (and, since login always requires a fresh OTP, a full
+    // password+OTP cycle) in the middle of ordinary active use.
+    test.slow();
+
+    // Swap in an expired access token *without* a page.goto()/reload: a
+    // full navigation would re-run AuthContext's own mount-time
+    // fetchCurrentUser() check first, which would refresh the token all by
+    // itself before Merchant Rules' own effect ever runs — serializing
+    // away the exact race this test needs to exercise. A client-side nav
+    // (clicking the real nav link, same as a user would) leaves
+    // AuthContext untouched and lets Merchant Rules' mount effect be the
+    // *first* thing to see the expired token, firing its two parallel
+    // apiFetch calls (/api/merchant-rules, /api/categories) against it.
+    await page.context().addCookies([
+      { name: "cc_at", value: forgeExpiredAccessToken(), domain: "localhost", path: "/api", httpOnly: true },
+    ]);
+
+    const refreshRequests = [];
+    page.on("request", (r) => {
+      if (r.url().includes("/api/auth/refresh")) refreshRequests.push(r);
+    });
+
+    await page.getByRole("link", { name: "Merchant Rules" }).click();
+
+    // Real proof, not just a lucky outcome: exactly one refresh request
+    // should ever have been sent, no matter how many parallel API calls
+    // this page fired against the same expired token.
+    await expect(page.getByText("No merchant rules yet")).toBeVisible();
+    expect(refreshRequests.length).toBe(1);
+
+    // Never bounced to login/OTP — the session survived the concurrent load intact.
+    await expect(page).toHaveURL(/\/merchant-rules$/);
+    await expect(page.getByRole("button", { name: "Sign In" })).not.toBeVisible();
+
+    // Both of the page's parallel requests actually succeeded (not silently
+    // left 401'd) — the empty state above already implies this, but assert
+    // the categories fetch (the other parallel call) landed too by
+    // confirming a session-scoped, authenticated request still works.
+    const profileRes = await page.request.get("/api/auth/profile");
+    expect(profileRes.ok()).toBe(true);
+  });
 });
 
 test.describe("refresh token expiry / invalidity", () => {

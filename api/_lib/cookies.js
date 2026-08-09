@@ -13,8 +13,26 @@ export const ACCESS_COOKIE  = "cc_at";
 export const REFRESH_COOKIE = "cc_rt";
 export const CSRF_COOKIE    = "cc_csrf";
 
-export const ACCESS_TOKEN_TTL_MS  = 15 * 60_000;          // 15 minutes
-export const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60_000; // 30 days
+export const ACCESS_TOKEN_TTL_MS = 15 * 60_000; // 15 minutes
+
+/**
+ * Sliding idle-session window: how long a refresh token (and the session
+ * document behind it) stays valid with NO activity. Every successful
+ * refresh — api/auth.js's refresh handler, driven by src/api.js's apiFetch
+ * on any 401 — both re-sets this cookie's Max-Age and extends the
+ * session's DB-side `expiresAt` by this same amount (session.js's
+ * rotateSession), so an actively-used session slides forward
+ * indefinitely, up to ABSOLUTE_SESSION_TTL_MS from the original login.
+ */
+export const IDLE_SESSION_TTL_MS = 60 * 60_000; // 1 hour
+
+/**
+ * Hard cap on a session's total lifetime, measured from the original
+ * login (session.createdAt, never touched by rotation) — not from last
+ * activity. Without this, IDLE_SESSION_TTL_MS's sliding renewal would let
+ * a session that's refreshed at least once an hour stay alive forever.
+ */
+export const ABSOLUTE_SESSION_TTL_MS = 30 * 24 * 60 * 60_000; // 30 days
 
 const isProd = () => process.env.NODE_ENV === "production";
 
@@ -76,11 +94,11 @@ export function setAuthCookies(res, { accessToken, refreshToken, csrfToken }) {
     maxAgeMs: ACCESS_TOKEN_TTL_MS, path: "/api", httpOnly: true,
   }));
   appendSetCookie(res, serializeCookie(REFRESH_COOKIE, refreshToken, {
-    maxAgeMs: REFRESH_TOKEN_TTL_MS, path: "/api/auth", httpOnly: true,
+    maxAgeMs: IDLE_SESSION_TTL_MS, path: "/api/auth", httpOnly: true,
   }));
   if (csrfToken) {
     appendSetCookie(res, serializeCookie(CSRF_COOKIE, csrfToken, {
-      maxAgeMs: REFRESH_TOKEN_TTL_MS, path: "/", httpOnly: false,
+      maxAgeMs: ABSOLUTE_SESSION_TTL_MS, path: "/", httpOnly: false,
     }));
   }
 }

@@ -3,6 +3,7 @@ import request from "supertest";
 import { buildTestApp } from "./testApp.js";
 import { getDb } from "../api/_lib/db.js";
 import { findActiveSessionByToken } from "../api/_lib/session.js";
+import { IDLE_SESSION_TTL_MS, ABSOLUTE_SESSION_TTL_MS } from "../api/_lib/cookies.js";
 import { _resetForTests as resetRateLimits } from "../api/_lib/ratelimit.js";
 import { extractCookie, isCookieCleared, uniqueEmail, signupUser as signupUserWithApp } from "./helpers.js";
 
@@ -206,6 +207,95 @@ describe("refresh", () => {
     expect(res.status).toBe(401);
   });
 
+  it("stays authenticated across several refreshes spaced out under the 1-hour idle window — a sliding session, not a fixed one", async () => {
+    const email = uniqueEmail();
+    const { csrf, res: loginRes } = await signupUser(email);
+    let rt = extractCookie(loginRes, "cc_rt");
+
+    // Each refresh simulates activity right before the idle window would
+    // have expired — proves the window really slides forward on use,
+    // rather than being a fixed countdown from login.
+    for (let i = 0; i < 3; i++) {
+      const session = await findActiveSessionByToken(db, rt);
+      await db.collection("sessions").updateOne(
+        { _id: session._id },
+        { $set: { expiresAt: new Date(Date.now() + 1000) } } // "about to go idle-expired"
+      );
+      const res = await request(app)
+        .post("/api/auth/refresh")
+        .set("Cookie", `cc_rt=${rt}; cc_csrf=${csrf}`)
+        .set("X-CSRF-Token", csrf);
+      expect(res.status).toBe(200);
+      rt = extractCookie(res, "cc_rt");
+    }
+
+    expect((await findActiveSessionByToken(db, rt)).expiresAt.getTime()).toBeGreaterThan(
+      Date.now() + IDLE_SESSION_TTL_MS - 5000
+    );
+  });
+
+  it("rejects a refresh token whose session has gone idle-expired (no activity for the ~1-hour window)", async () => {
+    const email = uniqueEmail();
+    const { csrf, res: loginRes } = await signupUser(email);
+    const rt = extractCookie(loginRes, "cc_rt");
+
+    const session = await findActiveSessionByToken(db, rt);
+    await db.collection("sessions").updateOne(
+      { _id: session._id },
+      { $set: { expiresAt: new Date(Date.now() - IDLE_SESSION_TTL_MS) } }
+    );
+
+    const res = await request(app)
+      .post("/api/auth/refresh")
+      .set("Cookie", `cc_rt=${rt}; cc_csrf=${csrf}`)
+      .set("X-CSRF-Token", csrf);
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects a session past the absolute lifetime cap even though it kept sliding (idle window still valid)", async () => {
+    const email = uniqueEmail();
+    const { csrf, res: loginRes } = await signupUser(email);
+    const rt = extractCookie(loginRes, "cc_rt");
+
+    // Simulates a session that's been refreshed every hour, forever — the
+    // idle window (expiresAt) is still comfortably valid, but the account
+    // "logged in" 31 days ago and never had to fully re-authenticate since.
+    const session = await findActiveSessionByToken(db, rt);
+    await db.collection("sessions").updateOne(
+      { _id: session._id },
+      {
+        $set: {
+          createdAt: new Date(Date.now() - (ABSOLUTE_SESSION_TTL_MS + 60_000)),
+          expiresAt: new Date(Date.now() + IDLE_SESSION_TTL_MS), // still "active" by idle standards
+        },
+      }
+    );
+
+    const res = await request(app)
+      .post("/api/auth/refresh")
+      .set("Cookie", `cc_rt=${rt}; cc_csrf=${csrf}`)
+      .set("X-CSRF-Token", csrf);
+    expect(res.status).toBe(401);
+  });
+
+  it("does not reject a long-lived session that is still within the absolute cap", async () => {
+    const email = uniqueEmail();
+    const { csrf, res: loginRes } = await signupUser(email);
+    const rt = extractCookie(loginRes, "cc_rt");
+
+    const session = await findActiveSessionByToken(db, rt);
+    await db.collection("sessions").updateOne(
+      { _id: session._id },
+      { $set: { createdAt: new Date(Date.now() - (ABSOLUTE_SESSION_TTL_MS - 60_000)) } }
+    );
+
+    const res = await request(app)
+      .post("/api/auth/refresh")
+      .set("Cookie", `cc_rt=${rt}; cc_csrf=${csrf}`)
+      .set("X-CSRF-Token", csrf);
+    expect(res.status).toBe(200);
+  });
+
   it("rejects a refresh token whose session has been revoked", async () => {
     const email = uniqueEmail();
     const { csrf, res: loginRes } = await signupUser(email);
@@ -304,5 +394,111 @@ describe("multiple devices / logout-all", () => {
       .find({ userId: user._id.toString(), revoked: false })
       .toArray();
     expect(stillActive.length).toBe(0);
+  });
+});
+
+describe("refresh-token/session ownership across users", () => {
+  it("each user's session is independent — refreshing one never yields, extends, or touches the other's identity or session", async () => {
+    const emailA = uniqueEmail();
+    const emailB = uniqueEmail();
+    const { csrf: csrfA, res: loginA } = await signupUser(emailA);
+    const { csrf: csrfB, res: loginB } = await signupUser(emailB);
+    const rtA = extractCookie(loginA, "cc_rt");
+    const rtB = extractCookie(loginB, "cc_rt");
+    expect(rtA).not.toBe(rtB);
+
+    const refreshA = await request(app)
+      .post("/api/auth/refresh")
+      .set("Cookie", `cc_rt=${rtA}; cc_csrf=${csrfA}`)
+      .set("X-CSRF-Token", csrfA);
+    expect(refreshA.status).toBe(200);
+
+    // The identity behind A's new access token is still A, never B.
+    const profileAfterRefresh = await request(app)
+      .get("/api/auth/profile")
+      .set("Cookie", `cc_at=${extractCookie(refreshA, "cc_at")}`);
+    expect(profileAfterRefresh.body.email).toBe(emailA);
+
+    // B's own (untouched) refresh token still works independently and
+    // still resolves to B — A's refresh didn't rotate, revoke, or
+    // otherwise affect B's session document.
+    const refreshB = await request(app)
+      .post("/api/auth/refresh")
+      .set("Cookie", `cc_rt=${rtB}; cc_csrf=${csrfB}`)
+      .set("X-CSRF-Token", csrfB);
+    expect(refreshB.status).toBe(200);
+    const profileB = await request(app)
+      .get("/api/auth/profile")
+      .set("Cookie", `cc_at=${extractCookie(refreshB, "cc_at")}`);
+    expect(profileB.body.email).toBe(emailB);
+
+    // The two session documents are genuinely distinct records.
+    const sessionA = await findActiveSessionByToken(db, extractCookie(refreshA, "cc_rt"));
+    const sessionB = await findActiveSessionByToken(db, extractCookie(refreshB, "cc_rt"));
+    expect(sessionA._id.toString()).not.toBe(sessionB._id.toString());
+    expect(sessionA.userId).not.toBe(sessionB.userId);
+  });
+
+  it("mixing user A's CSRF token with user B's refresh-token cookie still only ever resolves to B, never A", async () => {
+    const emailB = uniqueEmail();
+    const { csrf: csrfA } = await signupUser(uniqueEmail());
+    const { res: loginB } = await signupUser(emailB);
+    const rtB = extractCookie(loginB, "cc_rt");
+
+    // The double-submit CSRF check only proves "cookie == header", not
+    // whose account either belongs to — session identity is determined
+    // solely by which refresh token is presented (cc_rt), never by the
+    // CSRF token. Passing CSRF with a mismatched-user token pair must
+    // still resolve to B's identity (the account rtB actually belongs to),
+    // and must never leak or grant A's.
+    const res = await request(app)
+      .post("/api/auth/refresh")
+      .set("Cookie", `cc_rt=${rtB}; cc_csrf=${csrfA}`)
+      .set("X-CSRF-Token", csrfA);
+    expect(res.status).toBe(200);
+
+    const profile = await request(app)
+      .get("/api/auth/profile")
+      .set("Cookie", `cc_at=${extractCookie(res, "cc_at")}`);
+    expect(profile.body.email).toBe(emailB);
+  });
+});
+
+describe("cookie security attributes", () => {
+  it("access/refresh/csrf cookies keep HttpOnly, SameSite, and Path scoping on login", async () => {
+    const { res: loginRes } = await signupUser(uniqueEmail());
+    const setCookie = [].concat(loginRes.headers["set-cookie"] || []);
+
+    const at = setCookie.find((c) => c.startsWith("cc_at="));
+    const rt = setCookie.find((c) => c.startsWith("cc_rt="));
+    const csrf = setCookie.find((c) => c.startsWith("cc_csrf="));
+
+    expect(at).toMatch(/HttpOnly/);
+    expect(at).toMatch(/Path=\/api(?!\/auth)/); // "/api", not "/api/auth"
+    expect(rt).toMatch(/HttpOnly/);
+    expect(rt).toMatch(/Path=\/api\/auth/);
+    expect(csrf).not.toMatch(/HttpOnly/); // deliberately readable by the frontend
+
+    for (const cookie of [at, rt, csrf]) {
+      expect(cookie).toMatch(/SameSite=Lax/);
+    }
+  });
+
+  it("access/refresh cookies keep HttpOnly and SameSite on refresh too, not just login", async () => {
+    const { csrf, res: loginRes } = await signupUser(uniqueEmail());
+    const rt = extractCookie(loginRes, "cc_rt");
+
+    const refreshRes = await request(app)
+      .post("/api/auth/refresh")
+      .set("Cookie", `cc_rt=${rt}; cc_csrf=${csrf}`)
+      .set("X-CSRF-Token", csrf);
+    const setCookie = [].concat(refreshRes.headers["set-cookie"] || []);
+
+    const at = setCookie.find((c) => c.startsWith("cc_at="));
+    const newRt = setCookie.find((c) => c.startsWith("cc_rt="));
+    expect(at).toMatch(/HttpOnly/);
+    expect(at).toMatch(/SameSite=Lax/);
+    expect(newRt).toMatch(/HttpOnly/);
+    expect(newRt).toMatch(/SameSite=Lax/);
   });
 });

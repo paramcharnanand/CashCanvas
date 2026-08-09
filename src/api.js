@@ -67,6 +67,48 @@ async function rawRequest(url, options = {}) {
   });
 }
 
+// The one in-flight `POST /api/auth/refresh` request, shared by every
+// concurrent apiFetch() caller — see refreshSession() below for why this
+// exists. null whenever no refresh is currently in progress.
+let refreshInFlight = null;
+
+/**
+ * Perform (at most) one real refresh request at a time, no matter how many
+ * apiFetch() calls hit a 401 simultaneously.
+ *
+ * Without this, a page that loads several resources in parallel (most do —
+ * e.g. Merchant Rules fires GET /api/merchant-rules and GET /api/categories
+ * together) would have *each* of those calls independently see the same
+ * expired access token and independently POST /api/auth/refresh at the same
+ * moment. api/auth.js's refresh handler rotates the refresh token with an
+ * atomic compare-and-swap *by design* (see api/_lib/session.js's
+ * rotateSession and tests/auth.test.js's "under concurrent refresh attempts
+ * ... exactly one succeeds") — a real, intentional defense against a stolen
+ * token being replayed. But that same defense can't tell "two requests
+ * racing because of theft" apart from "two requests racing because this
+ * page made two fetch calls" — every refresh call but the first one loses
+ * the compare-and-swap and is treated as reuse of an already-rotated token,
+ * which clears all three auth cookies. Depending on which response's
+ * Set-Cookie the browser applies last, that can wipe out the session that
+ * the *winning* refresh call just legitimately re-established, forcing a
+ * full logout (and, since login always requires a fresh OTP, a full
+ * password+OTP cycle) in the middle of ordinary active use — this was the
+ * actual root cause of "logged out too often."
+ *
+ * Coalescing every concurrent caller onto one shared promise means the
+ * browser only ever sends one refresh request per expiry, so this race
+ * never has a chance to start. The backend's reuse-detection is unchanged
+ * and still does its job against a genuinely stolen/replayed token.
+ */
+function refreshSession() {
+  if (!refreshInFlight) {
+    refreshInFlight = rawRequest("/api/auth/refresh", { method: "POST" }).finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
+}
+
 /**
  * Fetch wrapper for all API calls. On a 401 from a route that requires an
  * access token, transparently attempts one silent refresh and retries the
@@ -77,7 +119,7 @@ export async function apiFetch(url, options = {}) {
   const res = await rawRequest(url, options);
   if (res.status !== 401 || NO_REFRESH_RETRY.includes(url)) return res;
 
-  const refreshRes = await rawRequest("/api/auth/refresh", { method: "POST" });
+  const refreshRes = await refreshSession();
   if (!refreshRes.ok) return res;
 
   return rawRequest(url, options);

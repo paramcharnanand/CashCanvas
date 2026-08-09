@@ -54,7 +54,7 @@ cleared together (`clearAuthCookies()`) on logout or when refresh fails:
 | Cookie | Contents | HttpOnly | Path | Lifetime |
 |---|---|---|---|---|
 | `cc_at` (access token) | Signed JWT `{userId, email, name}` | Yes | `/api` | 15 minutes |
-| `cc_rt` (refresh token) | Opaque random hex string | Yes | `/api/auth` | 30 days, sliding |
+| `cc_rt` (refresh token) | Opaque random hex string | Yes | `/api/auth` | 1 hour, sliding (idle timeout) — capped at 30 days total from login |
 | `cc_csrf` | Opaque random hex string | **No** | `/` | 30 days |
 
 All three: `Secure` in production only (disabled in dev since local HTTP has no TLS —
@@ -83,11 +83,20 @@ Each login/signup/OTP-verification creates one document in the `sessions` collec
   ip,
   createdAt,
   lastUsedAt,
-  expiresAt,          // 30 days out; slides forward on every refresh
+  expiresAt,          // IDLE_SESSION_TTL_MS (1h) out; slides forward on every refresh
   revoked,            // false until logout / logout-all / reuse detection
   revokedAt,
 }
 ```
+
+Two independent expiry checks gate every refresh (`findActiveSessionByToken`,
+`api/_lib/session.js`): `expiresAt` is the sliding **idle** window — no
+activity for `IDLE_SESSION_TTL_MS` (1 hour) and the session is dead, even
+though `createdAt` is unchanged. `createdAt` itself is checked against
+`ABSOLUTE_SESSION_TTL_MS` (30 days) on every refresh too, as a hard ceiling
+that sliding renewal can't extend past — an actively-used session that
+refreshes every hour forever still needs to fully re-authenticate after 30
+days.
 
 The refresh token is an **opaque random value** (`crypto.randomBytes(48)`), not a JWT. This
 is deliberate: a JWT refresh token can only be invalidated by maintaining a blocklist,
@@ -152,6 +161,13 @@ Browser (src/api.js)              Server                              MongoDB
 `apiFetch()` in `src/api.js` does this transparently: any 401 from a route that needs an
 access token triggers exactly one refresh-and-retry, so a 15-minute access token never
 interrupts an active session.
+
+Most pages here load several resources in parallel on mount, so it's normal for multiple
+`apiFetch` calls to hit a 401 from the same expired access token at the same moment.
+`apiFetch` coalesces all of them onto one shared in-flight refresh promise (`refreshSession()`)
+instead of letting each one independently `POST /api/auth/refresh` — see that function's own
+comment for why: racing the rotation below with itself, not an attacker, was the actual root
+cause of a "logged out too often" bug this phase fixed.
 
 ### Sequence: logout
 
