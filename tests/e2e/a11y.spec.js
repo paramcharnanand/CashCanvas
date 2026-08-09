@@ -191,7 +191,7 @@ test.describe("accessibility", () => {
   test("404 page has no unexpected a11y violations", async ({ page }) => {
     await page.goto("/this-route-does-not-exist");
     await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
-    // NotFoundPage renders standalone (outside AppShell, no Header/Sidebar
+    // NotFoundPage renders standalone (outside AppShell, no Header/nav
     // landmarks to lean on) with a plain <div> wrapper — the same
     // landmark-one-main/region shell-level gap every other page in the app
     // carries (ADR-019), not something unique to this one. Never scanned

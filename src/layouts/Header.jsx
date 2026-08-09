@@ -13,11 +13,11 @@ const THEME_LABEL = { light: "Light", dark: "Dark", system: "System" };
  *
  * The logo is always a real <Link>, never onClick + navigate("...") and
  * never window.location — client-side navigation, no reload, exactly the
- * "logo always clickable" requirement. showBrand is false on >=lg, where
- * the Sidebar already renders the brand — one visible logo at a time, not
- * two competing ones.
+ * "logo always clickable" requirement. Always rendered here now that
+ * primary navigation lives in BottomNav at every viewport width — there's
+ * no wider Sidebar to hold a competing copy of it above --bp-lg anymore.
  */
-export function Header({ onOpenPalette, showBrand = false }) {
+export function Header({ onOpenPalette }) {
   const { preference, cyclePreference } = useTheme();
   const { isAuthenticated } = useAuth();
   const ThemeIcon = THEME_ICON[preference];
@@ -40,20 +40,18 @@ export function Header({ onOpenPalette, showBrand = false }) {
         gap: "var(--space-4)",
       }}
     >
-      {showBrand && (
-        <Link
-          to={isAuthenticated ? "/dashboard" : "/"}
-          style={{
-            font: "var(--text-heading-md)",
-            fontStyle: "italic",
-            color: "var(--text)",
-            textDecoration: "none",
-            flexShrink: 0,
-          }}
-        >
-          Cash<span style={{ color: "var(--primary)" }}>Canvas</span>
-        </Link>
-      )}
+      <Link
+        to={isAuthenticated ? "/dashboard" : "/"}
+        style={{
+          font: "var(--text-heading-md)",
+          fontStyle: "italic",
+          color: "var(--text)",
+          textDecoration: "none",
+          flexShrink: 0,
+        }}
+      >
+        Cash<span style={{ color: "var(--primary)" }}>Canvas</span>
+      </Link>
       <button
         onClick={onOpenPalette}
         style={{

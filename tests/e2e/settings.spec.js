@@ -18,9 +18,6 @@ test.describe("settings page", () => {
   test("shows the signed-in user's name and email, read-only", async ({ authenticatedPage: page, testUser }) => {
     await page.goto("/settings");
     await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-    // The same name also appears in the desktop Sidebar's identity link
-    // (Phase 8.9's user-menu replacement) — .first() to disambiguate,
-    // not because either instance is more "correct."
     await expect(page.getByText(testUser.name).first()).toBeVisible();
     await expect(page.getByText(testUser.email)).toBeVisible();
   });
@@ -93,15 +90,6 @@ test.describe("settings page", () => {
     // Wait for real mounted content first.
     await expect(page.getByRole("button", { name: /try with sample data/i })).toBeVisible();
     await page.keyboard.press("Control+,");
-    await expect(page).toHaveURL(/\/settings$/);
-  });
-
-  test("sidebar identity block links to Settings", async ({ authenticatedPage: page }) => {
-    await page.goto("/dashboard");
-    // Desktop-only control — the sidebar isn't rendered below --bp-lg.
-    const viewport = page.viewportSize();
-    test.skip(viewport && viewport.width < 1024, "sidebar not rendered on narrow viewports");
-    await page.getByRole("link", { name: /E2E Test User/i }).click();
     await expect(page).toHaveURL(/\/settings$/);
   });
 });

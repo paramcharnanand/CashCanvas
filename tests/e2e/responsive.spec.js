@@ -1,11 +1,13 @@
 import { test, expect, seedTransactions } from "./fixtures/index.mjs";
 
 /**
- * Cross-page responsive-layout regressions — narrow-viewport specific, so
- * scoped to the mobile device projects only (see playwright.config.js's
- * mobile-chrome/mobile-safari projects, matching the pattern
- * settings.spec.js's Tab-order test already uses for viewport-conditional
- * assertions).
+ * Cross-page responsive-layout regressions. Most of these are
+ * narrow-viewport specific and self-skip above their relevant breakpoint
+ * (see playwright.config.js's mobile-chrome/mobile-safari projects,
+ * matching the pattern settings.spec.js's Tab-order test already uses for
+ * viewport-conditional assertions) — the bottom-nav tests are the
+ * exception: BottomNav is the primary nav at every viewport width, so
+ * those run unconditionally across all 5 projects.
  */
 test.describe("responsive layout", () => {
   test("StatCard values never visually truncate on a narrow viewport", async ({ authenticatedPage: page }) => {
@@ -30,14 +32,14 @@ test.describe("responsive layout", () => {
     await expect(values.first()).toHaveText("$3,200.00");
   });
 
-  test("no bottom mobile-nav label wraps to a second line", async ({ authenticatedPage: page }) => {
-    const viewport = page.viewportSize();
-    test.skip(!viewport || viewport.width >= 1024, "the sidebar, not the bottom nav, renders above the lg breakpoint");
-
-    // Found via a real screenshot audit: "Merchant Rules" wrapped to two
-    // lines in the bottom nav while every other (shorter) label stayed on
-    // one — an equal-width flex row with 8 items has no room left for a
-    // 14-character label at any of its siblings' font size.
+  test("no bottom-nav label wraps to a second line", async ({ authenticatedPage: page }) => {
+    // Runs at every viewport width — BottomNav is the primary nav
+    // everywhere now (compact bar below --bp-lg, spacious bar at/above it,
+    // no left Sidebar). Found via a real screenshot audit: "Merchant
+    // Rules" wrapped to two lines in the compact bar while every other
+    // (shorter) label stayed on one — an equal-width flex row with 8 items
+    // has no room left for a 14-character label at any of its siblings'
+    // font size.
     await page.goto("/dashboard");
     const nav = page.getByRole("navigation", { name: "Primary navigation" });
     await expect(nav).toBeVisible();
@@ -71,9 +73,7 @@ test.describe("responsive layout", () => {
   });
 
   test("adjacent bottom-nav labels never touch", async ({ authenticatedPage: page }) => {
-    const viewport = page.viewportSize();
-    test.skip(!viewport || viewport.width >= 1024, "the sidebar, not the bottom nav, renders above the lg breakpoint");
-
+    // Runs at every viewport width — see the previous test's comment.
     // Found via a real screenshot audit: "Transactions" and "Analytics"
     // rendered with zero visible gap between them ("TransactionsAnalytics")
     // — the nav's flex container had no `gap`, so two labels each sized
@@ -96,9 +96,7 @@ test.describe("responsive layout", () => {
   });
 
   test("bottom-nav items meet the 44px minimum touch-target height", async ({ authenticatedPage: page }) => {
-    const viewport = page.viewportSize();
-    test.skip(!viewport || viewport.width >= 1024, "the sidebar, not the bottom nav, renders above the lg breakpoint");
-
+    // Runs at every viewport width — see the first test's comment.
     await page.goto("/dashboard");
     const nav = page.getByRole("navigation", { name: "Primary navigation" });
     await expect(nav).toBeVisible();
