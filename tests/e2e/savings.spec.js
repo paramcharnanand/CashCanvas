@@ -80,6 +80,29 @@ test.describe("savings page", () => {
     await expect(page.getByLabel("Target Amount ($)")).toHaveValue("15000");
   });
 
+  test("deleting a goal via the API removes it, and it stays gone after a reload", async ({ authenticatedPage: page }) => {
+    // No delete control exists in the UI yet (useSavingsData's deleteGoal
+    // is exported but unused by SavingsPage) — this exercises the real
+    // DELETE /api/savings route the same way the UI would if/when it grows
+    // one, via the same page.request pattern the seeding calls above use.
+    await seedTransactions(page);
+    const csrf = await getCsrfToken(page);
+    await page.request.put("/api/savings", {
+      headers: { "X-CSRF-Token": csrf },
+      data: { name: "Emergency fund", amount: 5000, deadline: "2027-01-01" },
+    });
+
+    await page.goto("/savings");
+    await expect(page.getByLabel("Goal Name")).toHaveValue("Emergency fund");
+
+    const del = await page.request.delete("/api/savings", { headers: { "X-CSRF-Token": csrf } });
+    expect(del.ok()).toBe(true);
+
+    await page.reload();
+    await expect(page.getByLabel("Goal Name")).toHaveValue("");
+    await expect(page.getByLabel("Target Amount ($)")).toHaveValue("");
+  });
+
   test("shows the savings suggestion panel once a goal and real spending data both exist", async ({ authenticatedPage: page }) => {
     await seedTransactions(page);
     await page.goto("/savings");

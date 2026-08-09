@@ -21,7 +21,9 @@
     { "source": "/api/files",             "destination": "/api/data" },
     { "source": "/api/categories/:path*", "destination": "/api/data" },
     { "source": "/api/categories",        "destination": "/api/data" },
+    { "source": "/api/merchant-rules/:path*", "destination": "/api/data" },
     { "source": "/api/merchant-rules",    "destination": "/api/data" },
+    { "source": "/api/savings",           "destination": "/api/data" },
     { "source": "/(.*)",                  "destination": "/index.html" }
   ]
 }
