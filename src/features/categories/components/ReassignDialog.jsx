@@ -3,13 +3,12 @@ import { Dialog } from "../../../components/ui/Dialog.jsx";
 import { Button } from "../../../components/ui/Button.jsx";
 
 /**
- * Bulk reassign-category dialog — ported from the legacy `Dashboard`'s
- * hidden "Transactions" tab (Phase 10 final cleanup, see ROADMAP.md's
- * completion note), rebuilt on `Dialog`/`Field`/design tokens rather than
- * the hand-rolled modal it replaces. Same two actions: pick an existing
- * category, or create a new one inline and apply it in the same step.
+ * Bulk category-assignment dialog — shared by Categories (Uncategorized
+ * Transactions bulk-assign) and Transactions (row-selection bulk reassign).
+ * Two actions: pick an existing category, or create a new one inline and
+ * apply it in the same step.
  */
-export function ReassignDialog({ open, onClose, selectedCount, categories, onReassign, onCreateAndReassign }) {
+export function ReassignDialog({ open, onClose, selectedCount, categories, onReassign, onCreateAndReassign, title = "Reassign Category" }) {
   const [newCatName, setNewCatName] = useState("");
   const inputId = useId();
 
@@ -29,7 +28,7 @@ export function ReassignDialog({ open, onClose, selectedCount, categories, onRea
     <Dialog open={open} onClose={close} labelledBy="reassign-title" maxWidth={380}>
       <div style={{ padding: "var(--space-6)" }}>
         <h2 id="reassign-title" style={{ font: "var(--text-heading-md)", color: "var(--text)", margin: "0 0 var(--space-2)" }}>
-          Reassign Category
+          {title}
         </h2>
         <p style={{ font: "var(--text-body-sm)", color: "var(--text-subtle)", margin: "0 0 var(--space-5)" }}>
           {selectedCount} transaction{selectedCount !== 1 ? "s" : ""} will be updated

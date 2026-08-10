@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Tag, Upload as UploadIcon } from "lucide-react";
-import { Card } from "../components/ui/Card.jsx";
+import { Tag, Upload as UploadIcon, List } from "lucide-react";
 import { EmptyState } from "../components/ui/EmptyState.jsx";
 import { Button } from "../components/ui/Button.jsx";
 import { StatCard } from "../components/ui/StatCard.jsx";
@@ -9,22 +8,43 @@ import { useCategoriesData } from "../features/categories/hooks/useCategoriesDat
 import { CategoryGrid } from "../features/categories/components/CategoryGrid.jsx";
 import { NewCategoryDialog } from "../features/categories/components/NewCategoryDialog.jsx";
 import { UncategorizedPanel } from "../features/categories/components/UncategorizedPanel.jsx";
-
-const fmt = (v) => "$" + Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+import { ReassignDialog } from "../features/categories/components/ReassignDialog.jsx";
 
 /**
- * Mounted at "/categories" (see router.jsx) — the Categories tab split out
- * of the legacy `Dashboard` (`App.jsx`) onto the standardized component
- * system, per docs/frontend/phase-8-migration-plan.md's Phase 8. Same
- * "separate route, no shared state with `LegacyWorkspace`" pattern as
- * Transactions/Analytics.
+ * Mounted at "/categories" — the primary category-based transaction
+ * management surface: category cards → Uncategorized Transactions (bulk
+ * multi-select assign) → View All Transactions.
  */
 export default function CategoriesPage() {
   const {
     transactions, loading, categories, otherTxns, categorizedPct, categorizedCount,
-    totalExpenses, createCategory, deleteCategory, setKeywords, quickFix,
+    createCategory, deleteCategory, setKeywords, bulkAssign, bulkCreateAndAssign,
   } = useCategoriesData();
   const [newCatOpen, setNewCatOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [reassignOpen, setReassignOpen] = useState(false);
+
+  const toggleSelected = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const allUncategorizedSelected = otherTxns.length > 0 && otherTxns.every((t) => selectedIds.has(t.id));
+  const toggleSelectAllUncategorized = () => {
+    setSelectedIds(allUncategorizedSelected ? new Set() : new Set(otherTxns.map((t) => t.id)));
+  };
+
+  const handleBulkAssign = (categoryName) => {
+    bulkAssign(Array.from(selectedIds), categoryName);
+    setSelectedIds(new Set());
+  };
+
+  const handleBulkCreateAndAssign = (categoryName) => {
+    bulkCreateAndAssign(categoryName, Array.from(selectedIds)).finally(() => setSelectedIds(new Set()));
+  };
 
   if (loading) return null;
 
@@ -67,25 +87,6 @@ export default function CategoriesPage() {
         />
       </div>
 
-      {categories.length > 0 && (
-        <Card style={{ marginBottom: "var(--space-6)" }}>
-          <h2 style={{ font: "var(--text-heading-sm)", color: "var(--text)", margin: "0 0 var(--space-4)" }}>
-            Category breakdown
-          </h2>
-          {categories.map((c) => (
-            <div key={c.name} style={{ marginBottom: "var(--space-4)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "var(--space-2)" }}>
-                <span style={{ font: "var(--text-body-sm)", fontWeight: 600, color: "var(--text)" }}>{c.name}</span>
-                <span style={{ font: "13px var(--font-numeral)", color: "var(--text-subtle)" }}>{fmt(c.total)}</span>
-              </div>
-              <div style={{ height: 3, background: "var(--surface-alt)", borderRadius: 2, overflow: "hidden" }}>
-                <div style={{ height: "100%", width: `${totalExpenses > 0 ? (c.total / totalExpenses) * 100 : 0}%`, background: c.color, borderRadius: 2 }} />
-              </div>
-            </div>
-          ))}
-        </Card>
-      )}
-
       <div style={{ marginBottom: "var(--space-6)" }}>
         <CategoryGrid
           categories={categories}
@@ -95,16 +96,57 @@ export default function CategoriesPage() {
         />
       </div>
 
+      {selectedIds.size > 0 && (
+        <div
+          style={{
+            display: "flex", alignItems: "center", gap: "var(--space-3)",
+            padding: "var(--space-3) var(--space-4)", marginBottom: "var(--space-3)",
+            background: "var(--positive-soft)", borderRadius: "var(--radius-sm)",
+            border: "1px solid var(--positive)",
+          }}
+        >
+          <span style={{ font: "var(--text-body-sm)", fontWeight: 600, color: "var(--primary)" }}>
+            {selectedIds.size} selected
+          </span>
+          <Button variant="primary" size="sm" onClick={() => setReassignOpen(true)}>
+            Move to Category
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => setSelectedIds(new Set())}>
+            Clear
+          </Button>
+        </div>
+      )}
+
       <UncategorizedPanel
         transactions={otherTxns}
-        categoryNames={categories.map((c) => c.name)}
-        onQuickFix={quickFix}
+        selectedIds={selectedIds}
+        onToggleSelect={toggleSelected}
+        onToggleSelectAll={toggleSelectAllUncategorized}
       />
+
+      <div style={{ display: "flex", justifyContent: "center", marginTop: "var(--space-6)" }}>
+        <Link to="/transactions" style={{ textDecoration: "none" }}>
+          <Button variant="secondary">
+            <List size={16} strokeWidth={1.75} aria-hidden="true" />
+            View All Transactions
+          </Button>
+        </Link>
+      </div>
 
       <NewCategoryDialog
         open={newCatOpen}
         onClose={() => setNewCatOpen(false)}
         onCreate={createCategory}
+      />
+
+      <ReassignDialog
+        open={reassignOpen}
+        onClose={() => setReassignOpen(false)}
+        selectedCount={selectedIds.size}
+        categories={categories.map((c) => c.name)}
+        onReassign={handleBulkAssign}
+        onCreateAndReassign={handleBulkCreateAndAssign}
+        title="Move to Category"
       />
     </div>
   );

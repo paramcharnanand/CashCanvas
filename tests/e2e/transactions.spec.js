@@ -158,9 +158,47 @@ test.describe("transactions page", () => {
     await expect(page.getByRole("row", { name: /ACME COFFEE ROASTERS AIRPORT/ }).getByRole("cell", { name: "Dining" })).toBeVisible();
   });
 
-  test("Transactions is a real, always-visible nav destination", async ({ authenticatedPage: page }) => {
-    await page.goto("/dashboard");
-    await page.getByRole("link", { name: "Transactions" }).click();
+  test("\"By Category\" view groups transactions under real category headings, with Other last", async ({ authenticatedPage: page }) => {
+    await seedTransactions(page, [
+      ...sampleTransactions,
+      { date: "2025-01-31", desc: "ZZQX UNMATCHED MERCHANT 42", amount: -19.99 },
+    ]);
+    await page.goto("/transactions");
+    await page.getByRole("button", { name: "By Category" }).click();
+
+    const headingTexts = await page.getByRole("heading", { level: 2 }).allTextContents();
+    expect(headingTexts).toContain("Groceries");
+    expect(headingTexts).toContain("Housing");
+    expect(headingTexts.at(-1)).toBe("Other"); // uncategorized always last, regardless of its total
+
+    const otherGroup = page.getByRole("heading", { name: "Other", exact: true }).locator("xpath=ancestor::div[2]");
+    await expect(otherGroup.getByRole("cell", { name: "ZZQX UNMATCHED MERCHANT 42" })).toBeVisible();
+  });
+
+  test("\"By Category\" view (?view=category) persists across a page refresh, same as sort", async ({ authenticatedPage: page }) => {
+    await seedTransactions(page);
+    await page.goto("/transactions");
+    await page.getByRole("button", { name: "By Category" }).click();
+    await expect(page).toHaveURL(/[?&]view=category/);
+    await expect(page.getByRole("heading", { name: "Groceries", exact: true })).toBeVisible();
+
+    await page.reload();
+    await expect(page).toHaveURL(/[?&]view=category/);
+    await expect(page.getByRole("heading", { name: "Groceries", exact: true })).toBeVisible();
+
+    // Switching back to Flat drops the param and restores the single table
+    // (toHaveCount, not toBeVisible — this locator legitimately matches
+    // multiple <table>s while the category-grouped view is still mid-render).
+    await page.getByRole("button", { name: "Flat", exact: true }).click();
+    await expect(page).not.toHaveURL(/[?&]view=category/);
+    await expect(page.getByRole("table")).toHaveCount(1);
+  });
+
+  test("Transactions is reached via \"View All Transactions\" on Categories, not the bottom nav", async ({ authenticatedPage: page }) => {
+    await seedTransactions(page);
+    await page.goto("/categories");
+    await expect(page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Transactions" })).toHaveCount(0);
+    await page.getByRole("link", { name: "View All Transactions" }).click();
     await expect(page).toHaveURL(/\/transactions$/);
   });
 });

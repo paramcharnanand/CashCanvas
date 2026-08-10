@@ -1,34 +1,28 @@
 import { useEffect, useState, useCallback } from "react";
 import _ from "lodash";
 import { apiFetch } from "../../../api.js";
-import { categorize, cleanDesc, DEFAULT_CATEGORIES } from "../../../utils/categorization.js";
-import { matchMerchant } from "../../../utils/merchantNormalization.js";
+import { resolveCategory, DEFAULT_CATEGORIES } from "../../../utils/categorization.js";
+import { cleanDesc } from "../../../utils/merchantNormalization.js";
+import { useCategoryOverrides } from "../../../contexts/CategoryOverridesContext.jsx";
 
 /**
  * Fetches the most recent uploaded statement + merchant rules/custom
- * categories (same "separate route, no shared state with `LegacyWorkspace`"
- * pattern as `features/transactions/hooks/useTransactionsData.js` and
- * `features/analytics/hooks/useAnalyticsData.js`), plus the full
- * `apiCategories` list (with `_id`s) needed for create/delete/keyword-edit.
- *
- * Unlike Transactions (Phase 8.6, deliberately read-only — see its own
- * scope decision), this hook's "quick-fix an uncategorized transaction"
- * action *does* write: it calls `POST /api/merchant-rules`, the same
- * persistence path the legacy `Dashboard`'s "Reassign Category" flow
- * already uses. This is a deliberate improvement over the legacy
- * `Dashboard`'s own Categories-tab quick-fix, which only ever set a local,
- * non-persisted `txnOverrides` entry (confirmed by reading `App.jsx` before
- * porting this) — reproducing that ephemeral-only behavior on a second,
- * independent route would have recreated the exact cross-page divergence
- * risk Phase 8.6 already flagged and declined for Transactions. Persisting
- * via the same merchant-rules mechanism the Transactions reassign flow
- * already uses avoids that risk instead of reproducing it.
+ * categories, storing raw transactions once and deriving `category` fresh
+ * every render via `resolveCategory(desc, { customCats, merchantRules,
+ * override })` — the same reactive-derivation shape `useDashboardData`
+ * already used, adopted here (and by `useTransactionsData`) so cached AI
+ * guesses arriving asynchronously from `CategoryOverridesContext` are
+ * reflected immediately, and so `bulkAssign` only needs to update
+ * `merchantRules` state rather than hand-patching every matching
+ * transaction's `category` field.
  */
 export function useCategoriesData() {
-  const [transactions, setTransactions] = useState(null);
+  const [rawTxns, setRawTxns] = useState(null);
   const [apiCategories, setApiCategories] = useState([]);
-  const [, setMerchantRules] = useState(new Map());
+  const [merchantRules, setMerchantRules] = useState(new Map());
+  const [customCats, setCustomCats] = useState({});
   const [loading, setLoading] = useState(true);
+  const { overrides, registerFile, runAiPass } = useCategoryOverrides();
 
   const fetchAll = useCallback(() => {
     return Promise.all([
@@ -42,39 +36,48 @@ export function useCategoriesData() {
       setMerchantRules(rules);
       const cats = Array.isArray(catsData) ? catsData : [];
       setApiCategories(cats);
-      const customCats = {};
-      cats.forEach((c) => { customCats[c.categoryName] = c.keywords || []; });
+      const customCatsMap = {};
+      cats.forEach((c) => { customCatsMap[c.categoryName] = c.keywords || []; });
+      setCustomCats(customCatsMap);
 
       if (!Array.isArray(files) || files.length === 0) {
-        setTransactions([]);
+        setRawTxns([]);
         return;
       }
       const latest = files[0]; // already sorted by uploadedAt desc
+      registerFile(latest._id);
       const res = await apiFetch(`/api/files/${latest._id}`);
       const data = await res.json();
       if (!data.transactions) {
-        setTransactions([]);
+        setRawTxns([]);
         return;
       }
       const txns = data.transactions.map((t, i) => {
         const date = typeof t.date === "string" ? new Date(t.date) : t.date;
-        return { ...t, id: i, date, category: categorize(t.desc, customCats, rules) };
+        return { ...t, id: i, date };
       });
-      setTransactions(txns);
+      setRawTxns(txns);
+      runAiPass(txns, customCatsMap, rules);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     let cancelled = false;
     fetchAll().catch(() => {
-      if (!cancelled) setTransactions([]);
+      if (!cancelled) setRawTxns([]);
     }).finally(() => {
       if (!cancelled) setLoading(false);
     });
     return () => { cancelled = true; };
   }, [fetchAll]);
 
-  const expenses = (transactions ?? []).filter((t) => t.amount < 0);
+  const transactions = (rawTxns ?? []).map((t) => ({
+    ...t,
+    category: resolveCategory(t.desc, { customCats, merchantRules, override: overrides[t.id] }),
+  }));
+
+  const expenses = transactions.filter((t) => t.amount < 0);
   const otherTxns = expenses.filter((t) => t.category === "Other");
   const categorizedCount = expenses.length - otherTxns.length;
   const categorizedPct = expenses.length > 0 ? Math.round((categorizedCount / expenses.length) * 100) : 0;
@@ -82,14 +85,6 @@ export function useCategoriesData() {
 
   const CHART_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)", "var(--chart-6)"];
 
-  // The full category universe is DEFAULT_CATEGORIES (built-in keyword
-  // sets, no `_id`, no delete/edit affordance beyond adding a keyword —
-  // categorize() already knows them) union apiCategories (user-created,
-  // with a real `_id`) — matches the legacy Dashboard's own `allCategories`
-  // derivation (App.jsx) exactly. A category not in either source can still
-  // appear here transiently right after quickFix() assigns it, so the
-  // union always includes every category any transaction is currently
-  // showing.
   const categoryNameSet = new Set([
     ...Object.keys(DEFAULT_CATEGORIES),
     ...apiCategories.map((c) => c.categoryName),
@@ -98,15 +93,6 @@ export function useCategoriesData() {
   categoryNameSet.delete("Other");
   categoryNameSet.delete("Income");
 
-  // Categories with real transactions, configured keywords, or a real
-  // server-side record (`apiCat` — the user explicitly created it via "New
-  // Category") are shown. Only never-used *default* categories (no id, no
-  // transactions, no keywords) are hidden, to avoid cluttering the grid
-  // with all of DEFAULT_CATEGORIES. A user-created category necessarily
-  // starts with zero transactions and zero keywords, so excluding it too
-  // (the legacy Dashboard's original rule, ported unchanged into Phase 8.8)
-  // was a real bug: its card is the only UI that can ever add a keyword to
-  // it, so a brand-new category had no path to ever become visible.
   const categories = Array.from(categoryNameSet)
     .map((name, i) => {
       const apiCat = apiCategories.find((c) => c.categoryName === name);
@@ -127,23 +113,6 @@ export function useCategoriesData() {
     .filter((c) => c.count > 0 || c.keywords.length > 0 || c.id != null)
     .sort((a, b) => b.total - a.total);
 
-  /**
-   * create/delete/setKeywords all refetch (`fetchAll()`) after their write
-   * completes, rather than optimistically patching `apiCategories` alone.
-   * Found while testing: `transactions` is categorized once, at fetch time,
-   * via `categorize(desc, customCats, rules)` — patching `apiCategories`
-   * locally left already-fetched transactions' `category` field stale
-   * (e.g. a deleted category's card would keep reappearing, still showing
-   * the transaction that used to match its keyword, because `expenses`
-   * still had `category: "<deleted name>"` recorded on it). The legacy
-   * Dashboard avoided this because its `transactions` was a `useMemo`
-   * reactively depending on `customCats`, recomputing automatically on
-   * every edit — replicating that same reactivity here would mean hand-
-   * duplicating `categorize()`'s call graph in a second place. A full
-   * refetch after each (infrequent, deliberate) category edit is simpler
-   * and always correct — the same "re-derive from server truth" choice
-   * this hook already makes for everything else.
-   */
   const createCategory = useCallback(({ categoryName, icon, color }) => {
     return apiFetch("/api/categories", {
       method: "POST",
@@ -155,22 +124,6 @@ export function useCategoriesData() {
     return apiFetch(`/api/categories/${id}`, { method: "DELETE" }).then(() => fetchAll());
   }, [fetchAll]);
 
-  /**
-   * `category.id` is `null` for a built-in `DEFAULT_CATEGORIES` category
-   * with no `apiCategories` record yet (categorize() already recognizes it
-   * by name; nothing has ever been persisted for it). The legacy
-   * Dashboard's equivalent handler (`App.jsx`'s Categories tab, pre-Phase-8)
-   * had a real, evidenced bug here: it only called the PUT-keywords API
-   * when an `_id` already existed, silently updating local state only
-   * otherwise — so a keyword added to a default category (the common case:
-   * most categories a user interacts with *are* the built-in ones) worked
-   * for the rest of that session and then silently vanished on reload,
-   * never persisted. Root-caused by reading the legacy handler's
-   * `if (id) ...` guard, not observed via a failing test. Fixed here, not
-   * reproduced: when there's no existing category document, create one
-   * (with the new keyword list included in the same POST) instead of
-   * updating state that has nothing to persist to.
-   */
   const setKeywords = useCallback((category, keywords) => {
     const req = category.id
       ? apiFetch(`/api/categories/${category.id}`, { method: "PUT", body: JSON.stringify({ keywords }) })
@@ -179,28 +132,38 @@ export function useCategoriesData() {
   }, [fetchAll]);
 
   /**
-   * Persists merchantName → category (the same "reassignment learns a
-   * rule" mechanism the legacy Dashboard's Transactions tab already uses),
-   * then re-derives every transaction's category locally so the fix is
-   * reflected immediately without a full refetch.
+   * Bulk-assigns the given transaction ids to `categoryName` by writing one
+   * merchant rule per distinct cleaned merchant name among them, applied
+   * optimistically to local `merchantRules` state — `transactions` above
+   * re-derives `category` from it automatically, including for any other
+   * currently-loaded transaction sharing the same cleaned merchant name.
    */
-  const quickFix = useCallback((txn, categoryName) => {
-    const merchantName = cleanDesc(txn.desc);
-    if (!merchantName) return Promise.resolve();
-    const newRule = new Map([[merchantName, categoryName]]);
-    setMerchantRules((prev) => new Map([...prev, [merchantName, categoryName]]));
-    setTransactions((prev) =>
-      (prev ?? []).map((t) => {
-        if (t.id === txn.id) return { ...t, category: categoryName };
-        const match = matchMerchant(cleanDesc(t.desc), newRule);
-        return match ? { ...t, category: match.category } : t;
-      })
-    );
-    return apiFetch("/api/merchant-rules", {
-      method: "POST",
-      body: JSON.stringify({ merchantName, category: categoryName }),
+  const bulkAssign = useCallback((ids, categoryName) => {
+    const idSet = new Set(ids);
+    const merchantNames = new Set();
+    (rawTxns ?? []).filter((t) => idSet.has(t.id)).forEach((t) => {
+      const merchantName = cleanDesc(t.desc);
+      if (merchantName) merchantNames.add(merchantName);
     });
-  }, []);
+    setMerchantRules((prev) => {
+      const next = new Map(prev);
+      merchantNames.forEach((name) => next.set(name, categoryName));
+      return next;
+    });
+    return Promise.all(
+      Array.from(merchantNames).map((merchantName) =>
+        apiFetch("/api/merchant-rules", {
+          method: "POST",
+          body: JSON.stringify({ merchantName, category: categoryName }),
+        })
+      )
+    );
+  }, [rawTxns]);
+
+  /** Creates a new category, then bulk-assigns the given ids to it. */
+  const bulkCreateAndAssign = useCallback((categoryName, ids) => {
+    return createCategory({ categoryName }).then(() => bulkAssign(ids, categoryName));
+  }, [createCategory, bulkAssign]);
 
   return {
     transactions,
@@ -213,6 +176,7 @@ export function useCategoriesData() {
     createCategory,
     deleteCategory,
     setKeywords,
-    quickFix,
+    bulkAssign,
+    bulkCreateAndAssign,
   };
 }

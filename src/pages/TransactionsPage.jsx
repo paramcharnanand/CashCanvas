@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
+import _ from "lodash";
 import { Receipt, Upload as UploadIcon } from "lucide-react";
 import { EmptyState } from "../components/ui/EmptyState.jsx";
 import { Table } from "../components/ui/Table.jsx";
@@ -7,34 +8,18 @@ import { Button } from "../components/ui/Button.jsx";
 import { useDebounce } from "../hooks/useDebounce.js";
 import { useTransactionsData } from "../features/transactions/hooks/useTransactionsData.js";
 import { TransactionsToolbar } from "../features/transactions/components/TransactionsToolbar.jsx";
-import { ReassignDialog } from "../features/transactions/components/ReassignDialog.jsx";
+import { ReassignDialog } from "../features/categories/components/ReassignDialog.jsx";
 
 const fmt = (v) => "$" + Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /**
- * Mounted at "/transactions" (see router.jsx) — a real, always-reachable,
- * bookmarkable route replacing the old "only reachable via a stat-card
- * click" pattern, per docs/frontend/phase-8-migration-plan.md's Phase 6.
- * Search/filter/sort state lives entirely in the URL (`useSearchParams`),
- * satisfying that phase's "sort persists across a page refresh" goal.
- *
- * Row selection + bulk "Reassign Category" (Phase 10 final cleanup) ports
- * the legacy `Dashboard`'s hidden "Transactions" tab — deliberately kept
- * off this page through Phase 8.6 to avoid a second, independent
- * `txnOverrides` drifting from the legacy one before a shared merchant
- * rule resynced them. That risk is moot now that the legacy component is
- * deleted outright; see `useTransactionsData.js`'s docblock and
- * ROADMAP.md's Phase 10 completion note.
- *
- * Filtering/sorting is client-side, not a `GET /api/files` query-param
- * round trip, despite the migration plan's "backend note" suggesting one:
- * the whole active file's transactions are already fetched in full (today's
- * architecture caps at 10,000/file, already in memory) — adding server-side
- * search here would be real backend surface with no functional need yet,
- * the same "don't build it speculatively ahead of a real requirement"
- * reasoning ROADMAP.md's Phase 4 tech debt note already applied to
- * pagination. Revisit if the data model ever moves off "one embedded array
- * per file."
+ * Mounted at "/transactions" — reached via "View All Transactions" on
+ * Categories rather than the bottom nav as of the Categories/Settings IA
+ * rework. Default view stays the original flat, sortable table (all
+ * existing search/filter/sort/bulk-reassign behavior unchanged); `?view=
+ * category` is an additional opt-in view grouping the same filtered/sorted
+ * rows into per-category sections, ordered by descending group total with
+ * "Other" (uncategorized) always last.
  */
 export default function TransactionsPage() {
   const { transactions, loading, allCategories, reassign, createCategory } = useTransactionsData();
@@ -58,6 +43,7 @@ export default function TransactionsPage() {
   const dateFrom = searchParams.get("dateFrom") || "";
   const dateTo = searchParams.get("dateTo") || "";
   const sort = searchParams.get("sort") || "date-desc";
+  const view = searchParams.get("view") || "flat";
 
   const setParam = (key, value) => {
     setSearchParams((prev) => {
@@ -99,6 +85,22 @@ export default function TransactionsPage() {
     });
   }, [transactions, debouncedSearch, category, dateFrom, dateTo, sort]);
 
+  const groupedByCategory = useMemo(() => {
+    if (view !== "category") return null;
+    const groups = new Map();
+    filtered.forEach((t) => {
+      if (!groups.has(t.category)) groups.set(t.category, []);
+      groups.get(t.category).push(t);
+    });
+    return Array.from(groups.entries())
+      .map(([name, txns]) => ({ name, txns, total: Math.abs(_.sumBy(txns, "amount")) }))
+      .sort((a, b) => {
+        if (a.name === "Other") return 1;
+        if (b.name === "Other") return -1;
+        return b.total - a.total;
+      });
+  }, [filtered, view]);
+
   const hasActiveFilters = !!(searchInput || category || dateFrom || dateTo || (sort && sort !== "date-desc"));
 
   const clearFilters = () => {
@@ -114,15 +116,13 @@ export default function TransactionsPage() {
     });
   };
 
-  const allFilteredSelected = filtered.length > 0 && filtered.every((t) => selectedIds.has(t.id));
-  const toggleSelectAll = () => {
+  const toggleSelectGroup = (rows) => {
+    const groupSelected = rows.length > 0 && rows.every((t) => selectedIds.has(t.id));
     setSelectedIds((prev) => {
-      if (allFilteredSelected) {
-        const next = new Set(prev);
-        filtered.forEach((t) => next.delete(t.id));
-        return next;
-      }
-      return new Set([...prev, ...filtered.map((t) => t.id)]);
+      const next = new Set(prev);
+      if (groupSelected) rows.forEach((t) => next.delete(t.id));
+      else rows.forEach((t) => next.add(t.id));
+      return next;
     });
   };
 
@@ -158,6 +158,41 @@ export default function TransactionsPage() {
     );
   }
 
+  const buildColumns = (rowsInScope) => [
+    {
+      key: "select",
+      label: (
+        <input
+          type="checkbox"
+          checked={rowsInScope.length > 0 && rowsInScope.every((t) => selectedIds.has(t.id))}
+          onChange={() => toggleSelectGroup(rowsInScope)}
+          aria-label="Select all visible transactions"
+          style={{ cursor: "pointer", accentColor: "var(--primary)" }}
+        />
+      ),
+      render: (t) => (
+        <input
+          type="checkbox"
+          checked={selectedIds.has(t.id)}
+          onChange={() => toggleSelected(t.id)}
+          aria-label="Select transaction"
+          style={{ cursor: "pointer", accentColor: "var(--primary)" }}
+        />
+      ),
+    },
+    { key: "date", label: "Date", render: (t) => t.date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) },
+    { key: "desc", label: "Description", wrap: true },
+    { key: "category", label: "Category" },
+    {
+      key: "amount", label: "Amount", align: "right",
+      render: (t) => (
+        <span style={{ font: "600 13px var(--font-numeral)", color: t.amount >= 0 ? "var(--positive)" : "var(--text)" }}>
+          {t.amount >= 0 ? "+" : "-"}{fmt(t.amount)}
+        </span>
+      ),
+    },
+  ];
+
   return (
     <div style={{ maxWidth: 1080, margin: "0 auto", padding: "var(--space-8) var(--space-6)" }}>
       <h1 style={{ font: "var(--text-display-lg)", color: "var(--text)", margin: "0 0 var(--space-1)" }}>
@@ -183,6 +218,15 @@ export default function TransactionsPage() {
         hasActiveFilters={hasActiveFilters}
       />
 
+      <div role="group" aria-label="Transaction view" style={{ display: "flex", gap: "var(--space-2)", marginBottom: "var(--space-4)" }}>
+        <Button variant={view === "flat" ? "primary" : "secondary"} size="sm" onClick={() => setParam("view", null)}>
+          Flat
+        </Button>
+        <Button variant={view === "category" ? "primary" : "secondary"} size="sm" onClick={() => setParam("view", "category")}>
+          By Category
+        </Button>
+      </div>
+
       {selectedIds.size > 0 && (
         <div
           style={{
@@ -204,53 +248,25 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      <Table
-        emptyMessage="No transactions match your filters."
-        columns={[
-          {
-            key: "select",
-            label: (
-              <input
-                type="checkbox"
-                checked={allFilteredSelected}
-                onChange={toggleSelectAll}
-                aria-label="Select all visible transactions"
-                style={{ cursor: "pointer", accentColor: "var(--primary)" }}
-              />
-            ),
-            render: (t) => (
-              <input
-                type="checkbox"
-                checked={selectedIds.has(t.id)}
-                onChange={() => toggleSelected(t.id)}
-                // Deliberately not `Select transaction: ${t.desc}` — that
-                // embeds the description as a literal substring, which
-                // collides with every getByRole("cell", { name: desc })
-                // assertion elsewhere in this suite (Playwright's default
-                // substring matching means the checkbox cell itself would
-                // also match). A generic per-row label is standard practice
-                // for table row-selection checkboxes; a screen-reader user
-                // navigating the table already gets row context from the
-                // adjacent cells' own content.
-                aria-label="Select transaction"
-                style={{ cursor: "pointer", accentColor: "var(--primary)" }}
-              />
-            ),
-          },
-          { key: "date", label: "Date", render: (t) => t.date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) },
-          { key: "desc", label: "Description", wrap: true },
-          { key: "category", label: "Category" },
-          {
-            key: "amount", label: "Amount", align: "right",
-            render: (t) => (
-              <span style={{ font: "600 13px var(--font-numeral)", color: t.amount >= 0 ? "var(--positive)" : "var(--text)" }}>
-                {t.amount >= 0 ? "+" : "-"}{fmt(t.amount)}
+      {view === "category" ? (
+        groupedByCategory.map((group) => (
+          <div key={group.name} style={{ marginBottom: "var(--space-6)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-2)" }}>
+              <h2 style={{ font: "var(--text-heading-sm)", color: "var(--text)", margin: 0 }}>{group.name}</h2>
+              <span style={{ font: "13px var(--font-numeral)", color: "var(--text-subtle)" }}>
+                {group.txns.length} · {fmt(group.total)}
               </span>
-            ),
-          },
-        ]}
-        rows={filtered}
-      />
+            </div>
+            <Table columns={buildColumns(group.txns)} rows={group.txns} emptyMessage="No transactions" />
+          </div>
+        ))
+      ) : (
+        <Table
+          emptyMessage="No transactions match your filters."
+          columns={buildColumns(filtered)}
+          rows={filtered}
+        />
+      )}
 
       <ReassignDialog
         open={reassignOpen}

@@ -19,13 +19,15 @@ test.describe("merchant rules page", () => {
     await expect(page.getByText("No merchant rules yet")).toBeVisible();
   });
 
-  test("a rule created via reassignment on Categories' uncategorized quick-fix appears here", async ({ authenticatedPage: page }) => {
+  test("a rule created via reassignment on Categories' uncategorized bulk-assign appears here", async ({ authenticatedPage: page }) => {
     await seedTransactions(page, [
       { date: "2025-01-10", desc: "ZZQX UNMATCHED MERCHANT 42", amount: -19.99 },
       { date: "2025-01-11", desc: "WHOLE FOODS MARKET", amount: -40 },
     ]);
     await page.goto("/categories");
-    await page.getByRole("button", { name: "Groceries" }).click();
+    await page.getByRole("checkbox", { name: "Select transaction" }).check();
+    await page.getByRole("button", { name: "Move to Category" }).click();
+    await page.getByRole("button", { name: "Groceries", exact: true }).click();
 
     await page.goto("/merchant-rules");
     await expect(page.getByRole("cell", { name: "zzqx unmatched merchant 42", exact: true })).toBeVisible();
@@ -113,9 +115,10 @@ test.describe("merchant rules page", () => {
     await expect(page.getByRole("cell", { name: "Groceries" })).toBeVisible();
   });
 
-  test("Merchant Rules is a real, always-visible nav destination", async ({ authenticatedPage: page }) => {
-    await page.goto("/dashboard");
-    await page.getByRole("link", { name: "Merchant Rules" }).click();
+  test("Merchant Rules is reached via Settings, not the bottom nav", async ({ authenticatedPage: page }) => {
+    await page.goto("/settings");
+    await expect(page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Merchant Rules" })).toHaveCount(0);
+    await page.getByRole("link", { name: "Manage Merchant Rules" }).click();
     await expect(page).toHaveURL(/\/merchant-rules$/);
   });
 });

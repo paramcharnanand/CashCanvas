@@ -32,6 +32,19 @@ test.describe("responsive layout", () => {
     await expect(values.first()).toHaveText("$3,200.00");
   });
 
+  test("bottom nav no longer contains Transactions or Merchant Rules", async ({ authenticatedPage: page }) => {
+    // Runs at every viewport width — see the next test's comment. Both
+    // moved out of the primary nav as of the Categories/Settings IA rework
+    // (Transactions via "View All Transactions" on Categories, Merchant
+    // Rules via Settings) while their routes stay fully live.
+    await page.goto("/dashboard");
+    const nav = page.getByRole("navigation", { name: "Primary navigation" });
+    await expect(nav).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Transactions" })).toHaveCount(0);
+    await expect(nav.getByRole("link", { name: "Merchant Rules" })).toHaveCount(0);
+    await expect(nav.getByRole("link", { name: "Rules" })).toHaveCount(0);
+  });
+
   test("no bottom-nav label wraps to a second line", async ({ authenticatedPage: page }) => {
     // Runs at every viewport width — BottomNav is the primary nav
     // everywhere now (compact bar below --bp-lg, spacious bar at/above it,

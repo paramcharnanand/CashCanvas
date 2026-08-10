@@ -56,6 +56,10 @@ test.describe("settings page", () => {
     await page.getByRole("button", { name: "Light", exact: true }).focus();
     await page.keyboard.press("Tab"); // Dark
     await page.keyboard.press("Tab"); // System
+    await page.keyboard.press("Tab"); // Manage Merchant Rules (the <a>)
+    await expect(page.getByRole("link", { name: "Manage Merchant Rules" })).toBeFocused();
+    await page.keyboard.press("Tab"); // Manage Merchant Rules (the <button> nested inside the <a>)
+    await expect(page.getByRole("button", { name: "Manage Merchant Rules" })).toBeFocused();
     await page.keyboard.press("Tab"); // Sign Out
     await expect(page.getByRole("button", { name: "Sign Out" })).toBeFocused();
   });
@@ -70,6 +74,13 @@ test.describe("settings page", () => {
     // Still authenticated — reloading doesn't bounce to /login.
     await page.reload();
     await expect(page).toHaveURL(/\/settings$/);
+  });
+
+  test("Merchant Rules is accessible from Settings", async ({ authenticatedPage: page }) => {
+    await page.goto("/settings");
+    await expect(page.getByRole("heading", { name: "Merchant Rules" })).toBeVisible();
+    await page.getByRole("link", { name: "Manage Merchant Rules" }).click();
+    await expect(page).toHaveURL(/\/merchant-rules$/);
   });
 
   test("Settings is a real, always-visible nav destination", async ({ authenticatedPage: page }) => {

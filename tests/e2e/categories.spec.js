@@ -52,11 +52,9 @@ test.describe("categories page", () => {
     // (Real bug found: the visibility rule that hides never-used *default*
     // categories from cluttering the grid was also hiding user-created
     // ones, which by definition start empty — a dead end, since the card
-    // is the only UI that can ever add a keyword to it. Fixing it also
-    // surfaces the category as a quick-fix chip in UncategorizedPanel,
-    // which reads the same list — hence two matches below, not one.)
-    await expect(page.getByText("Pet Care", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("Pet Care", { exact: true })).toHaveCount(2);
+    // is the only UI that can ever add a keyword to it.)
+    await expect(page.getByText("Pet Care", { exact: true })).toBeVisible();
+    await expect(page.getByText("Pet Care", { exact: true })).toHaveCount(1);
 
     // The card is real, not just a label — a keyword can be added to it
     // immediately, closing the dead end the bug caused. Scoped to the
@@ -114,10 +112,10 @@ test.describe("categories page", () => {
     await expect(page.getByText("costco", { exact: true })).not.toBeVisible();
   });
 
-  test("quick-fixing an uncategorized transaction persists a merchant rule, visible on the Merchant Rules page", async ({ authenticatedPage: page }) => {
-    // One transaction matches a built-in category (so at least one quick-fix
-    // chip exists to click) and one matches no DEFAULT_CATEGORIES keyword
-    // at all, guaranteeing it lands in "Other" (uncategorized).
+  test("bulk-assigning an uncategorized transaction persists a merchant rule, visible on the Merchant Rules page", async ({ authenticatedPage: page }) => {
+    // One transaction matches a built-in category and one matches no
+    // DEFAULT_CATEGORIES keyword at all, guaranteeing it lands in "Other"
+    // (uncategorized) — the only row with a "Select transaction" checkbox.
     await seedTransactions(page, [
       { date: "2025-01-10", desc: "ZZQX UNMATCHED MERCHANT 42", amount: -19.99 },
       { date: "2025-01-11", desc: "WHOLE FOODS MARKET", amount: -40 },
@@ -127,7 +125,9 @@ test.describe("categories page", () => {
     await expect(page.getByText("Uncategorized Transactions")).toBeVisible();
     await expect(page.getByText("ZZQX UNMATCHED MERCHANT 42")).toBeVisible();
 
-    await page.getByRole("button", { name: "Groceries" }).click();
+    await page.getByRole("checkbox", { name: "Select transaction" }).check();
+    await page.getByRole("button", { name: "Move to Category" }).click();
+    await page.getByRole("button", { name: "Groceries", exact: true }).click();
     await expect(page.getByText("ZZQX UNMATCHED MERCHANT 42")).not.toBeVisible();
 
     await page.goto("/merchant-rules");
@@ -136,14 +136,16 @@ test.describe("categories page", () => {
   });
 
   test("a learned merchant rule generalizes to real-world variants of the same merchant, not just the exact string", async ({ authenticatedPage: page }) => {
-    // Teach the system "ZZQX BREW CO" → Groceries via the same quick-fix
+    // Teach the system "ZZQX BREW CO" → Groceries via the same bulk-assign
     // flow as the test above.
     await seedTransactions(page, [
       { date: "2025-01-10", desc: "ZZQX BREW CO #4521", amount: -19.99 },
       { date: "2025-01-11", desc: "WHOLE FOODS MARKET", amount: -40 },
     ]);
     await page.goto("/categories");
-    await page.getByRole("button", { name: "Groceries" }).click();
+    await page.getByRole("checkbox", { name: "Select transaction" }).check();
+    await page.getByRole("button", { name: "Move to Category" }).click();
+    await page.getByRole("button", { name: "Groceries", exact: true }).click();
     await expect(page.getByText("ZZQX BREW CO #4521")).not.toBeVisible();
 
     // A later statement with real-world formatting variants of the same
@@ -165,6 +167,48 @@ test.describe("categories page", () => {
       const row = rows.filter({ has: page.getByRole("cell", { name: desc, exact: true }) });
       await expect(row.getByRole("cell", { name: "Groceries", exact: true })).toBeVisible();
     }
+  });
+
+  test("selecting multiple uncategorized transactions and bulk-assigning them updates the panel and the Needs attention count", async ({ authenticatedPage: page }) => {
+    await seedTransactions(page, [
+      { date: "2025-01-10", desc: "ZZQX UNMATCHED MERCHANT 42", amount: -19.99 },
+      { date: "2025-01-11", desc: "QWERTY LOCAL SHOP 7781", amount: -12.5 },
+      { date: "2025-01-12", desc: "WHOLE FOODS MARKET", amount: -40 },
+    ]);
+    await page.goto("/categories");
+
+    const checkboxes = page.getByRole("checkbox", { name: "Select transaction" });
+    await expect(checkboxes).toHaveCount(2);
+    await checkboxes.nth(0).check();
+    await checkboxes.nth(1).check();
+    await expect(page.getByText("2 selected")).toBeVisible();
+
+    await page.getByRole("button", { name: "Move to Category" }).click();
+    await page.getByRole("button", { name: "Groceries", exact: true }).click();
+
+    await expect(page.getByText("ZZQX UNMATCHED MERCHANT 42")).not.toBeVisible();
+    await expect(page.getByText("QWERTY LOCAL SHOP 7781")).not.toBeVisible();
+    await expect(page.getByText("Everything's categorized")).toBeVisible();
+  });
+
+  test("creating a new category from the bulk-assign dialog assigns the selected transactions and persists after reload", async ({ authenticatedPage: page }) => {
+    await seedTransactions(page, [
+      { date: "2025-01-10", desc: "ZZQX UNMATCHED MERCHANT 42", amount: -19.99 },
+      { date: "2025-01-11", desc: "WHOLE FOODS MARKET", amount: -40 },
+    ]);
+    await page.goto("/categories");
+
+    await page.getByRole("checkbox", { name: "Select transaction" }).check();
+    await page.getByRole("button", { name: "Move to Category" }).click();
+    await page.getByPlaceholder("e.g. Pet Care, Education...").fill("Pet Care");
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+
+    await expect(page.getByText("ZZQX UNMATCHED MERCHANT 42")).not.toBeVisible();
+    await expect(page.getByText("Pet Care", { exact: true })).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByText("Pet Care", { exact: true })).toBeVisible();
+    await expect(page.getByText("ZZQX UNMATCHED MERCHANT 42")).not.toBeVisible();
   });
 
   test("Categories is a real, always-visible nav destination", async ({ authenticatedPage: page }) => {

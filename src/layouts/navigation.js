@@ -1,31 +1,30 @@
 import { Home, Upload, List, BarChart3, Tag, Store, Target, Settings } from "lucide-react";
 
 /**
- * Single source of truth for primary navigation — read by Sidebar,
- * MobileNav, and the Command Palette, so they can never drift out of sync
- * with each other or with which pages actually exist yet.
+ * Single source of truth for primary (bottom) navigation — read by
+ * `BottomNav` only (the Command Palette, `features/command-palette/
+ * commands.js`, maintains its own independent registry and does not import
+ * this file, so disabling an item here does not affect the palette).
  *
- * `mobileLabel` (optional): a shorter label for MobileNav's bottom bar
- * specifically, where 8 equal-width items leave no room for a label as
- * long as "Merchant Rules" without wrapping to a second line (found via a
- * real screenshot audit). Falls back to `label` — the Sidebar/Command
- * Palette always use the full `label`, never this.
+ * `mobileLabel` (optional): a shorter label for the compact bottom-nav bar
+ * specifically, where equal-width items leave no room for a label as long
+ * as "Merchant Rules" without wrapping to a second line. Falls back to
+ * `label`.
  *
- * `enabled: false` items are real, planned destinations (already specified
- * in docs/frontend/phase-8-migration-plan.md) that don't have a route yet —
- * shown as disabled/"coming soon" in the Command Palette rather than
- * omitted outright (so the palette reflects the product's real shape), but
- * deliberately left OUT of the Sidebar/MobileNav entirely until their phase
- * ships a real page — a nav link with nowhere real to go is worse than an
- * absent one.
+ * `enabled: false` removes an item from the bottom nav (`SIDEBAR_ITEMS`)
+ * while its route stays fully live — used both for planned-but-unbuilt
+ * destinations and, as of the Categories/Settings IA rework, for
+ * Transactions and Merchant Rules: both are fully functional, reachable via
+ * "View All Transactions" on Categories and the Merchant Rules entry on
+ * Settings respectively, just intentionally out of the primary nav.
  */
 export const NAV_ITEMS = [
   { id: "overview", to: "/dashboard", label: "Overview", icon: Home, enabled: true, phase: null },
   { id: "upload", to: "/upload", label: "Upload", icon: Upload, enabled: true, phase: null },
-  { id: "transactions", to: "/transactions", label: "Transactions", icon: List, enabled: true, phase: null },
+  { id: "transactions", to: "/transactions", label: "Transactions", icon: List, enabled: false, phase: null },
   { id: "analytics", to: "/analytics", label: "Analytics", icon: BarChart3, enabled: true, phase: null },
   { id: "categories", to: "/categories", label: "Categories", icon: Tag, enabled: true, phase: null },
-  { id: "merchant-rules", to: "/merchant-rules", label: "Merchant Rules", mobileLabel: "Rules", icon: Store, enabled: true, phase: null },
+  { id: "merchant-rules", to: "/merchant-rules", label: "Merchant Rules", mobileLabel: "Rules", icon: Store, enabled: false, phase: null },
   { id: "savings", to: "/savings", label: "Savings", icon: Target, enabled: true, phase: null },
   { id: "settings", to: "/settings", label: "Settings", icon: Settings, enabled: true, phase: null },
 ];

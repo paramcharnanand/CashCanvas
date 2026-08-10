@@ -5,14 +5,12 @@ import { CheckCircle2 } from "lucide-react";
 const fmt = (v) => "$" + Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /**
- * Restyled from the legacy `Dashboard`'s "Uncategorized Transactions"
- * panel. Clicking a category chip calls `useCategoriesData`'s `quickFix`,
- * which persists a real merchant rule — unlike the legacy version, which
- * only ever set an ephemeral, non-persisted local override (see
- * `useCategoriesData.js`'s docblock for the full reasoning behind this
- * deliberate behavior change).
+ * Multi-select list of "Other"-category transactions. Selection is owned by
+ * `CategoriesPage`, which renders the bulk-assign toolbar and
+ * `ReassignDialog` above this panel — this component is purely
+ * presentational.
  */
-export function UncategorizedPanel({ transactions, categoryNames, onQuickFix }) {
+export function UncategorizedPanel({ transactions, selectedIds, onToggleSelect, onToggleSelectAll }) {
   if (transactions.length === 0) {
     return (
       <Card>
@@ -20,6 +18,8 @@ export function UncategorizedPanel({ transactions, categoryNames, onQuickFix }) 
       </Card>
     );
   }
+
+  const allSelected = transactions.length > 0 && transactions.every((t) => selectedIds.has(t.id));
 
   return (
     <Card>
@@ -32,9 +32,21 @@ export function UncategorizedPanel({ transactions, categoryNames, onQuickFix }) 
           Action Required
         </span>
       </div>
-      <p style={{ font: "var(--text-body-sm)", color: "var(--text-subtle)", margin: "0 0 var(--space-5)" }}>
-        {transactions.length} transaction{transactions.length !== 1 ? "s" : ""} couldn't be auto-categorized. Click a category to assign it — this teaches the app to recognize the merchant next time.
+      <p style={{ font: "var(--text-body-sm)", color: "var(--text-subtle)", margin: "0 0 var(--space-4)" }}>
+        {transactions.length} transaction{transactions.length !== 1 ? "s" : ""} couldn't be auto-categorized. Select one or more, then move them into a category.
       </p>
+
+      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", padding: "var(--space-2) 0", borderBottom: "1px solid var(--border)", marginBottom: "var(--space-1)" }}>
+        <input
+          type="checkbox"
+          checked={allSelected}
+          onChange={onToggleSelectAll}
+          aria-label="Select all uncategorized transactions"
+          style={{ cursor: "pointer", accentColor: "var(--primary)" }}
+        />
+        <span style={{ font: "var(--text-label)", color: "var(--text-subtle)" }}>Select all</span>
+      </div>
+
       <div>
         {transactions.map((t) => (
           <div
@@ -44,6 +56,13 @@ export function UncategorizedPanel({ transactions, categoryNames, onQuickFix }) 
               padding: "var(--space-3) 0", borderBottom: "1px solid var(--border)",
             }}
           >
+            <input
+              type="checkbox"
+              checked={selectedIds.has(t.id)}
+              onChange={() => onToggleSelect(t.id)}
+              aria-label="Select transaction"
+              style={{ cursor: "pointer", accentColor: "var(--primary)" }}
+            />
             <div style={{ flex: 1, minWidth: 140 }}>
               <div style={{ font: "var(--text-body-sm)", fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {t.desc}
@@ -54,21 +73,6 @@ export function UncategorizedPanel({ transactions, categoryNames, onQuickFix }) 
             </div>
             <div style={{ font: "600 13px var(--font-numeral)", color: "var(--negative)", minWidth: 70, textAlign: "right" }}>
               {fmt(t.amount)}
-            </div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {categoryNames.slice(0, 6).map((name) => (
-                <button
-                  key={name}
-                  type="button"
-                  onClick={() => onQuickFix(t, name)}
-                  style={{
-                    padding: "4px 10px", background: "var(--surface-alt)", border: "none",
-                    borderRadius: "var(--radius-sm)", color: "var(--text-subtle)", cursor: "pointer", fontSize: 11,
-                  }}
-                >
-                  {name}
-                </button>
-              ))}
             </div>
           </div>
         ))}

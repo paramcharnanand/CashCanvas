@@ -1,30 +1,22 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../../../api.js";
-import { categorize, cleanDesc, DEFAULT_CATEGORIES } from "../../../utils/categorization.js";
-import { matchMerchant } from "../../../utils/merchantNormalization.js";
+import { resolveCategory, DEFAULT_CATEGORIES } from "../../../utils/categorization.js";
+import { cleanDesc } from "../../../utils/merchantNormalization.js";
+import { useCategoryOverrides } from "../../../contexts/CategoryOverridesContext.jsx";
 
 /**
- * Fetches the most recent uploaded statement (same "latest file" auto-
- * restore semantics `LegacyWorkspace` used to use, ported here since this
- * is a separate route with no shared state) plus merchant rules/custom
- * categories, and returns the same categorized transaction list the
- * dashboard shows.
- *
- * `reassign`/`createCategory` (Phase 10 final cleanup) port the legacy
- * `Dashboard`'s hidden "Transactions" tab bulk reassign-category flow —
- * deliberately kept there through Phase 8.6 (this page was read-only by
- * design, avoiding a state-consistency risk: a second, independent
- * `txnOverrides` here could have drifted from the legacy one until a
- * shared merchant rule resynced them). That risk is moot now that the
- * legacy component is deleted outright — this is the only remaining place
- * reassignment can live, so it lives here, using the same "persist a
- * merchant rule, apply locally without a refetch" pattern `useCategoriesData
- * .js`'s `quickFix` already established in Phase 8.8.
+ * Fetches the most recent uploaded statement plus merchant rules/custom
+ * categories, storing raw transactions once and deriving `category` fresh
+ * every render via `resolveCategory` (same reactive shape as
+ * `useCategoriesData`/`useDashboardData`) so cached AI guesses from
+ * `CategoryOverridesContext` are reflected without a refetch.
  */
 export function useTransactionsData() {
-  const [transactions, setTransactions] = useState(null);
+  const [rawTxns, setRawTxns] = useState(null);
   const [customCats, setCustomCats] = useState({});
+  const [merchantRules, setMerchantRules] = useState(new Map());
   const [loading, setLoading] = useState(true);
+  const { overrides, registerFile, runAiPass } = useCategoryOverrides();
 
   useEffect(() => {
     let cancelled = false;
@@ -35,9 +27,10 @@ export function useTransactionsData() {
       apiFetch("/api/categories").then((r) => r.json()).catch(() => []),
     ]).then(async ([files, rulesData, catsData]) => {
       if (cancelled) return;
-      const merchantRules = new Map(
+      const rules = new Map(
         Array.isArray(rulesData) ? rulesData.map((r) => [r.merchantName, r.category]) : []
       );
+      setMerchantRules(rules);
       const customCatsMap = {};
       if (Array.isArray(catsData)) {
         catsData.forEach((c) => { customCatsMap[c.categoryName] = c.keywords || []; });
@@ -45,66 +38,66 @@ export function useTransactionsData() {
       setCustomCats(customCatsMap);
 
       if (!Array.isArray(files) || files.length === 0) {
-        setTransactions([]);
+        setRawTxns([]);
         return;
       }
-      const latest = files[0]; // already sorted by uploadedAt desc
+      const latest = files[0];
+      registerFile(latest._id);
       const res = await apiFetch(`/api/files/${latest._id}`);
       const data = await res.json();
       if (cancelled || !data.transactions) {
-        setTransactions([]);
+        setRawTxns([]);
         return;
       }
 
       const txns = data.transactions.map((t, i) => {
         const date = typeof t.date === "string" ? new Date(t.date) : t.date;
-        return { ...t, id: i, date, category: categorize(t.desc, customCatsMap, merchantRules) };
+        return { ...t, id: i, date };
       });
-      setTransactions(txns);
+      setRawTxns(txns);
+      runAiPass(txns, customCatsMap, rules);
     }).catch(() => {
-      if (!cancelled) setTransactions([]);
+      if (!cancelled) setRawTxns([]);
     }).finally(() => {
       if (!cancelled) setLoading(false);
     });
 
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const transactions = (rawTxns ?? []).map((t) => ({
+    ...t,
+    category: resolveCategory(t.desc, { customCats, merchantRules, override: overrides[t.id] }),
+  }));
 
   const allCategories = Array.from(
     new Set([...Object.keys(DEFAULT_CATEGORIES), ...Object.keys(customCats)])
   ).filter((c) => c !== "Income" && c !== "Other");
 
   /**
-   * Reassigns every selected transaction to `categoryName`, learning a
-   * merchant→category rule per distinct cleaned description (the same
-   * mechanism the legacy Dashboard's reassign modal and Categories'
-   * quick-fix both already use) — applied locally immediately, not waiting
-   * on a refetch, since the write is fire-and-forget from the UI's
-   * perspective (matching quickFix's own pattern). Also patches any other
-   * currently-loaded transaction sharing the same cleaned merchant name,
-   * not just the explicitly selected ids, so the rule's effect is visible
-   * immediately on unselected rows too (matching quickFix's own behavior).
+   * Reassigns the given transaction ids to `categoryName` by writing one
+   * merchant rule per distinct cleaned description, applied optimistically
+   * to local `merchantRules` state — `transactions` above re-derives
+   * `category` automatically, including for any other currently-loaded
+   * transaction sharing the same cleaned merchant name.
    */
   const reassign = useCallback((ids, categoryName) => {
     const idSet = new Set(ids);
     const merchantNames = new Set();
-    (transactions ?? [])
+    (rawTxns ?? [])
       .filter((t) => idSet.has(t.id))
       .forEach((t) => {
         const merchantName = cleanDesc(t.desc);
         if (merchantName) merchantNames.add(merchantName);
       });
 
-    const newRules = new Map(Array.from(merchantNames, (name) => [name, categoryName]));
-
-    setTransactions((prev) => {
-      if (!prev) return prev;
-      return prev.map((t) => {
-        if (idSet.has(t.id)) return { ...t, category: categoryName };
-        const match = matchMerchant(cleanDesc(t.desc), newRules);
-        return match ? { ...t, category: match.category } : t;
-      });
+    setMerchantRules((prev) => {
+      const next = new Map(prev);
+      merchantNames.forEach((name) => next.set(name, categoryName));
+      return next;
     });
+
     return Promise.all(
       Array.from(merchantNames).map((merchantName) =>
         apiFetch("/api/merchant-rules", {
@@ -113,7 +106,7 @@ export function useTransactionsData() {
         })
       )
     );
-  }, [transactions]);
+  }, [rawTxns]);
 
   /** Creates a new category server-side, then makes it immediately available to `reassign`. */
   const createCategory = useCallback((categoryName) => {

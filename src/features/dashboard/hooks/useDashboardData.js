@@ -1,39 +1,29 @@
 import { useCallback, useEffect, useState } from "react";
 import _ from "lodash";
 import { apiFetch } from "../../../api.js";
-import { useAuth } from "../../../contexts/AuthContext.jsx";
 import { resolveCategory } from "../../../utils/categorization.js";
 import { generateSampleData } from "../../../utils/sampleData.js";
+import { useCategoryOverrides } from "../../../contexts/CategoryOverridesContext.jsx";
 
 /**
  * Fetches the most recent uploaded statement plus merchant rules/custom
- * categories (same "separate route" pattern as every other Phase 8.6+
- * hook — the legacy `LegacyWorkspace`/`Dashboard` this replaces is deleted
- * outright in Phase 10) and derives the same stats the legacy Dashboard's
- * Overview tab always computed: totalIncome/totalExpenses/netCashflow/
- * catBreakdown/monthlyData/recurring/recentTransactions.
+ * categories and derives the same stats the Overview tab always computed:
+ * totalIncome/totalExpenses/netCashflow/catBreakdown/monthlyData/recurring/
+ * recentTransactions.
  *
- * Also ports two behaviors that only existed on the legacy component,
- * rather than dropping them (see ROADMAP.md's Phase 10 completion note —
- * both were explicit product decisions, not silently carried over):
- * - AI auto-categorization of remaining "Other" transactions on load
- *   (`POST /api/categorize` in batches). Ephemeral, same as before — the
- *   only thing that persists server-side is a real user reassignment
- *   (which writes a merchant rule), not this pass.
- * - "Try with sample data" (`loadSampleData`): `generateSampleData()`,
- *   rendered through the exact same stat pipeline as real data, never
- *   sent to the server.
+ * AI auto-categorization of remaining "Other" transactions is now owned by
+ * `CategoryOverridesContext` (shared with Categories/Transactions) rather
+ * than local state — this hook just registers the loaded file and triggers
+ * the pass once.
  */
 export function useDashboardData() {
-  const { auth } = useAuth();
   const [rawTxns, setRawTxns] = useState(null); // null = loading, [] = no data
   const [fileName, setFileName] = useState("");
   const [loading, setLoading] = useState(true);
   const [isSample, setIsSample] = useState(false);
   const [customCats, setCustomCats] = useState({});
   const [merchantRules, setMerchantRules] = useState(new Map());
-  const [txnOverrides, setTxnOverrides] = useState({});
-  const [aiDone, setAiDone] = useState(false);
+  const { overrides, registerFile, runAiPass } = useCategoryOverrides();
 
   useEffect(() => {
     let cancelled = false;
@@ -44,9 +34,10 @@ export function useDashboardData() {
       apiFetch("/api/categories").then((r) => r.json()).catch(() => []),
     ]).then(async ([files, rulesData, catsData]) => {
       if (cancelled) return;
-      setMerchantRules(new Map(
+      const rules = new Map(
         Array.isArray(rulesData) ? rulesData.map((r) => [r.merchantName, r.category]) : []
-      ));
+      );
+      setMerchantRules(rules);
       const customCatsMap = {};
       if (Array.isArray(catsData)) {
         catsData.forEach((c) => { customCatsMap[c.categoryName] = c.keywords || []; });
@@ -58,6 +49,7 @@ export function useDashboardData() {
         return;
       }
       const latest = files[0];
+      registerFile(latest._id);
       const res = await apiFetch(`/api/files/${latest._id}`);
       const data = await res.json();
       if (cancelled || !data.transactions) {
@@ -71,6 +63,7 @@ export function useDashboardData() {
       }));
       setRawTxns(txns);
       setFileName(data.fileName || latest.fileName || "");
+      runAiPass(txns, customCatsMap, rules);
     }).catch(() => {
       if (!cancelled) setRawTxns([]);
     }).finally(() => {
@@ -78,54 +71,20 @@ export function useDashboardData() {
     });
 
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadSampleData = useCallback(() => {
     const sample = generateSampleData().map((t, i) => ({ ...t, id: i }));
+    registerFile("sample");
     setRawTxns(sample);
     setFileName("sample_data.csv");
     setIsSample(true);
-    setAiDone(true); // sample data is fake — nothing real to send the AI categorizer
-  }, []);
-
-  // AI categorization of remaining "Other" transactions — fires once per
-  // real (non-sample) dataset, mirroring the legacy Dashboard's own effect.
-  useEffect(() => {
-    if (!auth?.user || isSample || aiDone || !rawTxns || rawTxns.length === 0) return;
-    const otherTxns = rawTxns.filter(
-      (t) => t.amount < 0 && !txnOverrides[t.id] && resolveCategory(t.desc, { customCats, merchantRules, override: txnOverrides[t.id] }) === "Other"
-    );
-    if (otherTxns.length === 0) { setAiDone(true); return; }
-    setAiDone(true);
-
-    const BATCH_SIZE = 100;
-    const sendBatch = (batch) => apiFetch("/api/categorize", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ transactions: batch.map((t) => ({ desc: t.desc, amount: t.amount })) }),
-    }).then((r) => r.json()).then((data) => {
-      if (Array.isArray(data.results)) {
-        setTxnOverrides((prev) => {
-          const next = { ...prev };
-          data.results.forEach(({ idx, category }) => {
-            if (category && category !== "Other") {
-              const id = batch[idx]?.id;
-              if (id !== undefined && !next[id]) next[id] = category;
-            }
-          });
-          return next;
-        });
-      }
-    }).catch(() => {});
-
-    for (let i = 0; i < otherTxns.length; i += BATCH_SIZE) {
-      sendBatch(otherTxns.slice(i, i + BATCH_SIZE));
-    }
-  }, [auth?.user, isSample, aiDone, rawTxns, customCats, merchantRules]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [registerFile]);
 
   const transactions = (rawTxns ?? []).map((t) => ({
     ...t,
-    category: resolveCategory(t.desc, { customCats, merchantRules, override: txnOverrides[t.id] }),
+    category: resolveCategory(t.desc, { customCats, merchantRules, override: overrides[t.id] }),
   }));
 
   const expenses = transactions.filter((t) => t.amount < 0);

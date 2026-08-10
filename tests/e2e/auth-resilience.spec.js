@@ -95,10 +95,14 @@ test.describe("expired access token", () => {
     // fetchCurrentUser() check first, which would refresh the token all by
     // itself before Merchant Rules' own effect ever runs — serializing
     // away the exact race this test needs to exercise. A client-side nav
-    // (clicking the real nav link, same as a user would) leaves
-    // AuthContext untouched and lets Merchant Rules' mount effect be the
-    // *first* thing to see the expired token, firing its two parallel
-    // apiFetch calls (/api/merchant-rules, /api/categories) against it.
+    // (clicking real links, same as a user would) leaves AuthContext
+    // untouched and lets Merchant Rules' mount effect be the *first* thing
+    // to see the expired token, firing its two parallel apiFetch calls
+    // (/api/merchant-rules, /api/categories) against it. Merchant Rules is
+    // no longer in the bottom nav (Categories/Settings IA rework) — reached
+    // via Settings' "Manage Merchant Rules" link instead, still two client-
+    // side Link clicks, never a page.goto()/reload. Settings itself fetches
+    // nothing on mount, so this intermediate hop doesn't touch the race.
     await page.context().addCookies([
       { name: "cc_at", value: forgeExpiredAccessToken(), domain: "localhost", path: "/api", httpOnly: true },
     ]);
@@ -108,7 +112,8 @@ test.describe("expired access token", () => {
       if (r.url().includes("/api/auth/refresh")) refreshRequests.push(r);
     });
 
-    await page.getByRole("link", { name: "Merchant Rules" }).click();
+    await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Settings" }).click();
+    await page.getByRole("link", { name: "Manage Merchant Rules" }).click();
 
     // Real proof, not just a lucky outcome: exactly one refresh request
     // should ever have been sent, no matter how many parallel API calls
