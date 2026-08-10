@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { LockKeyhole } from "lucide-react";
+import { LockKeyhole, ShieldAlert } from "lucide-react";
 import { Field } from "../../../components/ui/Field.jsx";
 import { Button } from "../../../components/ui/Button.jsx";
 import { useCredentialsForm } from "../hooks/useCredentialsForm.js";
+import { useCountdown } from "../hooks/useCountdown.js";
 
 /**
  * Mounted inside LoginPage.jsx (see router.jsx's /login route). Restyled
@@ -12,11 +13,85 @@ import { useCredentialsForm } from "../hooks/useCredentialsForm.js";
  * points (inline link and the "Need help signing in?" panel), preserved
  * exactly rather than simplified, per the migration plan's "no structural
  * changes" constraint for this phase.
+ *
+ * Lockout UX (api/_lib/loginLockout.js drives the actual policy — this only
+ * renders whatever state the server reports): a 15-minute cooldown after
+ * the 4th consecutive wrong password disables Sign In with a live
+ * countdown; a second 4-strike cycle (or a frozen account) replaces the
+ * form with a "reset your password" panel, since the server won't accept
+ * any password at that tier regardless of what's typed.
  */
 export function LoginForm({ onAuth, onOtpRequired }) {
   const [helpOpen, setHelpOpen] = useState(false);
-  const { email, setEmail, password, setPassword, fieldErrors, loading, handleSubmit } =
+  const { email, setEmail, password, setPassword, fieldErrors, setFieldErrors, loading, lockout, setLockout, handleSubmit } =
     useCredentialsForm({ mode: "login", onAuth, onOtpRequired });
+
+  const cooldown = useCountdown(lockout?.type === "cooldown" ? lockout.until : null);
+  const cooldownActive = lockout?.type === "cooldown" && !cooldown.expired;
+
+  // The server is the source of truth for whether the cooldown is actually
+  // over — this just stops disabling the button once the client's own clock
+  // agrees, so the next real submit can go through immediately.
+  useEffect(() => {
+    if (lockout?.type === "cooldown" && cooldown.expired) {
+      setLockout(null);
+      setFieldErrors((p) => ({ ...p, form: "" }));
+    }
+  }, [lockout, cooldown.expired, setLockout, setFieldErrors]);
+
+  const backToSignIn = () => {
+    setLockout(null);
+    setFieldErrors((p) => ({ ...p, form: "" }));
+  };
+
+  if (lockout?.type === "resetRequired" || lockout?.type === "frozen") {
+    return (
+      <div style={{ textAlign: "center" }}>
+        <div
+          style={{
+            width: 56, height: 56, borderRadius: "50%", background: "var(--negative-soft)",
+            display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto var(--space-5)",
+          }}
+        >
+          <ShieldAlert size={28} strokeWidth={1.75} color="var(--negative)" aria-hidden="true" />
+        </div>
+        <h2 style={{ font: "var(--text-heading-lg)", color: "var(--text)", margin: "0 0 var(--space-2)" }}>
+          {lockout.type === "frozen" ? "Account temporarily frozen" : "Password reset required"}
+        </h2>
+        <p style={{ font: "var(--text-body-sm)", color: "var(--text-subtle)", margin: "0 0 var(--space-8)", lineHeight: 1.6 }}>
+          {lockout.type === "frozen"
+            ? "For your security, this account is temporarily frozen. Please reset your password to continue."
+            : "For your security, please reset your password before trying again."}
+        </p>
+        <Link
+          to="/forgot-password"
+          style={{
+            width: "100%", height: 40, boxSizing: "border-box",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+            borderRadius: "var(--radius-md)",
+            background: "linear-gradient(135deg, var(--primary) 0%, var(--primary-container) 100%)",
+            color: "var(--on-primary)", font: "var(--text-body-sm)", fontWeight: 600, textDecoration: "none",
+          }}
+        >
+          <LockKeyhole size={16} strokeWidth={1.75} aria-hidden="true" />
+          Reset password
+        </Link>
+        <div style={{ marginTop: "var(--space-4)" }}>
+          <button
+            type="button"
+            onClick={backToSignIn}
+            style={{
+              background: "none", border: "none", color: "var(--text-subtle)",
+              font: "var(--text-body-sm)", cursor: "pointer",
+              textDecoration: "underline", textUnderlineOffset: 3, padding: 0,
+            }}
+          >
+            Back to Sign In
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -72,11 +147,19 @@ export function LoginForm({ onAuth, onOtpRequired }) {
             }}
           >
             {fieldErrors.form}
+            {cooldownActive && (
+              <div style={{ marginTop: 4, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+                Time remaining: {cooldown.label}
+              </div>
+            )}
           </div>
         )}
 
-        <Button type="submit" variant="primary" loading={loading} style={{ width: "100%", marginTop: 4 }}>
-          {loading ? "Please wait…" : "Sign In"}
+        <Button
+          type="submit" variant="primary" loading={loading} disabled={cooldownActive}
+          style={{ width: "100%", marginTop: 4 }}
+        >
+          {cooldownActive ? `Try again in ${cooldown.label}` : loading ? "Please wait…" : "Sign In"}
         </Button>
 
         <div style={{ marginTop: "var(--space-5)", textAlign: "center" }}>

@@ -17,6 +17,7 @@ import { sendOtpEmail, isEmailVerificationEnabled,
          sendPasswordResetEmail }                              from "./_lib/mailer.js";
 import { verifyRecaptcha }                                     from "./_lib/recaptcha.js";
 import { checkRateLimit, getClientIp }                        from "./_lib/ratelimit.js";
+import { checkLoginGate, recordLoginResult, CLEAR_LOCKOUT_FIELDS } from "./_lib/loginLockout.js";
 import { getCookie, setAuthCookies, clearAuthCookies,
          REFRESH_COOKIE }                                      from "./_lib/cookies.js";
 import { generateRefreshToken, createSession, findActiveSessionByToken,
@@ -25,9 +26,6 @@ import { generateCsrfToken, requireCsrf }                      from "./_lib/csrf
 import { withErrorHandling }                                   from "./_lib/http.js";
 import { logger }                                              from "./_lib/logger.js";
 import { ObjectId }                                            from "mongodb";
-
-const MAX_FAILED = 5;
-const LOCKOUT_MS = 15 * 60_000;
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 function qp(req) {
@@ -96,8 +94,7 @@ async function signup(req, res) {
           email:         email.toLowerCase(),
           passwordHash,
           emailVerified: true,
-          failedLogins:  0,
-          lockedUntil:   null,
+          ...CLEAR_LOCKOUT_FIELDS,
           createdAt:     new Date(),
         });
       } catch (err) {
@@ -172,32 +169,21 @@ async function login(req, res) {
     if (!user)
       return res.status(401).json({ error: "No account found with this email. Please sign up first." });
 
-    if (user.lockedUntil && new Date() < new Date(user.lockedUntil)) {
-      const minutesLeft = Math.ceil((new Date(user.lockedUntil) - new Date()) / 60_000);
-      return res.status(429).json({
-        error: `Account locked after too many failed attempts. Try again in ${minutesLeft} minute${minutesLeft !== 1 ? "s" : ""}.`,
-      });
+    const now = new Date();
+
+    const gate = checkLoginGate(user, now);
+    if (gate) {
+      if (Object.keys(gate.fields).length)
+        await db.collection("users").updateOne({ _id: user._id }, { $set: gate.fields });
+      if (gate.retryAfterSeconds) res.setHeader("Retry-After", String(gate.retryAfterSeconds));
+      return res.status(gate.status).json(gate.body);
     }
 
     const passwordOk = await comparePassword(password, user.passwordHash);
-    if (!passwordOk) {
-      const failedCount = (user.failedLogins || 0) + 1;
-      const shouldLock  = failedCount >= MAX_FAILED;
-      await db.collection("users").updateOne({ _id: user._id }, {
-        $set: {
-          failedLogins: failedCount,
-          lastFailedAt: new Date(),
-          ...(shouldLock ? { lockedUntil: new Date(Date.now() + LOCKOUT_MS) } : {}),
-        },
-      });
-      const suffix = shouldLock ? " Account locked for 15 minutes." : "";
-      return res.status(401).json({ error: `Incorrect password. Please try again.${suffix}` });
-    }
-
-    await db.collection("users").updateOne(
-      { _id: user._id },
-      { $set: { failedLogins: 0, lockedUntil: null } }
-    );
+    const result = recordLoginResult(user, now, passwordOk);
+    await db.collection("users").updateOne({ _id: user._id }, { $set: result.fields });
+    if (result.retryAfterSeconds) res.setHeader("Retry-After", String(result.retryAfterSeconds));
+    if (!passwordOk) return res.status(result.status).json(result.body);
 
     if (!isEmailVerificationEnabled()) {
       await db.collection("users").updateOne(
@@ -272,8 +258,7 @@ async function verifyOtp(req, res) {
           passwordHash:  pending.passwordHash,
           emailVerified: true,
           verifiedAt:    new Date(),
-          failedLogins:  0,
-          lockedUntil:   null,
+          ...CLEAR_LOCKOUT_FIELDS,
           lastLoginAt:   new Date(),
           createdAt:     new Date(),
         });
@@ -315,7 +300,7 @@ async function verifyOtp(req, res) {
     }
 
     await db.collection("users").updateOne({ email: lEmail }, {
-      $set:   { lastLoginAt: new Date(), failedLogins: 0, lockedUntil: null },
+      $set:   { lastLoginAt: new Date(), ...CLEAR_LOCKOUT_FIELDS },
       $unset: { pendingOtp: "", pendingOtpExpiry: "", pendingOtpAttempts: "", pendingOtpPurpose: "" },
     });
     await establishSession(req, res, db, { userId: user._id.toString(), email: user.email, name: user.name });
@@ -564,7 +549,7 @@ async function resetPassword(req, res) {
 
     const passwordHash = await hashPassword(newPassword);
     await db.collection("users").updateOne({ _id: user._id }, {
-      $set:   { passwordHash, failedLogins: 0, lockedUntil: null },
+      $set:   { passwordHash, ...CLEAR_LOCKOUT_FIELDS },
       $unset: { passwordResetToken: "", passwordResetOtp: "", passwordResetExpiry: "" },
     });
 

@@ -108,6 +108,46 @@ test.describe("invalid credentials", () => {
   });
 });
 
+test.describe("password lockout escalation", () => {
+  // Only the reachable-in-real-time tier (4 wrong passwords -> 15-minute
+  // cooldown) is exercised here — the next tier (password-reset-required)
+  // only fires after that real 15-minute cooldown has actually elapsed, so
+  // it's covered by the fast, deterministic tests/auth.test.js and
+  // tests/loginLockout.test.js instead (which simulate the elapsed time
+  // directly), not here.
+  test("the 4th consecutive wrong password shows the cooldown banner, a live countdown, and disables Sign In", async ({ page, testUser }) => {
+    await page.request.post("/api/auth/signup", { data: testUser });
+    await page.context().clearCookies();
+
+    const authPage = new AuthPage(page);
+    await authPage.gotoLogin();
+
+    for (let i = 0; i < 3; i++) {
+      await authPage.fillLoginForm({ email: testUser.email, password: "WrongPassword1!" });
+      const [response] = await Promise.all([
+        page.waitForResponse((r) => r.url().includes("/api/auth/login")),
+        authPage.submit(),
+      ]);
+      expect(response.status(), `attempt #${i + 1}`).toBe(401);
+      await expect(authPage.errorText(/incorrect password/i)).toBeVisible();
+    }
+
+    await authPage.fillLoginForm({ email: testUser.email, password: "WrongPassword1!" });
+    const [fourthResponse] = await Promise.all([
+      page.waitForResponse((r) => r.url().includes("/api/auth/login")),
+      authPage.submit(),
+    ]);
+    expect(fourthResponse.status()).toBe(429);
+
+    await expect(authPage.errorText(/too many incorrect attempts.*15 minutes/i)).toBeVisible();
+    await expect(page.getByText(/time remaining/i)).toBeVisible();
+
+    const signInButton = page.locator('button[type="submit"]');
+    await expect(signInButton).toBeDisabled();
+    await expect(signInButton).toHaveText(/try again in/i);
+  });
+});
+
 test.describe("logout", () => {
   test("clears cookies and returns to the auth screen", async ({ authenticatedPage: page }) => {
     const settingsPage = new SettingsPage(page);

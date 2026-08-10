@@ -29,6 +29,10 @@ export function useCredentialsForm({ mode, onAuth, onOtpRequired }) {
   const [password, setPassword] = useState("");
   const [fieldErrors, setFieldErrors] = useState({ name: "", email: "", password: "", form: "" });
   const [loading, setLoading] = useState(false);
+  // Account-level lockout state from api/_lib/loginLockout.js, surfaced via
+  // the login response's cooldownUntil/resetRequired/frozen flags — only
+  // ever set in "login" mode. null once the block has lifted.
+  const [lockout, setLockout] = useState(null);
   const getCaptchaToken = useRecaptcha();
 
   const clearErrors = () => setFieldErrors({ name: "", email: "", password: "", form: "" });
@@ -65,10 +69,21 @@ export function useCredentialsForm({ mode, onAuth, onOtpRequired }) {
       const data = await res.json();
 
       if (!res.ok) {
-        setFieldErrors(routeError(data.error || "Something went wrong."));
+        if (data.cooldownUntil) {
+          setLockout({ type: "cooldown", until: new Date(data.cooldownUntil) });
+          setFieldErrors({ name: "", email: "", password: "", form: data.error });
+        } else if (data.resetRequired || data.frozen) {
+          setLockout({ type: data.frozen ? "frozen" : "resetRequired" });
+          setFieldErrors({ name: "", email: "", password: "", form: data.error });
+        } else {
+          setLockout(null);
+          setFieldErrors(routeError(data.error || "Something went wrong."));
+        }
       } else if (data.otpRequired) {
+        setLockout(null);
         onOtpRequired(data.email || email);
       } else if (data.user) {
+        setLockout(null);
         onAuth(data.user);
       }
     } catch {
@@ -78,5 +93,5 @@ export function useCredentialsForm({ mode, onAuth, onOtpRequired }) {
     }
   };
 
-  return { name, setName, email, setEmail, password, setPassword, fieldErrors, setFieldErrors, loading, handleSubmit };
+  return { name, setName, email, setEmail, password, setPassword, fieldErrors, setFieldErrors, loading, lockout, setLockout, handleSubmit };
 }

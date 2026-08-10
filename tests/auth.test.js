@@ -5,7 +5,8 @@ import { getDb } from "../api/_lib/db.js";
 import { findActiveSessionByToken } from "../api/_lib/session.js";
 import { IDLE_SESSION_TTL_MS, ABSOLUTE_SESSION_TTL_MS } from "../api/_lib/cookies.js";
 import { _resetForTests as resetRateLimits } from "../api/_lib/ratelimit.js";
-import { extractCookie, isCookieCleared, uniqueEmail, signupUser as signupUserWithApp } from "./helpers.js";
+import { extractCookie, isCookieCleared, uniqueEmail, uniqueIp, signupUser as signupUserWithApp } from "./helpers.js";
+import { MAX_ATTEMPTS_PER_CYCLE, COOLDOWN_MS, RESET_REQUIRED_REPEAT_LIMIT, FREEZE_MS } from "../api/_lib/loginLockout.js";
 
 let app;
 let db;
@@ -20,6 +21,16 @@ beforeEach(() => {
 });
 
 const signupUser = (email, password) => signupUserWithApp(app, email, password);
+
+// Every call here gets its own fake source IP (via X-Forwarded-For, which
+// getClientIp() already reads) so these tests — several of which legitimately
+// need more than 10 sequential /api/auth/login calls to drive the account
+// through its full escalation timeline — never trip the separate IP-keyed
+// login:<ip> rate limiter (covered on its own below). Real attackers can
+// rotate source IPs too; that's exactly why the account-level state in
+// api/_lib/loginLockout.js, not the IP limiter, is what has to hold the line.
+const login = (email, password) =>
+  request(app).post("/api/auth/login").set("X-Forwarded-For", uniqueIp()).send({ email, password });
 
 describe("login / signup", () => {
   it("creates a session and sets cookies, never returns a token in the body", async () => {
@@ -66,25 +77,6 @@ describe("login / signup", () => {
     expect(res.body.error).toMatch(/no account found/i);
   });
 
-  it("locks the account after MAX_FAILED wrong passwords, then rejects even the correct one", async () => {
-    const email = uniqueEmail();
-    await signupUser(email);
-
-    // MAX_FAILED (5) wrong attempts — the 5th also crosses the lockout threshold.
-    for (let i = 0; i < 5; i++) {
-      const res = await request(app).post("/api/auth/login").send({ email, password: "wrong-password" });
-      expect(res.status).toBe(401);
-    }
-
-    const lockedOut = await request(app).post("/api/auth/login").send({ email, password: "password123" });
-    expect(lockedOut.status).toBe(429);
-    expect(lockedOut.body.error).toMatch(/account locked/i);
-
-    const user = await db.collection("users").findOne({ email });
-    expect(user.lockedUntil).toBeTruthy();
-    expect(user.failedLogins).toBe(5);
-  });
-
   it("rate-limits login attempts from the same IP independent of account lockout", async () => {
     const email = uniqueEmail();
     await signupUser(email);
@@ -97,6 +89,207 @@ describe("login / signup", () => {
     const res = await request(app).post("/api/auth/login").send({ email, password: "password123" });
     expect(res.status).toBe(429);
     expect(res.headers["retry-after"]).toBeTruthy();
+  });
+});
+
+describe("account lockout escalation policy (api/_lib/loginLockout.js)", () => {
+  /** Directly seeds a password-reset token/OTP, bypassing email delivery (already covered by forgot-password.test.js). */
+  async function seedPasswordReset(email) {
+    const token = `test-token-${email}`;
+    const otp = "654321";
+    await db.collection("users").updateOne(
+      { email },
+      { $set: { passwordResetToken: token, passwordResetOtp: otp, passwordResetExpiry: new Date(Date.now() + 60 * 60_000) } }
+    );
+    return { token, otp };
+  }
+
+  it("failures 1-3 remain usable — plain 401, no lock", async () => {
+    const email = uniqueEmail();
+    await signupUser(email);
+
+    for (let i = 0; i < MAX_ATTEMPTS_PER_CYCLE - 1; i++) {
+      const res = await login(email, "wrong-password");
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe("Incorrect password. Please try again.");
+    }
+
+    const user = await db.collection("users").findOne({ email });
+    expect(user.lockedUntil).toBeNull();
+    expect(user.passwordResetRequired).toBe(false);
+
+    // Still able to log in normally on the 4th attempt if the password is correct.
+    const ok = await login(email, "password123");
+    expect(ok.status).toBe(200);
+  });
+
+  it("the 4th consecutive wrong password starts a server-enforced 15-minute cooldown", async () => {
+    const email = uniqueEmail();
+    await signupUser(email);
+
+    for (let i = 0; i < MAX_ATTEMPTS_PER_CYCLE - 1; i++) {
+      await login(email, "wrong-password");
+    }
+    const fourth = await login(email, "wrong-password");
+    expect(fourth.status).toBe(429);
+    expect(fourth.body.error).toBe("Too many incorrect attempts. Please try again in 15 minutes.");
+    expect(fourth.headers["retry-after"]).toBeTruthy();
+
+    const user = await db.collection("users").findOne({ email });
+    expect(user.lockedUntil).toBeTruthy();
+    expect(new Date(user.lockedUntil) - Date.now()).toBeGreaterThan(COOLDOWN_MS - 5000);
+    expect(new Date(user.lockedUntil) - Date.now()).toBeLessThanOrEqual(COOLDOWN_MS);
+
+    // Even the *correct* password is rejected during the cooldown.
+    const duringCooldown = await login(email, "password123");
+    expect(duringCooldown.status).toBe(429);
+  });
+
+  it("attempts during cooldown do not extend or bypass it", async () => {
+    const email = uniqueEmail();
+    await signupUser(email);
+    for (let i = 0; i < MAX_ATTEMPTS_PER_CYCLE; i++) await login(email, "wrong-password");
+
+    const userAfterLock = await db.collection("users").findOne({ email });
+    const lockedUntilBefore = userAfterLock.lockedUntil;
+
+    await login(email, "wrong-password");
+    await login(email, "password123");
+
+    const userAfterMoreAttempts = await db.collection("users").findOne({ email });
+    expect(new Date(userAfterMoreAttempts.lockedUntil).getTime()).toBe(new Date(lockedUntilBefore).getTime());
+    expect(userAfterMoreAttempts.failedLogins).toBe(userAfterLock.failedLogins);
+  });
+
+  it("cooldown expiration permits another attempt window", async () => {
+    const email = uniqueEmail();
+    await signupUser(email);
+    for (let i = 0; i < MAX_ATTEMPTS_PER_CYCLE; i++) await login(email, "wrong-password");
+
+    // Simulate the 15 minutes passing, the same way this file already
+    // simulates session-expiry elsewhere — write the expiry directly.
+    await db.collection("users").updateOne({ email }, { $set: { lockedUntil: new Date(Date.now() - 1000) } });
+
+    const res = await login(email, "wrong-password");
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe("Incorrect password. Please try again.");
+
+    const user = await db.collection("users").findOne({ email });
+    expect(user.failedLogins).toBe(1);
+    expect(user.lockoutCycles).toBe(1); // still remembers this is the 2nd cycle
+  });
+
+  it("a second 4-strike cycle requires a password reset instead of a second cooldown", async () => {
+    const email = uniqueEmail();
+    await signupUser(email);
+    for (let i = 0; i < MAX_ATTEMPTS_PER_CYCLE; i++) await login(email, "wrong-password");
+    await db.collection("users").updateOne({ email }, { $set: { lockedUntil: new Date(Date.now() - 1000) } });
+
+    let last;
+    for (let i = 0; i < MAX_ATTEMPTS_PER_CYCLE; i++) last = await login(email, "wrong-password");
+
+    expect(last.status).toBe(403);
+    expect(last.body.error).toBe("For your security, please reset your password before trying again.");
+    expect(last.body.resetRequired).toBe(true);
+
+    const user = await db.collection("users").findOne({ email });
+    expect(user.passwordResetRequired).toBe(true);
+    expect(user.freezeUntil).toBeNull(); // reaching it once never freezes
+
+    // The correct password no longer works either — a reset is mandatory.
+    const withCorrectPassword = await login(email, "password123");
+    expect(withCorrectPassword.status).toBe(403);
+  });
+
+  it("a successful password reset clears the escalation state and restores normal login", async () => {
+    const email = uniqueEmail();
+    await signupUser(email);
+    for (let i = 0; i < MAX_ATTEMPTS_PER_CYCLE; i++) await login(email, "wrong-password");
+    await db.collection("users").updateOne({ email }, { $set: { lockedUntil: new Date(Date.now() - 1000) } });
+    for (let i = 0; i < MAX_ATTEMPTS_PER_CYCLE; i++) await login(email, "wrong-password");
+
+    const gated = await db.collection("users").findOne({ email });
+    expect(gated.passwordResetRequired).toBe(true);
+
+    const { token, otp } = await seedPasswordReset(email);
+    const resetRes = await request(app)
+      .post("/api/auth/reset-password")
+      .send({ token, otp, newPassword: "brand-new-password1" });
+    expect(resetRes.status).toBe(200);
+
+    const cleared = await db.collection("users").findOne({ email });
+    expect(cleared.failedLogins).toBe(0);
+    expect(cleared.lockedUntil).toBeNull();
+    expect(cleared.lockoutCycles).toBe(0);
+    expect(cleared.passwordResetRequired).toBe(false);
+    expect(cleared.resetRequiredAttempts).toBe(0);
+    expect(cleared.freezeUntil).toBeNull();
+
+    const loggedIn = await login(email, "brand-new-password1");
+    expect(loggedIn.status).toBe(200);
+  });
+
+  it("ignoring the reset requirement RESET_REQUIRED_REPEAT_LIMIT times escalates to a 1-week freeze", async () => {
+    const email = uniqueEmail();
+    await signupUser(email);
+    for (let i = 0; i < MAX_ATTEMPTS_PER_CYCLE; i++) await login(email, "wrong-password");
+    await db.collection("users").updateOne({ email }, { $set: { lockedUntil: new Date(Date.now() - 1000) } });
+    for (let i = 0; i < MAX_ATTEMPTS_PER_CYCLE; i++) await login(email, "wrong-password");
+
+    let last;
+    for (let i = 0; i < RESET_REQUIRED_REPEAT_LIMIT; i++) last = await login(email, "wrong-password");
+
+    expect(last.status).toBe(423);
+    expect(last.body.frozen).toBe(true);
+
+    const user = await db.collection("users").findOne({ email });
+    expect(user.freezeUntil).toBeTruthy();
+    expect(new Date(user.freezeUntil) - Date.now()).toBeGreaterThan(FREEZE_MS - 5000);
+
+    // A password reset is still the escape hatch, even while frozen.
+    const { token, otp } = await seedPasswordReset(email);
+    const resetRes = await request(app)
+      .post("/api/auth/reset-password")
+      .send({ token, otp, newPassword: "brand-new-password2" });
+    expect(resetRes.status).toBe(200);
+
+    const cleared = await db.collection("users").findOne({ email });
+    expect(cleared.freezeUntil).toBeNull();
+
+    const loggedIn = await login(email, "brand-new-password2");
+    expect(loggedIn.status).toBe(200);
+  });
+
+  it("successful login clears failedLogins after some (non-locking) wrong attempts", async () => {
+    const email = uniqueEmail();
+    await signupUser(email);
+    await login(email, "wrong-password");
+    await login(email, "wrong-password");
+
+    const ok = await login(email, "password123");
+    expect(ok.status).toBe(200);
+
+    const user = await db.collection("users").findOne({ email });
+    expect(user.failedLogins).toBe(0);
+  });
+
+  it("account/user isolation — one user's failed attempts never affect another user", async () => {
+    const emailA = uniqueEmail();
+    const emailB = uniqueEmail();
+    await signupUser(emailA);
+    await signupUser(emailB);
+
+    for (let i = 0; i < MAX_ATTEMPTS_PER_CYCLE; i++) await login(emailA, "wrong-password");
+
+    const userA = await db.collection("users").findOne({ email: emailA });
+    expect(userA.lockedUntil).toBeTruthy();
+
+    const userBLogin = await login(emailB, "password123");
+    expect(userBLogin.status).toBe(200);
+
+    const userB = await db.collection("users").findOne({ email: emailB });
+    expect(userB.lockedUntil).toBeNull();
+    expect(userB.failedLogins).toBe(0);
   });
 });
 

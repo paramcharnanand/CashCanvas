@@ -21,6 +21,14 @@ export function uniqueEmail() {
   return `user${userCounter}-${Date.now()}@example.test`;
 }
 
+let ipCounter = 0;
+
+/** A fresh fake client IP per call, so tests can bypass the shared login:<ip> rate limiter via X-Forwarded-For. */
+export function uniqueIp() {
+  ipCounter += 1;
+  return `10.${(ipCounter >> 16) & 255}.${(ipCounter >> 8) & 255}.${ipCounter & 255}`;
+}
+
 export async function signupUser(app, email, password = "password123") {
   const agent = request.agent(app);
   const res = await agent.post("/api/auth/signup").send({ name: "Test User", email, password });
